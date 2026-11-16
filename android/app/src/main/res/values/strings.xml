@@ -4,4 +4,8 @@
     <string name="title_activity_main">Parking Tracker</string>
     <string name="package_name">be.parkingtracker.app</string>
     <string name="custom_url_scheme">be.parkingtracker.app</string>
+    <!-- Background location (persistent notification while the app checks where you park) -->
+    <string name="capacitor_background_geolocation_notification_channel_name">Parking check in the background</string>
+    <string name="capacitor_background_geolocation_notification_icon">drawable/ic_stat_parking</string>
+    <string name="capacitor_background_geolocation_notification_color">#1D4ED8</string>
 </resources>

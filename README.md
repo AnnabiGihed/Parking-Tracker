@@ -19,6 +19,10 @@ and sends you to the nearest covered street in **Waze** or **Google Maps**.
 - **Roadworks & traffic events** (Brussels Mobility / Osiris): warned at your spot and shown on the map.
 - **Public car parks** (capacity, height, operator, phone) and **EV charging points** as map layers (🗂️ switches).
 - **My car** (🚗): save where you parked, see it on the map, walk back with Google Maps.
+- **Parking alerts** (Android app, on by default, switch in 🚗 My car): when you stop after driving, the app saves
+  where the car is, checks the spot live and notifies you — "Free for you here", "Paid parking" (with the price and
+  the nearest free spot for you), "Reserved space"… — even when the app isn't on screen. It runs as a background
+  location service with a small persistent notification; allow location **all the time** for it to work reliably.
 - **Parking timer**: notification 10 minutes before the end and at the end (works with the app closed on Android).
 - **Pay** buttons open 4411 / EasyPark / Seety: paying itself happens in those apps.
 

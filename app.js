@@ -333,10 +333,16 @@
   map.on('click', (e) => { if (state.tracking) stopTracking(); setPin(e.latlng); });
 
   // ---------- live position ----------
+  // In the Android app, positions come from a background-capable watcher (foreground service with a
+  // small notification) so parking can be detected even when the app is not on screen.
+  const BG = () => (PT.IN_APP ? window.Capacitor?.Plugins?.BackgroundGeolocation || window.Capacitor?.registerPlugin?.('BackgroundGeolocation') : null);
+  const alertsOn = () => store.get('pt.bgAlerts') !== false; // default: on
   function onPosition(pos) {
     const { latitude: lat, longitude: lon, accuracy } = pos.coords;
     if (Date.now() - pos.timestamp > MAX_FIX_AGE_MS) return;
+    parkDetector(lat, lon, accuracy, pos.coords.speed, pos.timestamp);
     state.me = { lat, lon, accuracy, t: Date.now() };
+    if (document.visibilityState === 'hidden') return; // in the background only the parking detector runs
     if (!meMarker) {
       meMarker = L.marker([lat, lon], { icon: L.divIcon({ className: '', html: '<div class="me-dot"></div>', iconSize: [18, 18] }), interactive: false }).addTo(map);
       meAcc = L.circle([lat, lon], { radius: accuracy, color: '#2563eb', weight: 1, fillOpacity: 0.08, interactive: false }).addTo(map);
@@ -352,36 +358,119 @@
     const better = lc && lc.accuracy > PT.C.MAX_GPS_ACCURACY_M && accuracy <= PT.C.MAX_GPS_ACCURACY_M;
     if (moved || old || better) runCheck(lat, lon, 'me', accuracy);
   }
-  function startTracking() {
+  function onGpsError(message) {
+    // Don't overwrite the answer for a pin the user dropped meanwhile.
+    if (!state.pin) renderStatus(PT.cantVerify('No GPS position: ' + esc(message) + '. Allow location for this app, or tap the map.'), 'me');
+    else toast('No GPS: showing the pin you dropped');
+    stopTracking(true);
+    renderPermission();
+  }
+  // Starts the position source if needed (one watcher for the whole app).
+  async function ensureWatcher() {
+    if (state.watchId != null) return;
+    const bg = BG();
+    if (bg) {
+      state.watchKind = 'bg';
+      state.watchId = 'starting';
+      try {
+        state.watchId = await bg.addWatcher({
+          backgroundTitle: 'Parking Tracker',
+          backgroundMessage: alertsOn() ? 'Watching where you park, to tell you if it is free or paid.' : undefined,
+          requestPermissions: true, stale: false, distanceFilter: 5,
+        }, (loc, err) => {
+          if (err) { onGpsError(err.code === 'NOT_AUTHORIZED' ? 'location not allowed' : err.message || 'error'); return; }
+          if (loc) onPosition({ coords: { latitude: loc.latitude, longitude: loc.longitude, accuracy: loc.accuracy, speed: loc.speed }, timestamp: loc.time || Date.now() });
+        });
+      } catch (e) { state.watchId = null; onGpsError(e.message || 'location unavailable'); }
+      return;
+    }
     if (!navigator.geolocation) { toast('Location is not available on this device.'); return; }
+    state.watchKind = 'web';
+    state.watchId = navigator.geolocation.watchPosition(onPosition, (err) => onGpsError(err.message),
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 });
+  }
+  async function removeWatcher() {
+    const id = state.watchId;
+    state.watchId = null;
+    if (id == null || id === 'starting') return;
+    if (state.watchKind === 'bg') { try { await BG()?.removeWatcher({ id }); } catch { /* already gone */ } } else navigator.geolocation.clearWatch(id);
+  }
+  function startTracking() {
     state.tracking = true; state.lastStatus = null; state.lastCheck = null;
     $('trackBtn').classList.add('active');
     $('trackBtn').innerHTML = ICON('navigation');
     if (pinMarker) { map.removeLayer(pinMarker); pinMarker = null; state.pin = null; }
-    if (state.me) map.setView([state.me.lat, state.me.lon], Math.max(map.getZoom(), 17));
-    $('liveLine').innerHTML = `<span class="chip"><span class="spinner" style="width:12px;height:12px;border-width:2px"></span>Finding your position…</span>`;
-    state.watchId = navigator.geolocation.watchPosition(onPosition, (err) => {
-      // Don't overwrite the answer for a pin the user dropped meanwhile.
-      if (!state.pin) renderStatus(PT.cantVerify('No GPS position: ' + esc(err.message) + '. Allow location for this app, or tap the map.'), 'me');
-      else toast('No GPS: showing the pin you dropped');
-      stopTracking();
-      renderPermission();
-    }, { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 });
+    if (state.me) { map.setView([state.me.lat, state.me.lon], Math.max(map.getZoom(), 17)); runCheck(state.me.lat, state.me.lon, 'me', state.me.accuracy); }
+    else $('liveLine').innerHTML = `<span class="chip"><span class="spinner" style="width:12px;height:12px;border-width:2px"></span>Finding your position…</span>`;
+    ensureWatcher();
   }
-  function stopTracking() {
+  // Leaving "follow me": the background watcher keeps running for parking alerts (unless there was an error).
+  function stopTracking(failed) {
     state.tracking = false;
     $('trackBtn').classList.remove('active');
     $('trackBtn').innerHTML = ICON('locate');
-    if (state.watchId != null) navigator.geolocation.clearWatch(state.watchId);
-    state.watchId = null;
+    if (failed || state.watchKind !== 'bg' || !alertsOn()) removeWatcher();
   }
   $('trackBtn').onclick = () => (state.tracking ? stopTracking() : startTracking());
   setInterval(() => {
+    if (document.visibilityState === 'hidden') return;
     if (state.tracking && state.me && Date.now() - (state.lastCheck?.t || 0) >= RECHECK_EVERY_MS) {
-      if (Date.now() - state.me.t > MAX_FIX_AGE_MS) renderStatus(PT.cantVerify('Lost the GPS signal. Waiting for a fresh position…'), 'me');
+      // The app's watcher only reports when you move (5 m), so no news means you're still there.
+      if (state.watchKind !== 'bg' && Date.now() - state.me.t > MAX_FIX_AGE_MS) renderStatus(PT.cantVerify('Lost the GPS signal. Waiting for a fresh position…'), 'me');
       else runCheck(state.me.lat, state.me.lon, 'me', state.me.accuracy);
     }
   }, 5000);
+
+  // ---------- parking detection + alerts ----------
+  // Driving = faster than ~20 km/h. Parked = after driving, no movement for 2 minutes.
+  const DRIVE_SPEED = 5.5; // m/s
+  const PARKED_AFTER_MS = 120000;
+  const park = { drove: false, lastFix: null, lastMoveT: 0, lastDriveT: 0 };
+  function parkDetector(lat, lon, accuracy, speed, t) {
+    const prev = park.lastFix;
+    let v = speed;
+    if ((v == null || v < 0) && prev && t > prev.t) v = PT.dist(lat, lon, prev.lat, prev.lon) / ((t - prev.t) / 1000);
+    if (!prev || PT.dist(lat, lon, prev.lat, prev.lon) > 15) park.lastMoveT = t;
+    if (v != null && v >= DRIVE_SPEED) { park.drove = true; park.lastDriveT = t; }
+    park.lastFix = { lat, lon, accuracy, t };
+  }
+  setInterval(() => {
+    const f = park.lastFix;
+    if (!park.drove || !f || !alertsOn()) return;
+    const now = Date.now();
+    if (now - park.lastMoveT >= PARKED_AFTER_MS && now - park.lastDriveT < 20 * 60000) {
+      park.drove = false;
+      onParked(f.lat, f.lon, f.accuracy);
+    }
+  }, 15000);
+
+  const LNP = () => window.Capacitor?.Plugins?.LocalNotifications;
+  async function notify(id, title, body) {
+    const ln = LNP();
+    try {
+      if (ln) { await ln.schedule({ notifications: [{ id, title, body, largeBody: body }] }); return; }
+      if ('Notification' in window && Notification.permission === 'granted') { new Notification(title, { body }); return; }
+    } catch { /* fall back to a toast */ }
+    toast(title + ' — ' + body, 8000);
+  }
+  const plain = (html) => String(html || '').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+  async function onParked(lat, lon, accuracy) {
+    const r = await PT.decide(await ctx(), lat, lon, Math.min(accuracy || 10, PT.C.MAX_GPS_ACCURACY_M));
+    const [title] = HEADLINES[r.title] || [r.title];
+    store.set('pt.car', { lat, lon, t: Date.now(), status: title, where: '' });
+    drawCar();
+    if (document.visibilityState === 'visible') { toast(`🚗 Parked: ${title}`); if (!state.tracking) runCheck(lat, lon, 'me', accuracy); return; }
+    let body = plain(r.detail);
+    if (r.tariff && r.status !== 'free') body += ` · ${r.tariff}`;
+    if (r.status !== 'free' && r.zone) {
+      try {
+        const [spot] = await PT.liveFreeSpots(await ctx(), lat, lon, 1);
+        if (spot) body += ` · Nearest free spot for you: ${spot.label}, ${Math.round(spot.m)} m.`;
+      } catch { /* no suggestion */ }
+    }
+    const icon = r.status === 'free' ? '✅' : r.status === 'pay' ? '⚠️' : 'ℹ️';
+    await notify(4300 + (Date.now() % 1000), `${icon} ${title}`, body);
+  }
 
   window.addEventListener('offline', () => {
     renderStatus(PT.cantVerify('Internet connection lost. The app only answers with live data.'), state.tracking ? 'me' : 'pin');
@@ -615,7 +704,7 @@
     ctx().then(() => { renderCardLine(); recheck(); refreshLayer(); });
   }
 
-  window.__pt = { state, map, runCheck, ctx, parseCardText, refreshLayer, showFreeSpots };
+  window.__pt = { state, map, runCheck, ctx, parseCardText, refreshLayer, showFreeSpots, park, parkDetector, onParked };
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:' && !PT.IN_APP) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
@@ -686,7 +775,22 @@
     if (s.foreground && !state.tracking && !state.pin) startTracking();
   });
 
+  // Parking alerts switch (My car panel)
+  $('alertsToggle').checked = alertsOn();
+  $('alertsToggle').onchange = async () => {
+    store.set('pt.bgAlerts', $('alertsToggle').checked);
+    if ($('alertsToggle').checked) {
+      try { await LNP()?.requestPermissions(); } catch { /* browser */ }
+      const s = await locationStatus();
+      if (s.background === false) toast('Allow location “all the time” so alerts also work in the background');
+    }
+    await removeWatcher();
+    if (state.tracking || $('alertsToggle').checked) ensureWatcher(); // re-create with/without background mode
+  };
+
   $('welcomeStart').onclick = () => { $('welcomeDialog').close(); openCard(); };
+  // Notifications are needed for parking alerts, the timer and Android's background-location notice.
+  if (PT.IN_APP && alertsOn()) setTimeout(() => { LNP()?.requestPermissions().catch(() => {}); }, 4000);
   // Ask for the position as soon as the app opens (the very first time too).
   startTracking();
   if (!state.card) setTimeout(() => { $('welcomeDialog').showModal(); renderPermission(); }, 200);

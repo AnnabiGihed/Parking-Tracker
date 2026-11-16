@@ -3,11 +3,16 @@
   "appName": "Parking Tracker",
   "webDir": "www",
   "android": {
-    "allowMixedContent": false
+    "allowMixedContent": false,
+    "useLegacyBridge": true
   },
   "plugins": {
     "CapacitorHttp": {
       "enabled": true
+    },
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_parking",
+      "iconColor": "#1D4ED8"
     }
   }
 }
