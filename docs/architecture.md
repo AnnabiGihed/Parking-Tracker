@@ -203,7 +203,8 @@ Solution layout (folders follow the house structure, adapted to a mobile client)
 ```text
 ParkingTracker.slnx
 global.json                 SDK 10.0.4xx, rollForward latestFeature
-Directory.Build.props       nullable, implicit usings, analyzers, XML docs
+Directory.Build.props       nullable, implicit usings, analyzers, XML docs (no target framework)
+.editorconfig               organizational analyzer baseline; test/.editorconfig narrows it for tests
 Directory.Packages.props    central versions; Pivot.Framework.* pinned together
 nuget.config                nuget.org + GitHub Packages, source mapping Pivot.* -> GitHub
 src/Core/ParkingTracker.Domain
@@ -222,6 +223,13 @@ Each layer has one installer (`ApplicationServiceInstaller`, `InfrastructureServ
 (`BaseServiceInstaller`) is used only for Application and Infrastructure; Android services are registered by hand.
 Release builds keep the default partial trimming; full trimming and NativeAOT stay off because the mediator and the
 scanning use reflection.
+
+### 4.1 Build the .NET solution
+
+The `Pivot.Framework.*` packages come from GitHub Packages, so restore needs a token. Set two environment variables
+in the shell that builds: `GITHUB_PACKAGES_USER` (the GitHub user name) and `GITHUB_PACKAGES_TOKEN` (a GitHub token
+with the `read:packages` scope, for example the output of `gh auth token`). `nuget.config` reads them at restore time
+and never stores them. Then build and test everything with `python .agent-kit/verify.py`.
 
 ## 5. Data and integration design
 

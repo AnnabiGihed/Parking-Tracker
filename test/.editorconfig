@@ -1,0 +1,7 @@
+# Narrower analyzer settings for test projects (Static Analysis and Quality Gates / R11).
+# Documentation rules (SA1600, CS1591) stay on: test classes and methods are documented too.
+
+[*.cs]
+# CA1707: house test naming Method_Scenario_ShouldExpectation (dotnet-unit-tests) needs underscores.
+# Author: Gihed Annabi, 11-2026. Scope: test projects only.
+dotnet_diagnostic.CA1707.severity = none

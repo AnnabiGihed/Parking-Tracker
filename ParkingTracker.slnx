@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Core/ParkingTracker.Domain/ParkingTracker.Domain.csproj" />
+    <Project Path="src/Core/ParkingTracker.Application/ParkingTracker.Application.csproj" />
+    <Project Path="src/Infrastructure/ParkingTracker.Infrastructure/ParkingTracker.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/test/">
+    <Project Path="test/ParkingTracker.Domain.Tests/ParkingTracker.Domain.Tests.csproj" />
+    <Project Path="test/ParkingTracker.Application.Tests/ParkingTracker.Application.Tests.csproj" />
+    <Project Path="test/ParkingTracker.Infrastructure.Tests/ParkingTracker.Infrastructure.Tests.csproj" />
+  </Folder>
+</Solution>

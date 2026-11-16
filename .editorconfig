@@ -1,0 +1,38 @@
+root = true
+
+[*]
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{csproj,props,targets,json,yml,yaml,slnx}]
+indent_style = space
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.cs]
+# Pivot.Framework house style: C# is indented with tabs.
+indent_style = tab
+indent_size = 4
+
+# StyleCop: naming, layout and documentation rules only (Static Analysis and Quality Gates / R1).
+dotnet_analyzer_diagnostic.category-StyleCop.CSharp.SpacingRules.severity = none
+dotnet_analyzer_diagnostic.category-StyleCop.CSharp.ReadabilityRules.severity = none
+dotnet_analyzer_diagnostic.category-StyleCop.CSharp.OrderingRules.severity = none
+dotnet_analyzer_diagnostic.category-StyleCop.CSharp.MaintainabilityRules.severity = none
+
+# Required local additions (Static Analysis and Quality Gates / R4).
+dotnet_diagnostic.SA1124.severity = none    # regions are mandatory (csharp-regions)
+dotnet_diagnostic.SA1123.severity = error   # but never inside members
+dotnet_diagnostic.SA1633.severity = none    # no file banners; the type header lives in <summary>
+dotnet_diagnostic.SA1600.severity = error   # documentation (csharp-xml-documentation)
+dotnet_diagnostic.CS1591.severity = error
+
+# SA1514 (waiver ADR-0005): csharp-regions forbids a blank line directly after #region, which SA1514 demands before the first
+# member's documentation header; the house skill wins. Author: Gihed Annabi, 11-2026.
+dotnet_diagnostic.SA1514.severity = none
+
+[*.{g.cs,Designer.cs}]
+generated_code = true
