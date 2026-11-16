@@ -68,33 +68,110 @@
   };
   legend.addTo(map);
 
-  // Live street colours for what is on screen.
+  // ---------- live map layers ----------
+  const LAYERS = {
+    streets: { minZoom: LAYER_MIN_ZOOM, group: surfacesLayer, on: true },
+    spaces: { minZoom: 18, group: L.layerGroup().addTo(map), on: true },
+    works: { minZoom: 15, group: L.layerGroup().addTo(map), on: true },
+    carparks: { minZoom: 14, group: L.layerGroup().addTo(map), on: false },
+    chargers: { minZoom: 15, group: L.layerGroup().addTo(map), on: false },
+  };
+  const savedLayers = store.get('pt.layers') || {};
+  for (const [k, v] of Object.entries(savedLayers)) if (LAYERS[k]) LAYERS[k].on = !!v;
+  const poi = (emoji) => L.divIcon({ className: '', html: `<div class="poi-icon">${emoji}</div>`, iconSize: [22, 22], iconAnchor: [11, 11] });
+  const DRAW = {
+    async streets(box) {
+      const surfaces = await PT.liveArea(await ctx(), box);
+      return (g) => {
+        for (const s of surfaces) {
+          const c = KIND_STYLE[s.kind].color;
+          L.polygon(PT.surfaceLatLngs(s.f.g), { color: c, weight: 1, fillColor: c, fillOpacity: 0.55, interactive: false }).addTo(g);
+        }
+      };
+    },
+    async spaces(box) {
+      const spaces = await PT.liveSpaces(box);
+      return (g) => {
+        for (const s of spaces) {
+          if (s.typres) {
+            L.marker([s.lat, s.lon], { icon: poi(s.label ? s.label.split(' ')[0] : '⛔'), interactive: true })
+              .bindPopup(`<b>${esc(s.label || 'Reserved space')}</b><br>You can't park here with your residents' card.`).addTo(g);
+          } else {
+            L.circleMarker([s.lat, s.lon], { radius: 2.5, color: '#334155', weight: 1, fillColor: '#fff', fillOpacity: 1, interactive: false }).addTo(g);
+          }
+        }
+      };
+    },
+    async works(box) {
+      const works = await PT.liveWorks(box);
+      return (g) => {
+        for (const w of works) {
+          const html = `<b>🚧 ${esc(w.title)}</b><br>${esc(w.where)}<br>${w.from ? 'From ' + esc(fmtDate(w.from)) : ''}${w.to ? ' until ' + esc(fmtDate(w.to)) : ''}`
+            + `${w.by ? '<br>' + esc(w.by) : ''}${w.link ? `<br><a href="${esc(w.link)}" target="_blank" rel="noopener">Details</a>` : ''}`;
+          if (w.g.type === 'Point') {
+            const [x, y] = w.g.coordinates; const ll = fromMerc(x, y);
+            L.marker(ll, { icon: poi('🚧') }).bindPopup(html).addTo(g);
+          } else {
+            L.polygon(PT.surfaceLatLngs(w.g), { color: '#ea580c', weight: 2, dashArray: '4 3', fillColor: '#fb923c', fillOpacity: 0.25 }).bindPopup(html).addTo(g);
+          }
+        }
+      };
+    },
+    async carparks(box) {
+      const parks = await PT.liveCarParks(box);
+      return (g) => {
+        for (const p of parks) {
+          L.marker([p.lat, p.lon], { icon: poi('🅿️') }).bindPopup(`<b>${esc(p.name)}</b><br>${esc(p.address)}<br>${p.capacity ? esc(p.capacity) + ' places' : ''}`
+            + `${p.disabled ? ', ' + esc(p.disabled) + ' ♿' : ''}${p.maxheight ? '<br>Max height ' + esc(p.maxheight) + ' m' : ''}`
+            + `${p.operator ? '<br>' + esc(p.operator) : ''}${p.phone ? ` · <a href="tel:${esc(p.phone)}">${esc(p.phone)}</a>` : ''}${navLinks(p.lat, p.lon)}`).addTo(g);
+        }
+      };
+    },
+    async chargers(box) {
+      const ch = await PT.liveChargers(box);
+      return (g) => {
+        for (const c of ch) {
+          L.marker([c.lat, c.lon], { icon: poi('⚡') }).bindPopup(`<b>⚡ ${esc(c.operator || 'Charging point')}</b><br>${esc(c.points || '?')} point(s) · ${esc(c.power || '?')} V`
+            + `<br>${esc(c.standard || '')} ${esc(c.type || '')}${navLinks(c.lat, c.lon)}`).addTo(g);
+        }
+      };
+    },
+  };
+  const fromMerc = (x, y) => [(2 * Math.atan(Math.exp(y / 6378137)) - Math.PI / 2) * 180 / Math.PI, (x / 6378137) * 180 / Math.PI];
+
   let layerTimer = null;
   function scheduleLayer() { clearTimeout(layerTimer); layerTimer = setTimeout(refreshLayer, 700); }
   async function refreshLayer() {
     const seq = ++state.layerSeq, st = $('layerState');
     if (!state.sector || !state.card) return;
-    if (map.getZoom() < LAYER_MIN_ZOOM) { surfacesLayer.clearLayers(); st.textContent = 'zoom in to see them'; return; }
-    if (!navigator.onLine) { surfacesLayer.clearLayers(); st.textContent = 'offline: no colours'; return; }
+    if (!navigator.onLine) { for (const l of Object.values(LAYERS)) l.group.clearLayers(); st.textContent = 'offline: no live layers'; return; }
+    const b = map.getBounds().pad(0.1), box = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()], z = map.getZoom();
+    const jobs = Object.entries(LAYERS).map(async ([name, l]) => {
+      if (!l.on || z < l.minZoom) { l.group.clearLayers(); return null; }
+      try {
+        const draw = await DRAW[name](box);
+        if (seq !== state.layerSeq) return null;
+        l.group.clearLayers(); draw(l.group); return null;
+      } catch (e) { if (seq === state.layerSeq) l.group.clearLayers(); return `${name}: ${e.message}`; }
+    });
     st.textContent = 'loading live…';
-    try {
-      const b = map.getBounds().pad(0.1);
-      const surfaces = await PT.liveArea(await ctx(), [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()]);
-      if (seq !== state.layerSeq) return;
-      surfacesLayer.clearLayers();
-      for (const s of surfaces) {
-        const c = KIND_STYLE[s.kind].color;
-        L.polygon(PT.surfaceLatLngs(s.f.g), { color: c, weight: 1, fillColor: c, fillOpacity: 0.55, interactive: false }).addTo(surfacesLayer);
-      }
-      st.textContent = 'updated ' + clock();
-    } catch (e) {
-      if (seq !== state.layerSeq) return;
-      surfacesLayer.clearLayers();
-      st.textContent = 'not available (' + e.message + ')';
-    }
+    const errors = (await Promise.all(jobs)).filter(Boolean);
+    if (seq !== state.layerSeq) return;
+    st.textContent = z < LAYER_MIN_ZOOM ? 'zoom in to see street colours' : errors.length ? 'some layers failed: ' + errors.join('; ') : 'updated ' + clock();
   }
   map.on('moveend', scheduleLayer);
-  setInterval(() => { if (map.getZoom() >= LAYER_MIN_ZOOM) refreshLayer(); }, 120000); // keep colours fresh
+  setInterval(refreshLayer, 120000); // keep layers fresh
+
+  // Layers panel
+  $('layersBtn').onclick = () => $('layersPanel').classList.toggle('hidden');
+  for (const cb of document.querySelectorAll('#layersPanel input[data-layer]')) {
+    cb.checked = LAYERS[cb.dataset.layer].on;
+    cb.onchange = () => {
+      LAYERS[cb.dataset.layer].on = cb.checked;
+      store.set('pt.layers', Object.fromEntries(Object.entries(LAYERS).map(([k, v]) => [k, v.on])));
+      refreshLayer();
+    };
+  }
 
   // ---------- sheet ----------
   function toast(msg, ms = 3500) {
@@ -124,10 +201,15 @@
       <a class="nav gmaps" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${lat.toFixed(6)},${lon.toFixed(6)}&travelmode=driving">Google Maps</a>
     </div>`;
 
+  // Payment happens in the operators' own apps; these buttons open them.
+  const PAY_APPS = [['4411', 'https://www.4411.io'], ['EasyPark', 'https://www.easypark.com'], ['Seety', 'https://seety.co']];
   function renderStatus(r, source, accuracy) {
     const box = $('status');
     box.className = 'status ' + r.status;
-    box.innerHTML = `<div class="status-title">${r.title}</div><div class="status-detail">${source === 'me' ? '📍 Your position: ' : '📌 Pin: '}${r.detail}</div>`;
+    const notes = (r.notes || []).length ? `<ul class="notes">${r.notes.map((n) => `<li>${n}</li>`).join('')}</ul>` : '';
+    const pay = r.status === 'pay' && r.zone && !r.reserved
+      ? `<div class="paylinks">Pay with: ${PAY_APPS.map(([n, u]) => `<a href="${u}" target="_blank" rel="noopener">${n}</a>`).join('')}</div>` : '';
+    box.innerHTML = `<div class="status-title">${r.title}</div><div class="status-detail">${source === 'me' ? '📍 Your position: ' : '📌 Pin: '}${r.detail}</div>${notes}${pay}`;
     const live = [];
     if (r.zone) live.push('🟢 live parking.brussels');
     live.push('checked ' + clock());
@@ -259,6 +341,84 @@
     if (best) map.fitBounds(L.latLngBounds([[from.lat, from.lon], [best.lat, best.lon]]).pad(0.4));
   };
 
+  // ---------- my car + parking timer ----------
+  let carMarker = null;
+  const LN = () => window.Capacitor?.Plugins?.LocalNotifications;
+  function drawCar() {
+    const car = store.get('pt.car');
+    if (carMarker) { map.removeLayer(carMarker); carMarker = null; }
+    if (car) {
+      carMarker = L.marker([car.lat, car.lon], { icon: L.divIcon({ className: '', html: '<div class="car-icon">🚗</div>', iconSize: [28, 28], iconAnchor: [14, 14] }) })
+        .bindPopup(`My car — parked ${new Date(car.t).toLocaleString('fr-BE', { dateStyle: 'short', timeStyle: 'short' })}`).addTo(map);
+    }
+    renderTimer();
+  }
+  function renderCarDialog() {
+    const car = store.get('pt.car'), timer = store.get('pt.timer');
+    $('carInfo').innerHTML = car
+      ? `Parked ${new Date(car.t).toLocaleString('fr-BE', { dateStyle: 'short', timeStyle: 'short' })}${car.status ? ` — the app said <b>${esc(car.status)}</b>` : ''}${car.where ? `<br>${car.where}` : ''}`
+      : 'No car saved. Save it where you park, to find it back and set a reminder.';
+    $('carActions').innerHTML = car
+      ? `<a class="btnlink primary" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${car.lat.toFixed(6)},${car.lon.toFixed(6)}&travelmode=walking">🚶 Walk to my car</a>
+         <button type="button" id="carShow">Show on the map</button>
+         <button type="button" id="carHere">Update: my car is here now</button>
+         <button type="button" id="carClear">I left (clear)</button>`
+      : '<button type="button" id="carHere" class="primary">📍 My car is parked here</button>';
+    $('timerStop').disabled = !timer;
+    const bind = (id, fn) => { const el = $(id); if (el) el.onclick = fn; };
+    bind('carHere', saveCarHere);
+    bind('carShow', () => { const c = store.get('pt.car'); $('carDialog').close(); map.setView([c.lat, c.lon], 18); carMarker?.openPopup(); });
+    bind('carClear', () => { store.set('pt.car', null); stopTimer(); drawCar(); renderCarDialog(); });
+  }
+  function saveCarHere() {
+    const at = state.tracking && state.me ? { lat: state.me.lat, lon: state.me.lon } : state.pin ? { lat: state.pin.lat, lon: state.pin.lng } : state.me;
+    if (!at) { toast('No position yet: press 📍 or drop a pin.'); return; }
+    const box = $('status');
+    store.set('pt.car', { ...at, t: Date.now(), status: box.querySelector('.status-title')?.textContent || '', where: box.querySelector('.status-detail b')?.outerHTML || '' });
+    drawCar(); renderCarDialog(); toast('🚗 Car position saved');
+  }
+  async function startTimer() {
+    const minutes = Math.max(5, Math.min(1440, +$('carForm').minutes.value || 0));
+    const end = Date.now() + minutes * 60000;
+    const plan = [{ id: 4101, at: end - 10 * 60000, body: 'Your parking time ends in 10 minutes.' }, { id: 4102, at: end, body: 'Your parking time is over.' }]
+      .filter((n) => n.at > Date.now() + 5000);
+    const ln = LN();
+    try {
+      if (ln) {
+        const p = await ln.requestPermissions();
+        if (p.display !== 'granted') { toast('Allow notifications for the reminder.'); return; }
+        await ln.cancel({ notifications: [{ id: 4101 }, { id: 4102 }] }).catch(() => {});
+        await ln.schedule({ notifications: plan.map((n) => ({ id: n.id, title: '🅿️ Parking Tracker', body: n.body, schedule: { at: new Date(n.at), allowWhileIdle: true } })) });
+      } else if ('Notification' in window) {
+        if (Notification.permission !== 'granted') await Notification.requestPermission();
+        state.webTimers = plan.map((n) => setTimeout(() => { try { new Notification('🅿️ Parking Tracker', { body: n.body }); } catch { toast(n.body, 8000); } }, n.at - Date.now()));
+      }
+    } catch (e) { toast('Could not schedule the reminder: ' + e.message); return; }
+    store.set('pt.timer', { end, minutes });
+    renderTimer(); renderCarDialog();
+    toast(`⏱️ Reminder set: ${minutes} min`);
+  }
+  async function stopTimer() {
+    store.set('pt.timer', null);
+    (state.webTimers || []).forEach(clearTimeout);
+    try { await LN()?.cancel({ notifications: [{ id: 4101 }, { id: 4102 }] }); } catch { /* nothing scheduled */ }
+    renderTimer(); renderCarDialog();
+  }
+  function renderTimer() {
+    const t = store.get('pt.timer'), el = $('timerLine');
+    if (!t) { el.classList.add('hidden'); syncSheetHeight(); return; }
+    const left = t.end - Date.now();
+    el.classList.remove('hidden');
+    el.innerHTML = left > 0
+      ? `⏱️ Parking time left: <b>${Math.floor(left / 3600000)}h${String(Math.floor((left % 3600000) / 60000)).padStart(2, '0')}</b> (until ${new Date(t.end).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })})`
+      : '⏱️ <b>Your parking time is over.</b>';
+    syncSheetHeight();
+  }
+  setInterval(renderTimer, 30000);
+  $('carBtn').onclick = () => { renderCarDialog(); $('carDialog').showModal(); };
+  $('timerStart').onclick = startTimer;
+  $('timerStop').onclick = stopTimer;
+
   // ---------- address search ----------
   $('searchForm').onsubmit = async (e) => {
     e.preventDefault();
@@ -378,6 +538,7 @@
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
   renderCardLine();
+  drawCar();
   syncSheetHeight();
   window.addEventListener('resize', syncSheetHeight);
   loadSector();

@@ -13,6 +13,14 @@ and sends you to the nearest covered street in **Waze** or **Google Maps**.
 - **Nearest free spot** (🟢): the closest street surface covered by your card, computed from live data, with Waze / Google Maps buttons.
 - **Live street colours** on the map (zoom in): green = free with your card, amber = partly (check the number),
   red = pay, dark red = red zone (card never valid), blue = parking disc, teal = free for everyone.
+- **Reserved spaces**: every on-street space from parking.brussels. Standing on a delivery bay, disabled (PMR),
+  taxi, EV-charging, car-sharing… space gives **RESERVED** (no card allows it); reserved spaces nearby are listed;
+  30/60-minute and shop & go zones give **TIME LIMITED**.
+- **Roadworks & traffic events** (Brussels Mobility / Osiris): warned at your spot and shown on the map.
+- **Public car parks** (capacity, height, operator, phone) and **EV charging points** as map layers (🗂️ switches).
+- **My car** (🚗): save where you parked, see it on the map, walk back with Google Maps.
+- **Parking timer**: notification 10 minutes before the end and at the end (works with the app closed on Android).
+- **Pay** buttons open 4411 / EasyPark / Seety: paying itself happens in those apps.
 
 ## Tolerance zones
 
@@ -28,6 +36,8 @@ Tick it in the card dialog if your card has it. Ask the City if you are not sure
 | Street surface under the car, its municipality and zone colour (red = residents' cards never valid, grey/green/orange = card valid in your sector, unregulated, blue = disc…) | **parking.brussels API** (`regulation_zones`) | **live, at every check** |
 | House numbers and where they are | **Brussels Region UrbIS address points** (`bm_urbis:urbadm_adpt`, data.mobility.brussels) | **live, at every check** |
 | Which streets and numbers your card covers | City of Brussels official sector list (`sectors.js`) — no API publishes City of Brussels sectors | the official documents are **checked live** (ETag / size / date) at start and every 6 h; if the City changes them, the app stops answering until the list is updated |
+| Reserved spaces (delivery, PMR, taxi, EV…) | **parking.brussels API** (`on_street`) | **live, at every check** |
+| Roadworks, traffic events, car parks, EV charging | **Brussels Mobility** (`bm_osiris:chantiers_actu`, `bm_traffic:events`, `bm_parking:parkingpublic`, `bm_equipment:evse`) | live, when checking / moving the map |
 | Where you are | phone GPS, high accuracy, no cached fixes | continuously; re-checked every 8 m or 30 s |
 
 Nothing is stored between checks. No internet, no answer from one of the sources, GPS worse than ±25 m or a fix

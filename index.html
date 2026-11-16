@@ -23,12 +23,25 @@
   <div id="map"></div>
 
   <div class="fabs">
-    <button id="trackBtn" class="fab" title="Follow my position">📍</button>
+    <button id="layersBtn" class="fab" title="Map layers">🗂️</button>
+    <button id="carBtn" class="fab" title="My car / parking timer">🚗</button>
     <button id="findBtn" class="fab" title="Nearest free spot">🟢</button>
+    <button id="trackBtn" class="fab" title="Follow my position">📍</button>
+  </div>
+
+  <div id="layersPanel" class="panel hidden">
+    <div class="panel-title">Map layers (live)</div>
+    <label><input type="checkbox" data-layer="streets" /> Street colours for your card</label>
+    <label><input type="checkbox" data-layer="spaces" /> Parking spaces &amp; reserved spaces</label>
+    <label><input type="checkbox" data-layer="works" /> Roadworks &amp; traffic events</label>
+    <label><input type="checkbox" data-layer="carparks" /> Public car parks</label>
+    <label><input type="checkbox" data-layer="chargers" /> EV charging points</label>
+    <p class="hint">Sources: parking.brussels, Brussels Mobility, UrbIS — fetched when you move the map.</p>
   </div>
 
   <section id="sheet" class="sheet">
     <div id="cardLine" class="cardline"></div>
+    <div id="timerLine" class="timerline hidden"></div>
     <div id="status" class="status idle">
       <div class="status-title">Tap the map or press 📍</div>
       <div class="status-detail">I'll tell you if your residential card lets you park there for free.</div>
@@ -36,6 +49,23 @@
     <div id="liveLine" class="liveline"></div>
     <div id="nearest" class="nearest hidden"></div>
   </section>
+
+  <dialog id="carDialog">
+    <form method="dialog" id="carForm">
+      <h2>🚗 My car</h2>
+      <div id="carInfo" class="hint"></div>
+      <div id="carActions" class="stack"></div>
+      <div id="timerBox" class="stack">
+        <label>Parking timer (minutes) <input name="minutes" type="number" min="5" max="1440" step="5" value="120" /></label>
+        <p class="hint">You get a notification 10 minutes before the end and at the end.</p>
+        <div class="row">
+          <button type="button" id="timerStart" class="primary">Start timer</button>
+          <button type="button" id="timerStop">Stop timer</button>
+        </div>
+      </div>
+      <menu><button value="close">Close</button></menu>
+    </form>
+  </dialog>
 
   <dialog id="cardDialog">
     <form method="dialog" id="cardForm">

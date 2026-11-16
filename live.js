@@ -16,6 +16,16 @@
   const BXL_SITE = 'https://www.bruxelles.be';
   const bxlUrl = (u) => (IN_APP ? u : u.replace(BXL_SITE, '/bxl')); // browser: through tools/dev-server.mjs
   const URBIS_WFS = 'https://data.mobility.brussels/geoserver/bm_urbis/wfs'; // allows browser calls (CORS *)
+  const BM_WFS = 'https://data.mobility.brussels/geoserver/ows'; // Brussels Mobility (roadworks, car parks, charging)
+  // Reserved parking spaces (parking.brussels on_street "typres"). Time-limited zones are allowed for a short time.
+  const RESERVED = {
+    1: '🚚 Delivery space', 2: '🚛 Trucks only', 3: '🚌 Bus only', 5: '♿ Disabled (PMR) space', 6: '🚕 Taxi rank',
+    8: '🏛️ Diplomatic (CD) space', 9: '🚓 Police only', 10: '🏍️ Motorbikes only', 11: '🚲 Bicycles only', 12: '👋 Kiss & ride',
+    13: '🚚 Delivery zone', 14: '👋 Kiss & ride zone', 16: '⏱️ 30-minute zone', 17: '⏱️ 60-minute zone', 18: '🛍️ Shop & go zone',
+    19: '⚡ EV charging zone', 20: '🚗 Car-sharing zone', 21: '🚌 Coach drop zone', 22: '🚌 Coach waiting zone', 23: '🚌 Coach overnight zone',
+    24: '🚛 Truck zone', 25: '🚛 Zone E1', 26: '⛔ Other reserved space',
+  };
+  const TIME_LIMITED = new Set([16, 17, 18]);
   const C = {
     API_TIMEOUT_MS: 12000,
     CORNER_AMBIGUITY_M: 4, // address about as close to two different streets: left out
@@ -184,7 +194,10 @@
       return r.json();
     }), C.API_TIMEOUT_MS, 'parking.brussels');
     if (!json || !Array.isArray(json.features)) throw new Error('parking.brussels: unexpected answer');
-    return json.features.filter((f) => f.geometry && !f.properties?.disabled_on).map((f) => {
+    // Tunnels and viaducts run under/over other streets: nobody parks there, and their surface would
+    // otherwise hide the street above or below (e.g. Tunnel Bailli under Avenue Louise).
+    const notParkable = (p) => /^(tunnel|viaduc|tr[ée]mie|pont)\b/i.test(String(p?.pn_name_fr || '').trim());
+    return json.features.filter((f) => f.geometry && !f.properties?.disabled_on && !notParkable(f.properties)).map((f) => {
       let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
       for (const rings of polysOf(f.geometry)) for (const [x, y] of rings[0]) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
       return { id: f.properties.id, p: f.properties, g: f.geometry, bb: [x0, y0, x1, y1] };
@@ -235,6 +248,72 @@
     });
   }
 
+  // ---------- live source 4: individual parking spaces, roadworks, car parks, charging ----------
+  async function wfs(base, layer, [s, w, n, e], what, extra = '') {
+    const url = `${base}?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=${layer}`
+      + `&srsName=EPSG:3857&count=5000${extra}&bbox=${s.toFixed(6)},${w.toFixed(6)},${n.toFixed(6)},${e.toFixed(6)},urn:ogc:def:crs:EPSG::4326`;
+    const json = await withTimeout(fetch(url, { cache: 'no-store' }).then((r) => {
+      if (!r.ok) throw new Error(what + ' HTTP ' + r.status);
+      return r.json();
+    }), C.API_TIMEOUT_MS, what);
+    if (!json || !Array.isArray(json.features)) throw new Error(what + ': unexpected answer');
+    return json.features.filter((f) => f.geometry);
+  }
+  const points = (g) => (g.type === 'Point' ? [g.coordinates] : g.type === 'MultiPoint' ? g.coordinates : []).map(([x, y]) => fromMerc(x, y));
+
+  // Every on-street parking space, with its reservation type (0 = ordinary space).
+  async function liveSpaces(box) {
+    const out = [];
+    for (const f of await wfs(PB_WFS, 'ParkingBrussels:on_street', box, 'parking.brussels spaces')) {
+      const p = f.properties || {};
+      for (const [lat, lon] of points(f.geometry)) out.push({ lat, lon, typres: +p.typres || 0, typreg: p.typreg, label: RESERVED[+p.typres] || null });
+    }
+    return out;
+  }
+  const parseDMY = (s) => { const m = String(s || '').match(/^(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : null; };
+  // Current roadworks (Osiris) and traffic events (Brussels Mobility), still running today.
+  async function liveWorks(box) {
+    const today = todayISO(), now = new Date().toISOString();
+    const [sites, events] = await Promise.all([
+      wfs(BM_WFS, 'bm_osiris:chantiers_actu', box, 'roadworks'),
+      wfs(BM_WFS, 'bm_traffic:events', box, 'traffic events'),
+    ]);
+    const works = [];
+    for (const f of sites) {
+      const p = f.properties || {}, start = parseDMY(p.str_start_date), end = parseDMY(p.str_end_date);
+      if ((end && end < today) || (start && start > today)) continue;
+      works.push({ kind: 'works', g: f.geometry, title: p.nature_fr || 'Roadworks', where: p.road_impl_fr || p.nom_fr || '',
+        from: start, to: end, by: p.pilote_fr || '', link: p.link_fr || '' });
+    }
+    for (const f of events) {
+      const p = f.properties || {};
+      if (p.is_active === false || (p.end_time && p.end_time < now) || (p.start_time && p.start_time > now)) continue;
+      works.push({ kind: 'event', g: f.geometry, title: (p.type_fr || 'Event').trim(), where: p.location_fr || '',
+        from: p.start_time?.slice(0, 10), to: p.end_time?.slice(0, 10), by: p.consequences_fr || '', link: '' });
+    }
+    return works;
+  }
+  async function liveCarParks(box) {
+    return (await wfs(BM_WFS, 'bm_parking:parkingpublic', box, 'car parks')).filter((f) => f.properties?.active !== false).map((f) => {
+      const p = f.properties, [lat, lon] = points(f.geometry)[0];
+      return { lat, lon, name: p.name_fr, address: [p.road_fr, p.housenr].filter(Boolean).join(' '), capacity: p.capacity,
+        disabled: p.disabledcapacity, operator: p.operator_fr, phone: p.contact_phone, maxheight: p.maxheight > 0 ? p.maxheight : null };
+    });
+  }
+  async function liveChargers(box) {
+    return (await wfs(BM_WFS, 'bm_equipment:evse', box, 'charging points')).map((f) => {
+      const p = f.properties, [lat, lon] = points(f.geometry)[0];
+      return { lat, lon, operator: p.operator_name, points: p.charging_points, power: p.power, standard: p.connector_standard, type: p.connector_type };
+    });
+  }
+  // Is the point inside / near a running roadworks or event?
+  function worksAt(works, lat, lon, radius = 25) {
+    return works.filter((w) => {
+      if (w.g.type === 'Point' || w.g.type === 'MultiPoint') return points(w.g).some(([a, o]) => dist(lat, lon, a, o) <= radius);
+      return closestOnSurface(lat, lon, w.g).m <= 5;
+    });
+  }
+
   // ---------- decisions ----------
   function cardState(card) {
     if (!card) return { valid: false, why: 'No parking card set up yet — tap 🪪.' };
@@ -276,7 +355,40 @@
     return { ...base, st, sets, near, kind: yes === near.length ? 'covered' : yes === 0 ? notCovered : 'mixed' };
   }
 
+  // Full decision: the card/zone/number decision, then reserved spaces and roadworks at that spot.
   async function decide(ctx, lat, lon, accuracy) {
+    const r = await decideZone(ctx, lat, lon, accuracy);
+    if (!r.zone) return r; // no street found / can't verify / card invalid: nothing more to add
+    const d = 0.0004, box = [lat - d, lon - d * 1.6, lat + d, lon + d * 1.6];
+    const notes = [];
+    // 1. Reserved spaces: these apply whatever your card.
+    let spaces;
+    try { spaces = await liveSpaces(box); } catch (e) { return cantVerify(`Could not check reserved parking spaces (${esc(e.message)}).`, { zone: r.zone }); }
+    const reach = Math.max(4, accuracy || 0);
+    const near = spaces.map((s) => ({ ...s, m: dist(lat, lon, s.lat, s.lon) })).filter((s) => s.m <= reach).sort((a, b) => a.m - b.m);
+    const precise = accuracy == null || accuracy <= 6;
+    const first = near[0];
+    if (first && first.typres && !TIME_LIMITED.has(first.typres) && first.m <= 3 && precise) {
+      return { ...r, status: 'pay', title: 'RESERVED', detail: `<b>${esc(first.label || 'Reserved space')}</b>: you can't park here, whatever your card. ${r.detail}`, reserved: first, notes };
+    }
+    const reservedNear = [...new Map(near.filter((s) => s.typres && !TIME_LIMITED.has(s.typres)).map((s) => [s.typres, s])).values()];
+    for (const s of reservedNear) notes.push(`⚠️ ${esc(s.label)} ${Math.round(s.m)} m away — don't park on it.`);
+    const timed = near.find((s) => TIME_LIMITED.has(s.typres) && s.m <= 3);
+    let out = { ...r, notes };
+    if (timed) {
+      notes.unshift(`${esc(timed.label)}: parking time is limited here, your card doesn't extend it.`);
+      if (out.status === 'free') out = { ...out, status: 'unknown', title: 'TIME LIMITED' };
+    }
+    // 2. Roadworks and traffic events (information: they may forbid parking, follow the signs).
+    try {
+      for (const w of worksAt(await liveWorks(box), lat, lon)) {
+        notes.push(`🚧 ${esc(w.title)}${w.where ? ' — ' + esc(w.where) : ''}${w.to ? ' (until ' + esc(fmtDate(w.to)) + ')' : ''}. Parking may be forbidden: check the signs.`);
+      }
+    } catch (e) { notes.push(`Could not check roadworks (${esc(e.message)}).`); }
+    return out;
+  }
+
+  async function decideZone(ctx, lat, lon, accuracy) {
     const cs = cardState(ctx.card);
     if (!cs.valid) return result('pay', 'PAY', cs.why);
     if (!navigator.onLine) return cantVerify('No internet connection. The app only answers with live data.');
@@ -379,6 +491,7 @@
     C, ZONE_NAMES, IN_APP, PB_WFS, esc, fmtDate, todayISO, normalize, dist, withTimeout,
     parseHouse, parseRule, ruleCovers, buildSector, streetIndex, ruleSetsFor, setsCover,
     checkOfficialList, liveZones, liveAddresses, liveArea, liveFreeSpots, surfaceStatus, surfaceLatLngs,
+    liveSpaces, liveWorks, liveCarParks, liveChargers, RESERVED, TIME_LIMITED,
     cardState, decide, listProblem, cantVerify,
   };
 })();
