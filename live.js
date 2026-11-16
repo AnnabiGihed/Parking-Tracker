@@ -108,6 +108,7 @@
     const s = String(raw || '').trim().toLowerCase();
     if (!s) return { all: true, text: 'whole side' };
     if (s.startsWith('hors')) return { none: true, text: 'not covered' };
+    if (s.startsWith('check:')) return { check: true, none: true, text: String(raw).slice(6).trim() };
     const ranges = s.split(/\s+et\s+|,/).map((part) => {
       part = part.trim();
       let m = part.match(/^(\S+)\s*(?:à|a)\s*fin/);
@@ -441,20 +442,95 @@
     return `Could not confirm that the City's official sector list is unchanged (${esc(list.why || 'not checked yet')}).`;
   }
 
-  // Status of one street surface for your card. Used by the spot decision, the map and the free-spot search.
-  function surfaceStatus(ctx, f, addrs) {
-    const z = f.p, color = ZONE_NAMES[z.typreg] ?? 'unknown';
-    const base = { f, zone: z, color };
-    if (z.typreg === 0) return { ...base, kind: 'free' };
-    if (z.typreg === 1) return { ...base, kind: 'red' };
-    if (![2, 3, 4, 5, 9].includes(z.typreg)) return { ...base, kind: 'unknown' };
+  // ---------- zone types and card scope (all municipalities) ----------
+  // What kind of zone is this, for a residents' card? From the live rule of the zone when available.
+  //   FREE · PAYABLE (card never valid) · DEROGATION (card valid in its sector) · DISK (blue zone; card valid in
+  //   its sector) · RESIDENTS (residents-only spaces) · RESERVED (delivery, car-sharing…: card not valid) · null
+  function zoneType(z, rule) {
+    if (z.typreg === 0) return 'FREE';
+    if (rule?.type) {
+      if (rule.type === 'RESERVED') return z.typreg === 9 ? 'RESIDENTS' : 'RESERVED';
+      return rule.type;
+    }
+    // Rule unknown: only colours that mean the same everywhere. Orange depends on the municipality.
+    return { 1: 'PAYABLE', 3: 'DEROGATION', 4: 'DEROGATION', 5: 'DISK', 9: 'RESIDENTS' }[z.typreg] || null;
+  }
+  const isEvent = (z, rule) => z.typreg === 6 || /v[ée]nement/i.test(rule?.name || '');
+
+  // Sector polygons ("mailles") published by parking.brussels, with their codes.
+  async function liveMailles(box) {
+    return (await wfs(PB_WFS, 'ParkingBrussels:permit_secteurs_mailles', box, 'parking.brussels sectors'))
+      .map((f) => ({ p: f.properties || {}, g: f.geometry }));
+  }
+  // The list of mailles (no shapes) for the card setup.
+  async function maillesList() {
+    const url = `${PB_WFS}?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json`
+      + '&typeNames=ParkingBrussels:permit_secteurs_mailles&propertyName=zonecode,namefre,namedut';
+    const json = await withTimeout(fetch(url, { cache: 'no-store' }).then((r) => r.json()), C.API_TIMEOUT_MS, 'parking.brussels sectors');
+    return (json.features || []).map((f) => f.properties).filter((p) => p.zonecode);
+  }
+
+  // Does the card cover this place (for zones that accept residents' cards)?
+  // Returns { state: 'yes' | 'no' | 'check' | 'streets', why } — 'streets' = decide with the City street lists.
+  function cardScope(ctx, z, pt, mailles, accuracy = 0) {
+    const muni = ctx.muni;
+    const here = titleCase(z.mu_name_fr);
+    const inside = (m) => closestOnSurface(pt.lat, pt.lon, m.g);
+    for (const m of mailles) {
+      if (ctx.lims.has(m.p.zonecode) && inside(m).m === 0) return { state: 'yes', why: `border zone ${esc(m.p.namefre || m.p.zonecode)} (on your card)` };
+    }
+    if (normalize(z.mu_name_fr) !== normalize(muni.mu)) {
+      if (muni.kind === 'streets') return { state: 'streets' }; // City tolerance agreements are street lists
+      return { state: 'no', why: `is in ${esc(here)}, not in ${esc(muni.name)}` };
+    }
+    switch (muni.kind) {
+      case 'streets': return { state: 'streets' };
+      case 'whole': return { state: 'yes', why: `your card is valid in this zone everywhere in ${esc(muni.name)}` };
+      case 'wsl':
+        return zoneType(z, null) === 'DISK' || z.typreg === 5
+          ? { state: 'yes', why: `blue zone: your card is valid in all blue zones of ${esc(muni.name)}` }
+          : { state: 'check', why: esc(muni.note) };
+      case 'unknown': return { state: 'check', why: esc(muni.note) };
+      case 'mailles': {
+        if (!ctx.mailles.size) return { state: 'check', why: 'choose the areas (mailles) printed on your card in the card settings' };
+        const mine = mailles.filter((m) => ctx.mailles.has(m.p.zonecode));
+        const hit = mine.find((m) => inside(m).m === 0);
+        if (hit) return { state: 'yes', why: `in your area ${esc(hit.p.namefre || hit.p.zonecode)}` };
+        const near = mine.map((m) => ({ m, d: inside(m).m })).sort((a, b) => a.d - b.d)[0];
+        if (near && near.d <= Math.max(C.BORDER_MARGIN_M, accuracy)) {
+          return { state: 'check', why: `you are at the limit of your area ${esc(near.m.p.namefre || near.m.p.zonecode)}: check the street signs` };
+        }
+        return { state: 'no', why: 'is outside the areas on your card' };
+      }
+      default: return { state: 'check', why: 'unknown municipality rules' };
+    }
+  }
+  // City street lists: a side with a condition in words ("côté parc"…).
+  const sideCheck = (sets, odd) => sets.map((r) => (odd ? r.odd : r.even)).find((x) => x.check) || null;
+  const bboxCenter = (f) => { const [x0, y0, x1, y1] = f.bb; const [lat, lon] = fromMerc((x0 + x1) / 2, (y0 + y1) / 2); return { lat, lon }; };
+
+  // Status of one street surface for your card. Used by the map and the free-spot search.
+  function surfaceStatus(ctx, f, addrs, rules, mailles) {
+    const z = f.p, rule = rules?.get(z.ZoneId1) || null, type = zoneType(z, rule);
+    const base = { f, zone: z, rule, color: ZONE_NAMES[z.typreg] ?? 'unknown' };
+    if (type === 'FREE') return { ...base, kind: 'free' };
+    if (type === 'PAYABLE') return { ...base, kind: z.typreg === 1 ? 'red' : 'pay' };
+    if (type === 'RESERVED') return { ...base, kind: 'pay' };
+    if (!type || isEvent(z, rule)) return { ...base, kind: 'unknown' };
+    const notCovered = type === 'DISK' ? 'disc' : 'pay';
+    const scope = cardScope(ctx, z, bboxCenter(f), mailles || []);
+    if (scope.state === 'yes') return { ...base, kind: 'covered', near: [] };
+    if (scope.state === 'no') return { ...base, kind: notCovered };
+    if (scope.state === 'check') return { ...base, kind: 'check' };
+    // City of Brussels street lists
+    if (!ctx.sector) return { ...base, kind: 'check' };
     const idx = streetIndex(ctx.sector, z.pn_name_fr, z.pn_name_du);
     const st = idx >= 0 ? ctx.sector.streets[idx] : null;
     const sets = st ? ruleSetsFor(st, z.mu_name_fr, ctx.codes) : [];
-    const notCovered = z.typreg === 5 ? 'disc' : 'pay';
     if (!sets.length) return { ...base, st, sets, kind: notCovered };
     if (ctx.listProblem) return { ...base, st, sets, kind: 'unknown' };
     if (sets.some((r) => r.odd.all && r.even.all)) return { ...base, st, sets, kind: 'covered', near: [] };
+    if (sets.some((r) => r.odd.check || r.even.check)) return { ...base, st, sets, kind: 'check' };
     let near = addrs.filter((a) => a.surfaceId === f.id);
     if (!near.length) {
       near = addrs.filter((a) => a.i === st.i && a.commune === normalize(z.mu_name_fr)
@@ -496,23 +572,17 @@
         notes.push(`🚧 ${esc(w.title)}${w.where ? ' — ' + esc(w.where) : ''}${w.to ? ' (until ' + esc(fmtDate(w.to)) + ')' : ''}. Parking may be forbidden: check the signs.`);
       }
     } catch (e) { notes.push(`Could not check roadworks (${esc(e.message)}).`); }
-    // 3. Paid hours and prices of this zone (live rules). Outside paid hours nobody pays.
-    const code = r.zone.ZoneId1 || r.zone.zoneid1;
-    if (code && r.zone.typreg !== 0) {
-      let rule = null;
-      try { rule = (await liveRules(code)).get(code) || null; } catch (e) {
-        notes.push(`Could not check the paid hours (${esc(e.message)}): the app assumes they apply.`);
-      }
-      if (rule) {
-        out.rule = rule;
-        out.tariff = tariffText(rule);
-        const needsPaying = (out.status === 'pay' && out.title !== 'RESERVED') || out.title === 'PARKING DISC' || out.title === 'CHECK THE NUMBER';
-        if (needsPaying && !paidNow(rule)) {
-          const next = nextPaid(rule);
-          notes.unshift(`During paid hours: ${out.detail}`);
-          out = { ...out, status: 'free', title: 'FREE NOW',
-            detail: `No need to pay right now: here, ${rule.type === 'DISK' ? 'the parking disc' : 'paid parking'} applies <b>${esc(scheduleText(rule))}</b>${isHoliday(brussels().y, brussels().m, brussels().d) && rule.special_day !== 1 ? ' (not on public holidays)' : ''}.${next ? ` It starts again <b>${esc(next)}</b>.` : ''}` };
-        }
+    // 3. Paid hours and prices of this zone (live rule, fetched by decideZone). Outside paid hours nobody pays.
+    if (r.ruleError) notes.push(`Could not check the paid hours (${esc(r.ruleError)}): the app assumes they apply.`);
+    const rule = r.rule;
+    if (rule && r.zone.typreg !== 0) {
+      out.tariff = tariffText(rule);
+      const needsPaying = (out.status === 'pay' && out.title !== 'RESERVED') || ['PARKING DISC', 'CHECK THE NUMBER', 'CHECK YOUR CARD', 'CHECK THE SIGNS'].includes(out.title);
+      if (needsPaying && !paidNow(rule)) {
+        const next = nextPaid(rule);
+        notes.unshift(`During paid hours: ${out.detail}`);
+        out = { ...out, status: 'free', title: 'FREE NOW',
+          detail: `No need to pay right now: here, ${rule.type === 'DISK' ? 'the parking disc' : 'paid parking'} applies <b>${esc(scheduleText(rule))}</b>${isHoliday(brussels().y, brussels().m, brussels().d) && rule.special_day !== 1 ? ' (not on public holidays)' : ''}.${next ? ` It starts again <b>${esc(next)}</b>.` : ''}` };
       }
     }
     return out;
@@ -534,17 +604,36 @@
     for (const z of zones) { const c = closestOnSurface(lat, lon, z.g); if (c.m < fm) { fm = c.m; f = z; } }
     if (!f || fm > C.ZONE_SNAP_M + Math.min(accuracy || 0, 15)) return cantVerify('This point is not on a street with parking rules. Put the pin on the street, where you park.');
 
-    const z = f.p, color = ZONE_NAMES[z.typreg] ?? 'unknown';
-    const extra = { zone: z, surface: f };
+    const z = f.p;
+    const code = z.ZoneId1 || z.zoneid1;
+    let rule = null, ruleError = null;
+    if (code && z.typreg !== 0) { try { rule = (await liveRules(code)).get(code) || null; } catch (e) { ruleError = e.message; } }
+    const extra = { zone: z, surface: f, rule, ruleError };
     const where = `<b>${esc(z.pn_name_fr)}</b>`;
-    if (z.typreg === 0) return result('free', 'FREE ✓', `${where} has no parking rules: free for everyone.`, extra);
-    if (z.typreg === 1) return result('pay', 'PAY', `${where} is a red zone: residents' cards are never valid here.`, extra);
-    if (z.typreg === 6) return cantVerify(`${where} is an event zone: the normal rules don't apply. Follow the signs.`, extra);
-    if (![2, 3, 4, 5, 9].includes(z.typreg)) return cantVerify(`${where}: this type of zone is unknown to the app. Follow the signs.`, extra);
+    const type = zoneType(z, rule);
+    if (type === 'FREE') return result('free', 'FREE ✓', `${where} has no parking rules: free for everyone.`, extra);
+    if (isEvent(z, rule)) return cantVerify(`${where} is an event zone: the normal rules don't apply. Follow the signs.`, extra);
+    if (type === 'PAYABLE') {
+      return result('pay', 'PAY', `${where} is ${z.typreg === 1 ? 'a red zone' : `a ${esc(ZONE_NAMES[z.typreg] || '')} zone`}: residents' cards are not valid here. Pay at the meter or with an app.`, extra);
+    }
+    if (type === 'RESERVED') return result('pay', 'PAY', `${where}: reserved zone (${esc(rule?.name || 'reserved use')}). Residents' cards are not valid here.`, extra);
+    if (!type) return cantVerify(`${where}: the rules of this ${esc(ZONE_NAMES[z.typreg] || '')} zone could not be checked. Orange zones accept residents' cards only in some municipalities: follow the signs.`, extra);
 
-    const notCovered = z.typreg === 5
+    const notCovered = type === 'DISK'
       ? (txt) => result('unknown', 'PARKING DISC', `${txt} Blue zone: put your parking disc, time is limited.`, extra)
       : (txt) => result('pay', 'PAY', `${txt} Pay at the meter or with an app.`, extra);
+
+    // Which municipality / sector / mailles does the card cover?
+    let mailles = [];
+    if (ctx.muni.kind === 'mailles' || ctx.lims.size) {
+      try { mailles = await liveMailles(pad(box)); } catch (e) { return cantVerify(`Could not get the sector map from parking.brussels (${esc(e.message)}).`, extra); }
+    }
+    const scope = cardScope(ctx, z, { lat, lon }, mailles, accuracy || 0);
+    if (scope.state === 'yes') return result('free', 'FREE ✓', `${where}: ${scope.why}.`, extra);
+    if (scope.state === 'no') return notCovered(`${where} ${scope.why}: your card doesn't cover it.`);
+    if (scope.state === 'check') return result('unknown', 'CHECK YOUR CARD', `${where}: ${scope.why}.`, extra);
+
+    // City of Brussels: street + house-number lists.
     const idx = streetIndex(ctx.sector, z.pn_name_fr, z.pn_name_du);
     const st = idx >= 0 ? ctx.sector.streets[idx] : null;
     const sets = st ? ruleSetsFor(st, z.mu_name_fr, ctx.codes) : [];
@@ -556,6 +645,8 @@
     if (ctx.listProblem) return cantVerify(ctx.listProblem, extra);
     const ruleText = sets.map((r) => `${esc(r.label)}: odd <b>${esc(r.odd.text)}</b>, even <b>${esc(r.even.text)}</b>`).join('; ');
     if (sets.some((r) => r.odd.all && r.even.all)) return result('free', 'FREE ✓', `${where}: your card covers the whole street.`, extra);
+    const bothCheck = sideCheck(sets, true) && sideCheck(sets, false);
+    if (bothCheck) return result('unknown', 'CHECK THE SIGNS', `${where} is in your sector only under a condition: “${esc(bothCheck.text)}”.`, extra);
 
     let addrs;
     try { addrs = await liveAddresses(ctx.sector, box, zones); } catch (e) { return cantVerify(`Could not get the official house numbers (${esc(e.message)}). ${ruleText}.`, extra); }
@@ -564,6 +655,10 @@
     let best = null, bd = Infinity;
     for (const a of mine) { const m = dist(lat, lon, a.a, a.o); if (m < bd) { bd = m; best = a; } }
     if (!best) return cantVerify(`Your card covers only part of ${where} (${ruleText}). Look at the house number in front of you.`, extra);
+    const cond = sideCheck(sets, best.house.n % 2 === 1);
+    if (cond && !setsCover(sets, best.house)) {
+      return result('unknown', 'CHECK THE SIGNS', `In front of <b>${esc(st.fr)} ${esc(best.h)}</b>: this side is in your sector only under a condition: “${esc(cond.text)}”.`, extra);
+    }
 
     const margin = Math.max(C.BORDER_MARGIN_M, accuracy || 0);
     const close = mine.filter((a) => dist(lat, lon, a.a, a.o) <= bd + margin);
@@ -581,12 +676,17 @@
 
   // Street surfaces + their status for an area (map layer, free-spot search). All live.
   async function liveArea(ctx, box, { withAddresses = true } = {}) {
-    const zones = await liveZones(pad(box));
-    const addrs = withAddresses ? await liveAddresses(ctx.sector, box, zones) : [];
+    const needMailles = ctx.muni.kind === 'mailles' || ctx.lims.size;
+    const [zones, rules, mailles] = await Promise.all([
+      liveZones(pad(box)),
+      liveRules().catch(() => null),
+      needMailles ? liveMailles(pad(box)) : Promise.resolve([]),
+    ]);
+    const addrs = withAddresses && ctx.muni.kind === 'streets' && ctx.sector ? await liveAddresses(ctx.sector, box, zones) : [];
     const inBox = (f) => f.g && polysOf(f.g).some((r) => r[0].some(([x, y]) => {
       const [la, lo] = fromMerc(x, y); return la >= box[0] && la <= box[2] && lo >= box[1] && lo <= box[3];
     }));
-    return zones.filter(inBox).map((f) => surfaceStatus(ctx, f, addrs));
+    return zones.filter(inBox).map((f) => surfaceStatus(ctx, f, addrs, rules, mailles));
   }
 
   // Nearest covered spots, from live data only. Returns up to `count`, one per street.
@@ -624,6 +724,7 @@
     checkOfficialList, liveZones, liveAddresses, liveArea, liveFreeSpots, surfaceStatus, surfaceLatLngs,
     liveSpaces, liveWorks, liveCarParks, liveChargers, RESERVED, TIME_LIMITED,
     liveRules, paidNow, nextPaid, tariffText, scheduleText, isHoliday,
+    zoneType, cardScope, liveMailles, maillesList,
     cardState, decide, listProblem, cantVerify,
   };
 })();

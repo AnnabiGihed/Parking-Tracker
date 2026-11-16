@@ -40,8 +40,8 @@
   <!-- Layers -->
   <div id="layersPanel" class="popover hidden" role="dialog" aria-label="Map layers">
     <div class="popover-head"><b>Map layers</b><button type="button" class="icon-btn" data-close="layersPanel" aria-label="Close"><span data-icon="close"></span></button></div>
-    <label class="switch"><input type="checkbox" data-layer="streets" /><span class="sw"></span><span><b>Where my card works</b><small>Green: free with your card · Red: pay</small></span></label>
-    <label class="switch"><input type="checkbox" data-layer="spaces" /><span class="sw"></span><span><b>Parking spaces</b><small>Delivery, disabled, taxi, EV… (zoom in)</small></span></label>
+    <label class="switch"><input type="checkbox" data-layer="streets" /><span class="sw"></span><span><b>Where my card works</b><small>Zoomed out: official zone colours. Closer: green = free with your card, red = pay</small></span></label>
+    <label class="switch"><input type="checkbox" data-layer="spaces" /><span class="sw"></span><span><b>Parking spaces</b><small>Delivery, disabled, taxi, EV… (street level)</small></span></label>
     <label class="switch"><input type="checkbox" data-layer="works" /><span class="sw"></span><span><b>Roadworks &amp; events</b><small>May block parking</small></span></label>
     <label class="switch"><input type="checkbox" data-layer="carparks" /><span class="sw"></span><span><b>Car parks</b><small>Public underground parkings</small></span></label>
     <label class="switch"><input type="checkbox" data-layer="chargers" /><span class="sw"></span><span><b>EV charging</b><small>Charging points</small></span></label>
@@ -106,7 +106,8 @@
         <input id="scanInput" type="file" accept="image/*" capture="environment" hidden />
       </label>
       <div id="scanStatus" class="muted small"></div>
-      <div class="field"><label for="f-sector">Sector</label><select name="sector" id="sectorSelect"></select></div>
+      <div class="field"><label>Municipality that issued the card</label><select name="municipality" id="muniSelect"></select></div>
+      <div id="sectorBox"></div>
       <div class="grid2">
         <div class="field"><label>Valid from</label><input name="from" type="date" required /></div>
         <div class="field"><label>Valid until</label><input name="to" type="date" required /></div>
@@ -151,6 +152,8 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="icons.js"></script>
+  <script src="municipalities.js"></script>
+  <script src="city-sectors.js"></script>
   <script src="sectors.js"></script>
   <script src="live.js"></script>
   <script src="app.js"></script>

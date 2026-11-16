@@ -8,7 +8,8 @@
   const MAX_FIX_AGE_MS = 15000;
   const RECHECK_MOVE_M = 8;
   const RECHECK_EVERY_MS = 30000;
-  const LAYER_MIN_ZOOM = 16;
+  const LAYER_MIN_ZOOM = 16; // house-number detail (City street lists)
+  const CARD_MIN_ZOOM = 15; // your card's coverage per street surface
   const KIND_STYLE = {
     covered: { color: '#16a34a', label: 'free with your card' },
     mixed: { color: '#f59e0b', label: 'partly (check the number)' },
@@ -41,12 +42,20 @@
   async function ctx() {
     const stale = !state.list || (state.list.status !== 'ok' && Date.now() - state.list.t > 60000)
       || (state.list.status === 'ok' && Date.now() - state.list.t > PT.C.LIST_RECHECK_MS);
+    // Only the City of Brussels uses documents (street lists) that must be confirmed unchanged.
     if (stale && state.sector) {
       listPromise = listPromise || PT.checkOfficialList(state.sector).then((l) => { state.list = l; listPromise = null; return l; });
       await listPromise;
     }
-    return { card: state.card, sector: state.sector, codes: new Set(state.card?.tolerances || []), listProblem: PT.listProblem(state.list) };
+    return {
+      card: state.card, muni: state.muni || MUNI.bruxelles, sector: state.sector,
+      codes: new Set(state.card?.tolerances || []), mailles: new Set(state.card?.mailles || []), lims: new Set(state.card?.lims || []),
+      listProblem: state.sector ? PT.listProblem(state.list) : null,
+    };
   }
+  const MUNI = Object.fromEntries(window.MUNICIPALITIES.map((m) => [m.id, m]));
+  // Cards saved by older versions only had a City sector.
+  if (state.card && !state.card.municipality) { state.card.municipality = 'bruxelles'; store.set('pt.card', state.card); }
 
   // ---------- map ----------
   const map = L.map('map', { zoomControl: false, preferCanvas: true, attributionControl: true }).setView([50.8285, 4.3640], 16);
@@ -62,9 +71,14 @@
   const TARGET_ICON = divIcon('target-marker', ICON('parking'), [30, 30], [15, 15]);
 
   // ---------- live map layers ----------
+  // Zoomed out: the official zone colours drawn by parking.brussels' own map server (cheap at any zoom).
+  const zonesWms = L.tileLayer.wms(PT.IN_APP ? 'https://ows.parking.brussels/ws/ParkingBrussels/ows' : '/pbapi/ws/ParkingBrussels/ows', {
+    layers: 'ParkingBrussels:regulation_zones', format: 'image/png', transparent: true, opacity: 0.75, maxZoom: 19, attribution: 'zones © parking.brussels',
+  });
+  const myAreasLayer = L.layerGroup().addTo(map);
   const LAYERS = {
-    streets: { minZoom: LAYER_MIN_ZOOM, group: surfacesLayer, on: true },
-    spaces: { minZoom: 18, group: L.layerGroup().addTo(map), on: true },
+    streets: { minZoom: CARD_MIN_ZOOM, group: surfacesLayer, on: true },
+    spaces: { minZoom: 17, group: L.layerGroup().addTo(map), on: true },
     works: { minZoom: 15, group: L.layerGroup().addTo(map), on: true },
     carparks: { minZoom: 14, group: L.layerGroup().addTo(map), on: false },
     chargers: { minZoom: 15, group: L.layerGroup().addTo(map), on: false },
@@ -74,12 +88,22 @@
   const poi = (emoji) => L.divIcon({ className: '', html: `<div class="poi-icon">${emoji}</div>`, iconSize: [22, 22], iconAnchor: [11, 11] });
   const DRAW = {
     async streets(box) {
-      const [surfaces, rules] = await Promise.all([PT.liveArea(await ctx(), box), PT.liveRules().catch(() => null)]);
+      const c = await ctx();
+      const surfaces = await PT.liveArea(c, box, { withAddresses: map.getZoom() >= LAYER_MIN_ZOOM });
+      // Outline of the areas (mailles) on your card.
+      let areas = [];
+      if (c.muni.kind === 'mailles' && c.mailles.size) {
+        try { areas = (await PT.liveMailles(box)).filter((m) => c.mailles.has(m.p.zonecode) || c.lims.has(m.p.zonecode)); } catch { /* outline only */ }
+      }
       return (g) => {
+        myAreasLayer.clearLayers();
+        for (const a of areas) {
+          L.polygon(PT.surfaceLatLngs(a.g), { color: '#1d4ed8', weight: 3, dashArray: '8 6', fill: false, interactive: false }).addTo(myAreasLayer);
+        }
         for (const s of surfaces) {
           let kind = s.kind;
           // Outside paid hours: streets you'd pay on are free for everyone right now.
-          const rule = rules?.get(s.zone.ZoneId1);
+          const rule = s.rule;
           if (['pay', 'red', 'disc', 'mixed'].includes(kind) && rule && !PT.paidNow(rule)) kind = kind === 'mixed' ? 'covered' : 'freenow';
           const c = KIND_STYLE[kind].color;
           L.polygon(PT.surfaceLatLngs(s.f.g), { color: c, weight: 1, fillColor: c, fillOpacity: 0.55, interactive: false }).addTo(g);
@@ -140,9 +164,12 @@
   function scheduleLayer() { clearTimeout(layerTimer); layerTimer = setTimeout(refreshLayer, 700); }
   async function refreshLayer() {
     const seq = ++state.layerSeq, st = $('layerState');
-    if (!state.sector || !state.card) return;
-    if (!navigator.onLine) { for (const l of Object.values(LAYERS)) l.group.clearLayers(); st.textContent = 'offline: no live layers'; return; }
+    if (!state.card || !state.muni) return;
+    if (!navigator.onLine) { for (const l of Object.values(LAYERS)) l.group.clearLayers(); map.removeLayer(zonesWms); st.textContent = 'offline: no live layers'; return; }
     const b = map.getBounds().pad(0.1), box = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()], z = map.getZoom();
+    // Zoomed out: official zone colours (parking.brussels map images). Closer: your card's coverage per street.
+    if (LAYERS.streets.on && z < CARD_MIN_ZOOM) zonesWms.addTo(map); else map.removeLayer(zonesWms);
+    if (!LAYERS.streets.on || z < CARD_MIN_ZOOM) myAreasLayer.clearLayers();
     const jobs = Object.entries(LAYERS).map(async ([name, l]) => {
       if (!l.on || z < l.minZoom) { l.group.clearLayers(); return null; }
       try {
@@ -154,7 +181,10 @@
     st.textContent = 'loading live…';
     const errors = (await Promise.all(jobs)).filter(Boolean);
     if (seq !== state.layerSeq) return;
-    st.textContent = z < LAYER_MIN_ZOOM ? 'zoom in to see street colours' : errors.length ? 'some layers failed: ' + errors.join('; ') : 'updated ' + clock();
+    st.textContent = errors.length ? 'some layers failed: ' + errors.join('; ')
+      : z < CARD_MIN_ZOOM ? 'Official zone colours (red, grey, green, blue…). Zoom in to see where your card works.'
+        : z < 17 ? `Where your card works · updated ${clock()} · zoom in for parking spaces`
+          : `Where your card works + parking spaces · updated ${clock()}`;
   }
   map.on('moveend', scheduleLayer);
   setInterval(refreshLayer, 120000); // keep layers fresh
@@ -204,7 +234,10 @@
     if (state.list?.status === 'changed') right = '<span class="warn">City list changed — update the app</span>';
     dot.className = 'dot' + (cs.valid && state.list?.status !== 'changed' ? '' : ' bad');
     const tol = (c.tolerances || []).length ? ' + Ixelles' : '';
-    el.innerHTML = `<span class="pill">${ICON('card')}${esc(state.sector?.name || c.sector)}${tol}${c.plate ? ' · ' + esc(c.plate) : ''}</span>${right}`;
+    const muni = MUNI[c.municipality] || MUNI.bruxelles;
+    const where = muni.kind === 'streets' ? (state.sector?.name || c.sector)
+      : muni.kind === 'mailles' ? `${muni.name}${(c.mailles || []).length ? ' · ' + c.mailles.length + ' area' + (c.mailles.length > 1 ? 's' : '') : ' · choose your areas'}` : muni.name;
+    el.innerHTML = `<span class="pill">${ICON('card')}${esc(where)}${tol}${c.plate ? ' · ' + esc(c.plate) : ''}</span>${right}`;
   }
 
   const navLinks = (lat, lon) => `<div class="nav-row">
@@ -610,34 +643,63 @@
 
   // ---------- card dialog ----------
   const dlg = $('cardDialog'), form = $('cardForm');
-  $('sectorSelect').innerHTML = Object.values(window.SECTORS).map((s) => `<option value="${s.id}">${esc(s.name)} / ${esc(s.nameNl)}</option>`).join('');
+  $('muniSelect').innerHTML = window.MUNICIPALITIES.map((m) => `<option value="${m.id}">${esc(m.name)}${m.nameNl !== m.name ? ' / ' + esc(m.nameNl) : ''}</option>`).join('');
   function renderTolerances(sectorId, checked = []) {
-    const tols = window.SECTORS[sectorId]?.tolerances || [];
+    const tols = (form.municipality.value === 'bruxelles' && window.SECTORS[sectorId]?.tolerances) || [];
     $('tolBox').innerHTML = tols.map((t) => `
       <label class="check"><input type="checkbox" name="tol" value="${esc(t.code)}" ${checked.includes(t.code) ? 'checked' : ''} />
         <span><b>${esc(t.label)}</b><small>Only if your card shows the code <b>${esc(t.code)}</b>. Not sure? Ask the City (02 279 22 11).</small></span>
       </label>`).join('');
   }
-  $('sectorSelect').onchange = () => renderTolerances(form.sector.value);
+  let maillesCache = null;
+  // The sector part of the card depends on the municipality (street-list sector, mailles, or nothing to choose).
+  async function renderSectorBox(c = {}) {
+    const muni = MUNI[form.municipality.value];
+    const box = $('sectorBox');
+    if (muni.kind === 'streets') {
+      box.innerHTML = `<div class="field"><label>Sector (on your card)</label><select name="sector">${Object.values(window.CITY_SECTORS)
+        .map((s) => `<option value="${s.id}" ${s.id === (c.sector || 'louise') ? 'selected' : ''}>${esc(s.name)}${s.nameNl !== s.name ? ' / ' + esc(s.nameNl) : ''}</option>`).join('')}</select></div>`;
+      form.sector.onchange = () => renderTolerances(form.sector.value);
+      renderTolerances(form.sector.value, c.tolerances || []);
+      return;
+    }
+    $('tolBox').innerHTML = '';
+    if (muni.kind !== 'mailles') { box.innerHTML = `<p class="muted small">${esc(muni.note || '')}</p>`; return; }
+    box.innerHTML = '<p class="muted small"><span class="spinner" style="display:inline-block;width:12px;height:12px;border-width:2px"></span> Loading the areas from parking.brussels…</p>';
+    try { maillesCache = maillesCache || await PT.maillesList(); } catch (e) { box.innerHTML = `<p class="muted small">Could not load the areas (${esc(e.message)}). Try again with internet.</p>`; return; }
+    if (form.municipality.value !== muni.id) return; // changed meanwhile
+    const mine = maillesCache.filter((m) => muni.prefixes.some((p) => m.zonecode === p || m.zonecode.startsWith(p + '_')))
+      .sort((a, b) => String(a.namefre || a.zonecode).localeCompare(String(b.namefre || b.zonecode)));
+    const lims = maillesCache.filter((m) => (muni.lim || []).includes(m.zonecode));
+    const sel = new Set(c.mailles || []), selLim = new Set(c.lims || []);
+    const row = (m, name, set) => `<label class="check"><input type="checkbox" name="${name}" value="${esc(m.zonecode)}" ${set.has(m.zonecode) || (mine.length === 1 && name === 'maille') ? 'checked' : ''} />
+        <span><b>${esc(m.namefre || m.zonecode)}</b><small>${esc(m.zonecode)}</small></span></label>`;
+    box.innerHTML = `<div class="field"><label>Areas on your card</label><p class="muted small">Tick every area (secteur / maille / zone) printed on your card.</p></div>
+      <div class="stack">${mine.map((m) => row(m, 'maille', sel)).join('')}</div>
+      ${lims.length ? `<div class="field"><label>Border zones</label></div><div class="stack">${lims.map((m) => row(m, 'lim', selLim)).join('')}</div>` : ''}`;
+  }
   function openCard() {
     const c = state.card || {};
     form.number.value = c.number || '';
     form.plate.value = c.plate || '';
-    form.sector.value = c.sector || 'louise';
-    renderTolerances(form.sector.value, c.tolerances || []);
+    form.municipality.value = c.municipality || 'bruxelles';
+    renderSectorBox(c);
     form.from.value = c.from || '';
     form.to.value = c.to || '';
     $('scanStatus').textContent = '';
     dlg.showModal();
   }
+  $('muniSelect').onchange = () => renderSectorBox({});
   $('cardBtn').onclick = openCard;
   dlg.addEventListener('close', () => {
     if (dlg.returnValue !== 'save') return;
     const first = !state.card;
+    const ticked = (name) => [...form.querySelectorAll(`input[name="${name}"]:checked`)].map((i) => i.value);
     state.card = {
       number: form.number.value.trim(), plate: form.plate.value.trim().toUpperCase().replace(/[\s-]/g, ''),
-      sector: form.sector.value, from: form.from.value, to: form.to.value,
-      tolerances: [...form.querySelectorAll('input[name="tol"]:checked')].map((i) => i.value),
+      municipality: form.municipality.value, sector: form.sector?.value || null,
+      from: form.from.value, to: form.to.value,
+      tolerances: ticked('tol'), mailles: ticked('maille'), lims: ticked('lim'),
     };
     store.set('pt.card', state.card);
     loadSector();
@@ -658,8 +720,12 @@
     if (range) { out.from = toISO(range[1]); out.to = toISO(range[2]); }
     const plate = t.match(/\b\d[A-Z]{3}\d{3}\b/) || t.match(/\b[A-Z]{3}\d{3}\b/);
     if (plate) out.plate = plate[0];
-    for (const s of Object.values(window.SECTORS)) {
-      if (new RegExp(`\\b(${s.name}|${s.nameNl})\\b`, 'i').test(t)) { out.sector = s.id; break; }
+    const words = (s) => String(s).split(/\s*[-/]\s*/)[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    for (const m of window.MUNICIPALITIES) {
+      if (m.id !== 'bruxelles' && new RegExp(`\\b(${words(m.name)}|${words(m.nameNl)})\\b`, 'i').test(t)) { out.municipality = m.id; break; }
+    }
+    for (const s of Object.values(window.CITY_SECTORS)) {
+      if (new RegExp(`\\b(${words(s.name)}|${words(s.nameNl)})\\b`, 'i').test(t)) { out.municipality = out.municipality || 'bruxelles'; out.sector = s.id; break; }
     }
     const loose = t.toUpperCase().replace(/[\s_\-.]+/g, '_');
     const codes = Object.values(window.SECTORS).flatMap((s) => (s.tolerances || []).map((x) => x.code));
@@ -677,10 +743,11 @@
       st.textContent = 'Reading the card… (can take ~20 s)';
       const { data } = await window.Tesseract.recognize(file, 'fra');
       const f = parseCardText(data.text);
-      for (const k of ['number', 'plate', 'sector', 'from', 'to']) if (f[k]) form[k].value = f[k];
-      if (f.sector || f.tolerances) {
+      for (const k of ['number', 'plate', 'from', 'to']) if (f[k]) form[k].value = f[k];
+      if (f.municipality) form.municipality.value = f.municipality;
+      if (f.municipality || f.sector || f.tolerances) {
         const keep = [...form.querySelectorAll('input[name="tol"]:checked')].map((i) => i.value);
-        renderTolerances(form.sector.value, [...keep, ...(f.tolerances || [])]);
+        await renderSectorBox({ sector: f.sector, tolerances: [...keep, ...(f.tolerances || [])] });
       }
       const found = Object.keys(f);
       st.textContent = found.length ? `Filled: ${found.join(', ')}. Please double-check.` : 'Could not read the card — please type the fields.';
@@ -696,9 +763,18 @@
     else if (state.pin) runCheck(state.pin.lat, state.pin.lng, 'pin');
   }
   function loadSector() {
-    const def = window.SECTORS[state.card?.sector || 'louise'];
-    if (!def) return;
-    state.sector = PT.buildSector(def);
+    const muni = MUNI[state.card?.municipality || 'bruxelles'] || MUNI.bruxelles;
+    state.muni = muni;
+    state.sector = null;
+    if (muni.kind === 'streets') {
+      const def = window.CITY_SECTORS[state.card?.sector || 'louise'] || window.CITY_SECTORS.louise;
+      // Tolerance agreements (street lists) verified for this sector: Ixelles – Louise.
+      const extra = window.SECTORS[def.id];
+      state.sector = PT.buildSector({
+        ...def, tolerances: extra?.tolerances || [],
+        sources: [...def.sources, ...((extra?.sources || []).filter((s) => !def.sources.some((d) => d.url === s.url)))],
+      });
+    }
     state.list = null;
     renderCardLine();
     ctx().then(() => { renderCardLine(); recheck(); refreshLayer(); });
