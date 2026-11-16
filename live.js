@@ -50,6 +50,7 @@
     return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
       .replace(/[’'`\-.]/g, ' ').replace(/\s+/g, ' ').trim();
   }
+  const titleCase = (s) => String(s || '').toLowerCase().replace(/(^|[\s-])\S/g, (m) => m.toUpperCase());
   const nameParts = (s) => String(s || '').split(/\s+-\s+|;/).map(normalize).filter(Boolean);
 
   // ---------- geometry ----------
@@ -405,26 +406,26 @@
 
     const z = f.p, color = ZONE_NAMES[z.typreg] ?? 'unknown';
     const extra = { zone: z, surface: f };
-    const where = `<b>${esc(z.pn_name_fr)}</b> (${esc(z.mu_name_fr)}, ${esc(color)} zone)`;
-    if (z.typreg === 0) return result('free', 'FREE ✓', `${where}: no parking rules here, free for everyone.`, extra);
-    if (z.typreg === 1) return result('pay', 'PAY', `${where}: red zone, residents' cards are never valid here.`, extra);
-    if (z.typreg === 6) return cantVerify(`${where}: event zone, the normal rules don't apply. Follow the signs.`, extra);
-    if (![2, 3, 4, 5, 9].includes(z.typreg)) return cantVerify(`${where}: zone type unknown to the app. Follow the signs.`, extra);
+    const where = `<b>${esc(z.pn_name_fr)}</b>`;
+    if (z.typreg === 0) return result('free', 'FREE ✓', `${where} has no parking rules: free for everyone.`, extra);
+    if (z.typreg === 1) return result('pay', 'PAY', `${where} is a red zone: residents' cards are never valid here.`, extra);
+    if (z.typreg === 6) return cantVerify(`${where} is an event zone: the normal rules don't apply. Follow the signs.`, extra);
+    if (![2, 3, 4, 5, 9].includes(z.typreg)) return cantVerify(`${where}: this type of zone is unknown to the app. Follow the signs.`, extra);
 
     const notCovered = z.typreg === 5
-      ? (txt) => result('unknown', 'PARKING DISC', `${txt} Blue zone: put your blue parking disc, time is limited.`, extra)
-      : (txt) => result('pay', 'PAY', `${txt} Pay at the meter or with a parking app.`, extra);
+      ? (txt) => result('unknown', 'PARKING DISC', `${txt} Blue zone: put your parking disc, time is limited.`, extra)
+      : (txt) => result('pay', 'PAY', `${txt} Pay at the meter or with an app.`, extra);
     const idx = streetIndex(ctx.sector, z.pn_name_fr, z.pn_name_du);
     const st = idx >= 0 ? ctx.sector.streets[idx] : null;
     const sets = st ? ruleSetsFor(st, z.mu_name_fr, ctx.codes) : [];
     if (!sets.length) {
       const hint = st && st.tol.some((t) => normalize(t.commune) === normalize(z.mu_name_fr)) ? ' (only with a tolerance code your card does not have)' : '';
-      return notCovered(`${where} is not in your sector ${esc(ctx.sector.name)}${hint}.`);
+      return notCovered(`${where} (${esc(titleCase(z.mu_name_fr))}) isn't in your sector ${esc(ctx.sector.name)}${hint}.`);
     }
     // From here the answer depends on the City's list: it must be confirmed unchanged.
     if (ctx.listProblem) return cantVerify(ctx.listProblem, extra);
     const ruleText = sets.map((r) => `${esc(r.label)}: odd <b>${esc(r.odd.text)}</b>, even <b>${esc(r.even.text)}</b>`).join('; ');
-    if (sets.some((r) => r.odd.all && r.even.all)) return result('free', 'FREE ✓', `${where}: the whole street is covered by your card (${esc(sets[0].label)}).`, extra);
+    if (sets.some((r) => r.odd.all && r.even.all)) return result('free', 'FREE ✓', `${where}: your card covers the whole street.`, extra);
 
     let addrs;
     try { addrs = await liveAddresses(ctx.sector, box, zones); } catch (e) { return cantVerify(`Could not get the official house numbers (${esc(e.message)}). ${ruleText}.`, extra); }
@@ -432,20 +433,20 @@
     const mine = addrs.filter((a) => a.i === st.i && a.commune === normalize(z.mu_name_fr));
     let best = null, bd = Infinity;
     for (const a of mine) { const m = dist(lat, lon, a.a, a.o); if (m < bd) { bd = m; best = a; } }
-    if (!best) return cantVerify(`${where} is only partly covered (${ruleText}). Look at the house number.`, extra);
+    if (!best) return cantVerify(`Your card covers only part of ${where} (${ruleText}). Look at the house number in front of you.`, extra);
 
     const margin = Math.max(C.BORDER_MARGIN_M, accuracy || 0);
     const close = mine.filter((a) => dist(lat, lon, a.a, a.o) <= bd + margin);
     const yes = close.filter((a) => setsCover(sets, a.house)), no = close.filter((a) => !setsCover(sets, a.house));
     if (yes.length && no.length) {
       const list = (xs) => [...new Set(xs.map((a) => a.h))].slice(0, 4).join(', ');
-      return result('unknown', 'CHECK THE NUMBER', `You are at a limit on ${where}. Free in front of <b>${esc(list(yes))}</b>, pay in front of <b>${esc(list(no))}</b>. ${ruleText}.`, extra);
+      return result('unknown', 'CHECK THE NUMBER', `You're at a limit on ${where}: free in front of <b>${esc(list(yes))}</b>, pay in front of <b>${esc(list(no))}</b>.`, extra);
     }
     const cov = setsCover(sets, best.house);
-    const front = `in front of <b>${esc(st.fr)} ${esc(best.h)}</b> (${best.house.n % 2 ? 'odd' : 'even'} side, ${esc(z.mu_name_fr)}, ${esc(color)} zone)`;
+    const front = `In front of <b>${esc(st.fr)} ${esc(best.h)}</b>`;
     return cov
-      ? result('free', 'FREE ✓', `You are ${front}: covered by your card (${esc(cov.label)}).`, extra)
-      : notCovered(`You are ${front}: not covered. ${ruleText}.`);
+      ? result('free', 'FREE ✓', `${front}. Your card covers this side of the street${cov.label !== 'your sector' ? ' (' + esc(cov.label) + ')' : ''}.`, extra)
+      : notCovered(`${front}. Your card doesn't cover this number (${ruleText}).`);
   }
 
   // Street surfaces + their status for an area (map layer, free-spot search). All live.

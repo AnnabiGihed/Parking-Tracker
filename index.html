@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0f172a" />
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0b1220" media="(prefers-color-scheme: dark)" />
   <title>Parking Tracker</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" href="icons/icon-192.png" />
@@ -12,91 +13,131 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">🅿️ Parking Tracker</div>
-    <form id="searchForm" class="search">
-      <input id="searchInput" type="search" placeholder="Search an address…" autocomplete="off" />
+  <div id="map" aria-label="Map"></div>
+
+  <!-- Top: search + card -->
+  <header class="top">
+    <form id="searchForm" class="searchbar" role="search">
+      <span class="searchbar-logo" data-icon="parking"></span>
+      <input id="searchInput" type="search" placeholder="Search a street or address" autocomplete="off" enterkeyhint="search" />
+      <button id="cardBtn" type="button" class="avatar" title="My parking card" aria-label="My parking card">
+        <span data-icon="card"></span><i id="cardDot" class="dot"></i>
+      </button>
     </form>
-    <button id="cardBtn" class="iconbtn" title="My parking card">🪪</button>
+    <button id="carChip" class="chip-float hidden" type="button"></button>
   </header>
 
-  <div id="map"></div>
-
-  <div class="fabs">
-    <button id="layersBtn" class="fab" title="Map layers">🗂️</button>
-    <button id="carBtn" class="fab" title="My car / parking timer">🚗</button>
-    <button id="findBtn" class="fab" title="Nearest free spot">🟢</button>
-    <button id="trackBtn" class="fab" title="Follow my position">📍</button>
+  <!-- Right-side map controls -->
+  <div class="controls">
+    <button id="layersBtn" class="ctrl" title="Map layers" aria-label="Map layers"><span data-icon="layers"></span></button>
+    <button id="carBtn" class="ctrl" title="My car and parking timer" aria-label="My car"><span data-icon="car"></span></button>
+    <button id="trackBtn" class="ctrl ctrl-locate" title="Follow my position" aria-label="Follow my position"><span data-icon="locate"></span></button>
   </div>
 
-  <div id="layersPanel" class="panel hidden">
-    <div class="panel-title">Map layers (live)</div>
-    <label><input type="checkbox" data-layer="streets" /> Street colours for your card</label>
-    <label><input type="checkbox" data-layer="spaces" /> Parking spaces &amp; reserved spaces</label>
-    <label><input type="checkbox" data-layer="works" /> Roadworks &amp; traffic events</label>
-    <label><input type="checkbox" data-layer="carparks" /> Public car parks</label>
-    <label><input type="checkbox" data-layer="chargers" /> EV charging points</label>
-    <p class="hint">Sources: parking.brussels, Brussels Mobility, UrbIS — fetched when you move the map.</p>
+  <!-- Main call to action -->
+  <button id="findBtn" class="cta" type="button"><span data-icon="parking"></span><span>Find free parking</span></button>
+
+  <!-- Layers -->
+  <div id="layersPanel" class="popover hidden" role="dialog" aria-label="Map layers">
+    <div class="popover-head"><b>Map layers</b><button type="button" class="icon-btn" data-close="layersPanel" aria-label="Close"><span data-icon="close"></span></button></div>
+    <label class="switch"><input type="checkbox" data-layer="streets" /><span class="sw"></span><span><b>Where my card works</b><small>Green: free with your card · Red: pay</small></span></label>
+    <label class="switch"><input type="checkbox" data-layer="spaces" /><span class="sw"></span><span><b>Parking spaces</b><small>Delivery, disabled, taxi, EV… (zoom in)</small></span></label>
+    <label class="switch"><input type="checkbox" data-layer="works" /><span class="sw"></span><span><b>Roadworks &amp; events</b><small>May block parking</small></span></label>
+    <label class="switch"><input type="checkbox" data-layer="carparks" /><span class="sw"></span><span><b>Car parks</b><small>Public underground parkings</small></span></label>
+    <label class="switch"><input type="checkbox" data-layer="chargers" /><span class="sw"></span><span><b>EV charging</b><small>Charging points</small></span></label>
+    <div class="legend-row">
+      <span><i style="background:#16a34a"></i>Free for you</span><span><i style="background:#f59e0b"></i>Check number</span>
+      <span><i style="background:#dc2626"></i>Pay</span><span><i style="background:#7f1d1d"></i>Red zone</span>
+      <span><i style="background:#2563eb"></i>Disc</span><span><i style="background:#0d9488"></i>Free for all</span>
+    </div>
+    <p id="layerState" class="muted small"></p>
   </div>
 
-  <section id="sheet" class="sheet">
+  <!-- Bottom sheet -->
+  <section id="sheet" class="sheet" aria-live="polite">
+    <button id="sheetHandle" class="handle" type="button" aria-label="Expand or collapse"></button>
     <div id="cardLine" class="cardline"></div>
     <div id="timerLine" class="timerline hidden"></div>
-    <div id="status" class="status idle">
-      <div class="status-title">Tap the map or press 📍</div>
-      <div class="status-detail">I'll tell you if your residential card lets you park there for free.</div>
-    </div>
-    <div id="liveLine" class="liveline"></div>
-    <div id="nearest" class="nearest hidden"></div>
-  </section>
-
-  <dialog id="carDialog">
-    <form method="dialog" id="carForm">
-      <h2>🚗 My car</h2>
-      <div id="carInfo" class="hint"></div>
-      <div id="carActions" class="stack"></div>
-      <div id="timerBox" class="stack">
-        <label>Parking timer (minutes) <input name="minutes" type="number" min="5" max="1440" step="5" value="120" /></label>
-        <p class="hint">You get a notification 10 minutes before the end and at the end.</p>
-        <div class="row">
-          <button type="button" id="timerStart" class="primary">Start timer</button>
-          <button type="button" id="timerStop">Stop timer</button>
+    <div id="status" class="result idle">
+      <div class="hero">
+        <div class="hero-icon"><span data-icon="pin"></span></div>
+        <div class="hero-text">
+          <div class="hero-title">Where do you want to park?</div>
+          <div class="hero-sub">Tap the map, search a street, or press <b>my location</b>. I'll tell you if your residents' card covers it.</div>
         </div>
       </div>
-      <menu><button value="close">Close</button></menu>
-    </form>
+    </div>
+    <div id="liveLine" class="chips"></div>
+    <div id="nearest" class="spot hidden"></div>
+  </section>
+
+  <!-- Welcome (first launch) -->
+  <dialog id="welcomeDialog" class="sheet-dialog">
+    <div class="welcome">
+      <div class="welcome-logo"><span data-icon="parking"></span></div>
+      <h1>Park free with your residents' card</h1>
+      <p class="muted">Parking Tracker checks, live, whether your Brussels <em>carte riverain</em> covers the spot where you are.</p>
+      <ul class="benefits">
+        <li><span data-icon="check"></span><span><b>Free or pay?</b> A clear answer for the spot you're on, in a second.</span></li>
+        <li><span data-icon="directions"></span><span><b>Nearest free spot</b>, with Waze or Google Maps.</span></li>
+        <li><span data-icon="block"></span><span><b>No bad surprises:</b> delivery bays, disabled spaces and roadworks.</span></li>
+        <li><span data-icon="timer"></span><span><b>Find your car</b> and get a reminder before paid time ends.</span></li>
+      </ul>
+      <button id="welcomeStart" type="button" class="btn btn-primary btn-block">Add my parking card</button>
+      <p class="muted small">Uses official live data from parking.brussels, Brussels Mobility and the City of Brussels. Your card stays on this phone.</p>
+    </div>
   </dialog>
 
-  <dialog id="cardDialog">
+  <!-- Parking card -->
+  <dialog id="cardDialog" class="sheet-dialog">
     <form method="dialog" id="cardForm">
-      <h2>My residential parking card</h2>
-      <p class="hint">Fill in from your <em>carte riverain / carte de dérogation</em>, or scan a photo of it.</p>
+      <div class="dialog-head"><h2>My parking card</h2><button value="cancel" formnovalidate class="icon-btn" aria-label="Close"><span data-icon="close"></span></button></div>
       <label class="scan">
-        📷 Scan a photo of the card
+        <span data-icon="camera"></span><span><b>Scan my card</b><small>Take a photo, we fill in the fields</small></span>
         <input id="scanInput" type="file" accept="image/*" capture="environment" hidden />
       </label>
-      <div id="scanStatus" class="hint"></div>
-      <label>Card number <input name="number" placeholder="B000-000-000" /></label>
-      <label>Plate <input name="plate" placeholder="1ABC234" /></label>
-      <label>Sector
-        <select name="sector" id="sectorSelect"></select>
-      </label>
-      <div id="tolBox"></div>
-      <div class="row">
-        <label>Valid from <input name="from" type="date" required /></label>
-        <label>Valid until <input name="to" type="date" required /></label>
+      <div id="scanStatus" class="muted small"></div>
+      <div class="field"><label for="f-sector">Sector</label><select name="sector" id="sectorSelect"></select></div>
+      <div class="grid2">
+        <div class="field"><label>Valid from</label><input name="from" type="date" required /></div>
+        <div class="field"><label>Valid until</label><input name="to" type="date" required /></div>
       </div>
-      <p class="hint">Stored only on this device.</p>
-      <menu>
-        <button value="cancel" formnovalidate>Cancel</button>
-        <button value="save" class="primary">Save</button>
-      </menu>
+      <div class="grid2">
+        <div class="field"><label>Plate</label><input name="plate" placeholder="1ABC234" autocapitalize="characters" /></div>
+        <div class="field"><label>Card number</label><input name="number" placeholder="B000-000-000" /></div>
+      </div>
+      <div id="tolBox"></div>
+      <p class="muted small">Stored only on this phone.</p>
+      <button value="save" class="btn btn-primary btn-block">Save card</button>
     </form>
   </dialog>
 
-  <div id="toast" class="toast hidden"></div>
+  <!-- My car -->
+  <dialog id="carDialog" class="sheet-dialog">
+    <form method="dialog" id="carForm">
+      <div class="dialog-head"><h2>My car</h2><button value="close" class="icon-btn" aria-label="Close"><span data-icon="close"></span></button></div>
+      <div id="carInfo" class="muted"></div>
+      <div id="carActions" class="stack"></div>
+      <div class="card-box">
+        <div class="card-box-title"><span data-icon="timer"></span><b>Parking timer</b></div>
+        <div class="presets" id="timerPresets">
+          <button type="button" data-min="30">30 min</button><button type="button" data-min="60">1 h</button>
+          <button type="button" data-min="120">2 h</button><button type="button" data-min="180">3 h</button>
+        </div>
+        <div class="grid2">
+          <div class="field"><label>Or minutes</label><input name="minutes" type="number" min="5" max="1440" step="5" value="120" /></div>
+          <div class="field end"><button type="button" id="timerStart" class="btn btn-primary">Start</button></div>
+        </div>
+        <button type="button" id="timerStop" class="btn btn-ghost btn-block">Stop the timer</button>
+        <p class="muted small">Reminder 10 minutes before the end, and at the end.</p>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast hidden" role="status"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="icons.js"></script>
   <script src="sectors.js"></script>
   <script src="live.js"></script>
   <script src="app.js"></script>

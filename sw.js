@@ -1,8 +1,8 @@
 // Service worker: makes the app installable and usable with a weak connection.
 // App files: network first (so updates arrive), cache as fallback.
 // Map tiles and Leaflet: cache first (they rarely change).
-const VERSION = 'pt-v3';
-const APP = ['./', 'index.html', 'style.css', 'app.js', 'live.js', 'sectors.js', 'manifest.webmanifest',
+const VERSION = 'pt-v4';
+const APP = ['./', 'index.html', 'style.css', 'app.js', 'live.js', 'icons.js', 'sectors.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png'];
 const LIBS = ['https://unpkg.com/leaflet@1.9.4/dist/leaflet.css', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'];
 const MAX_TILES = 1500;

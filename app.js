@@ -48,25 +48,17 @@
   }
 
   // ---------- map ----------
-  const map = L.map('map', { zoomControl: false, preferCanvas: true }).setView([50.8285, 4.3640], 16);
-  L.control.zoom({ position: 'topleft' }).addTo(map);
+  const map = L.map('map', { zoomControl: false, preferCanvas: true, attributionControl: true }).setView([50.8285, 4.3640], 16);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · zones: parking.brussels (live)',
+    maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · parking.brussels',
   }).addTo(map);
   const surfacesLayer = L.layerGroup().addTo(map);
   let meMarker = null, meAcc = null, pinMarker = null, targetMarker = null;
-
-  const legend = L.control({ position: 'topright' });
-  legend.onAdd = () => {
-    const d = L.DomUtil.create('div', 'legend');
-    d.innerHTML = `<div class="legend-title">Live street colours</div>` + ['covered', 'mixed', 'pay', 'red', 'disc', 'free', 'unknown']
-      .map((k) => `<div><i style="background:${KIND_STYLE[k].color}"></i>${KIND_STYLE[k].label}</div>`).join('')
-      + '<div id="layerState" class="legend-state"></div>';
-    L.DomEvent.disableClickPropagation(d);
-    d.onclick = () => d.classList.toggle('open');
-    return d;
-  };
-  legend.addTo(map);
+  const ICON = window.ICON;
+  const divIcon = (cls, html, size, anchor) => L.divIcon({ className: '', html: `<div class="${cls}">${html}</div>`, iconSize: size, iconAnchor: anchor });
+  const PIN_ICON = divIcon('pin-marker', ICON('pin'), [38, 38], [19, 36]);
+  const CAR_ICON = divIcon('car-marker', ICON('car'), [36, 36], [18, 18]);
+  const TARGET_ICON = divIcon('target-marker', ICON('parking'), [30, 30], [15, 15]);
 
   // ---------- live map layers ----------
   const LAYERS = {
@@ -163,7 +155,11 @@
   setInterval(refreshLayer, 120000); // keep layers fresh
 
   // Layers panel
-  $('layersBtn').onclick = () => $('layersPanel').classList.toggle('hidden');
+  $('layersBtn').onclick = () => {
+    const open = $('layersPanel').classList.toggle('hidden') === false;
+    if (open) { $('sheet').classList.add('compact'); syncSheetHeight(); }
+  };
+  map.on('click', () => $('layersPanel').classList.add('hidden'));
   for (const cb of document.querySelectorAll('#layersPanel input[data-layer]')) {
     cb.checked = LAYERS[cb.dataset.layer].on;
     cb.onchange = () => {
@@ -179,64 +175,106 @@
     t.textContent = msg; t.classList.remove('hidden');
     clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.add('hidden'), ms);
   }
-  function syncSheetHeight() { document.documentElement.style.setProperty('--sheet-h', $('sheet').offsetHeight + 'px'); }
+  function syncSheetHeight() {
+    const h = window.innerWidth >= 720 ? 0 : $('sheet').offsetHeight;
+    document.documentElement.style.setProperty('--sheet-h', h + 'px');
+  }
+  $('sheetHandle').onclick = () => { $('sheet').classList.toggle('compact'); syncSheetHeight(); };
 
   function renderCardLine() {
-    const c = state.card, el = $('cardLine');
-    if (!c) { el.innerHTML = '<span class="warn">No card yet — tap 🪪 to add yours.</span>'; return; }
+    const c = state.card, el = $('cardLine'), dot = $('cardDot');
+    if (!c) {
+      dot.className = 'dot none';
+      el.innerHTML = `<span class="pill">${ICON('card')}No card yet</span><a href="#" id="addCardLink">Add my card</a>`;
+      $('addCardLink').onclick = (e) => { e.preventDefault(); openCard(); };
+      return;
+    }
     const cs = PT.cardState(c);
     const left = c.to ? daysBetween(todayISO(), c.to) : null;
-    let warn = '';
-    if (!cs.valid) warn = `<span class="warn">${esc(cs.why)}</span>`;
+    let right = `<span>Valid until ${fmtDate(c.to)}</span>`;
+    if (!cs.valid) right = `<span class="warn">${esc(cs.why)}</span>`;
     else if (left !== null && left <= EXPIRY_WARN_DAYS) {
-      warn = `<span class="warn">Expires in ${left} day(s) — <a href="mailto:circulation.dem@brucity.be?subject=${encodeURIComponent('Renouvellement carte riverain ' + (c.number || ''))}">renew</a></span>`;
+      right = `<span class="warn">Expires in ${left} day(s) · <a href="mailto:circulation.dem@brucity.be?subject=${encodeURIComponent('Renouvellement carte riverain ' + (c.number || ''))}">renew</a></span>`;
     }
-    if (state.list?.status === 'changed') warn += '<span class="warn">City list changed — update the app</span>';
-    const tol = (c.tolerances || []).length ? ' + tolerance' : '';
-    el.innerHTML = `<span>🪪 ${esc(c.plate || 'plate?')} · sector <b>${esc(state.sector?.name || c.sector)}</b>${tol} · until ${fmtDate(c.to)}</span>${warn}`;
+    if (state.list?.status === 'changed') right = '<span class="warn">City list changed — update the app</span>';
+    dot.className = 'dot' + (cs.valid && state.list?.status !== 'changed' ? '' : ' bad');
+    const tol = (c.tolerances || []).length ? ' + Ixelles' : '';
+    el.innerHTML = `<span class="pill">${ICON('card')}${esc(state.sector?.name || c.sector)}${tol}${c.plate ? ' · ' + esc(c.plate) : ''}</span>${right}`;
   }
 
-  const navLinks = (lat, lon) => `<div class="btns">
-      <a class="nav waze" target="_blank" rel="noopener" href="https://waze.com/ul?ll=${lat.toFixed(6)},${lon.toFixed(6)}&navigate=yes">Waze</a>
-      <a class="nav gmaps" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${lat.toFixed(6)},${lon.toFixed(6)}&travelmode=driving">Google Maps</a>
+  const navLinks = (lat, lon) => `<div class="nav-row">
+      <a class="btn btn-waze" target="_blank" rel="noopener" href="https://waze.com/ul?ll=${lat.toFixed(6)},${lon.toFixed(6)}&navigate=yes">${ICON('navigation')}Waze</a>
+      <a class="btn btn-gmaps" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${lat.toFixed(6)},${lon.toFixed(6)}&travelmode=driving">${ICON('directions')}Google Maps</a>
     </div>`;
 
+  // Friendly headline + icon for each answer.
+  const HEADLINES = {
+    'FREE ✓': ['Free for you here', 'check'],
+    PAY: ['Paid parking', 'euro'],
+    RESERVED: ['Reserved space', 'block'],
+    'CHECK THE NUMBER': ['Check the house number', 'warning'],
+    'TIME LIMITED': ['Time-limited parking', 'timer'],
+    'PARKING DISC': ['Blue zone: use your disc', 'timer'],
+    "CAN'T VERIFY": ["Can't verify right now", 'help'],
+  };
+  const ZONE_COLORS = { 0: '#0d9488', 1: '#7f1d1d', 2: '#f97316', 3: '#94a3b8', 4: '#22c55e', 5: '#2563eb', 6: '#a855f7', 9: '#0f766e' };
   // Payment happens in the operators' own apps; these buttons open them.
   const PAY_APPS = [['4411', 'https://www.4411.io'], ['EasyPark', 'https://www.easypark.com'], ['Seety', 'https://seety.co']];
+
   function renderStatus(r, source, accuracy) {
     const box = $('status');
-    box.className = 'status ' + r.status;
-    const notes = (r.notes || []).length ? `<ul class="notes">${r.notes.map((n) => `<li>${n}</li>`).join('')}</ul>` : '';
-    const pay = r.status === 'pay' && r.zone && !r.reserved
-      ? `<div class="paylinks">Pay with: ${PAY_APPS.map(([n, u]) => `<a href="${u}" target="_blank" rel="noopener">${n}</a>`).join('')}</div>` : '';
-    box.innerHTML = `<div class="status-title">${r.title}</div><div class="status-detail">${source === 'me' ? '📍 Your position: ' : '📌 Pin: '}${r.detail}</div>${notes}${pay}`;
-    const live = [];
-    if (r.zone) live.push('🟢 live parking.brussels');
-    live.push('checked ' + clock());
-    if (source === 'me' && accuracy != null) live.push(`GPS ±${Math.round(accuracy)} m`);
-    $('liveLine').textContent = live.join(' · ');
+    const [title, icon] = HEADLINES[r.title] || [r.title, 'help'];
+    box.className = 'result ' + r.status;
+    const notes = (r.notes || []).length ? `<ul class="notes">${r.notes.map((n) => `<li><span>${n}</span></li>`).join('')}</ul>` : '';
+    const actions = [];
+    if (r.status === 'free') {
+      actions.push(`<button type="button" class="btn btn-primary btn-sm" data-act="park">${ICON('car')}I parked here</button>`);
+    }
+    if (r.status === 'pay' && r.zone && !r.reserved) {
+      actions.push(`<span class="paylinks">Pay with ${PAY_APPS.map(([n, u]) => `<a class="btn btn-sm" href="${u}" target="_blank" rel="noopener">${n}</a>`).join('')}</span>`);
+    }
+    if (r.status !== 'free' && r.zone) {
+      actions.push(`<button type="button" class="btn btn-sm" data-act="park">${ICON('timer')}Park &amp; set timer</button>`);
+    }
+    box.innerHTML = `<div class="hero"><div class="hero-icon">${ICON(icon)}</div><div class="hero-text">
+        <div class="hero-title">${esc(title)}</div><div class="hero-sub">${r.detail}</div></div></div>
+      ${notes}${actions.length ? `<div class="actions">${actions.join('')}</div>` : ''}`;
+    const chips = [`<span class="chip${r.zone ? ' live' : ''}">${ICON('live')}${r.zone ? 'Live' : 'Checked'} · ${clock()}</span>`];
+    chips.push(`<span class="chip">${ICON(source === 'me' ? 'navigation' : 'pin')}${source === 'me' ? 'My position' : 'Pin'}${source === 'me' && accuracy != null ? ` ±${Math.round(accuracy)} m` : ''}</span>`);
+    if (r.zone) {
+      const z = r.zone;
+      chips.push(`<span class="chip zone-chip"><i style="background:${ZONE_COLORS[z.typreg] || '#94a3b8'}"></i>${esc(PT.ZONE_NAMES[z.typreg] || 'unknown')} zone · ${esc(String(z.mu_name_fr || '').toLowerCase().replace(/^./, (m) => m.toUpperCase()))}</span>`);
+    }
+    $('liveLine').innerHTML = chips.join('');
     syncSheetHeight();
   }
+  $('status').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-act]');
+    if (b?.dataset.act === 'park') { saveCarHere(); renderCarDialog(); $('carDialog').showModal(); }
+  });
 
   // Nearest covered spots — computed from live data at this moment.
   async function showFreeSpots(lat, lon) {
     const seq = ++state.spotSeq, near = $('nearest');
     state.lastSpotAt = { lat, lon, t: Date.now() };
-    near.innerHTML = '🔎 Searching live for the nearest spot covered by your card…';
+    near.innerHTML = '<div class="spot-loading"><span class="spinner"></span>Looking for the nearest spot your card covers…</div>';
     near.classList.remove('hidden'); syncSheetHeight();
     let spots = [];
     try { spots = await PT.liveFreeSpots(await ctx(), lat, lon); } catch (e) {
-      if (seq === state.spotSeq) { near.innerHTML = `Could not search live (${esc(e.message)}).`; syncSheetHeight(); }
+      if (seq === state.spotSeq) { near.innerHTML = `<div class="spot-loading">Could not search right now (${esc(e.message)}).</div>`; syncSheetHeight(); }
       return;
     }
     if (seq !== state.spotSeq) return;
-    if (!spots.length) { near.innerHTML = 'No spot covered by your card within ~400 m right now.'; syncSheetHeight(); return; }
+    if (!spots.length) { near.innerHTML = '<div class="spot-loading">No spot covered by your card within ~400 m right now.</div>'; syncSheetHeight(); return; }
     const [best, ...others] = spots;
-    near.innerHTML = `🟢 Nearest spot covered by your card (live ${clock()}): <b>${esc(best.label)}</b> — ${Math.round(best.m)} m`
-      + (others.length ? `<br><small>Also: ${others.map((o) => `${esc(o.label)} (${Math.round(o.m)} m)`).join(', ')}</small>` : '')
-      + navLinks(best.lat, best.lon);
+    const walk = Math.max(1, Math.round(best.m / 80));
+    near.innerHTML = `<div class="spot-head"><div class="spot-icon">${ICON('parking')}</div><div>
+        <div class="spot-title">${esc(best.label)}</div>
+        <div class="spot-sub">Free with your card · ${Math.round(best.m)} m · about ${walk} min on foot</div></div></div>
+      ${navLinks(best.lat, best.lon)}
+      ${others.length ? `<div class="spot-more">Also nearby: ${others.map((o) => `${esc(o.label)} (${Math.round(o.m)} m)`).join(' · ')}</div>` : ''}`;
     if (targetMarker) map.removeLayer(targetMarker);
-    targetMarker = L.circleMarker([best.lat, best.lon], { radius: 11, color: '#16a34a', weight: 3, fillOpacity: 0.25 }).addTo(map);
+    targetMarker = L.marker([best.lat, best.lon], { icon: TARGET_ICON }).addTo(map);
     syncSheetHeight();
     return best;
   }
@@ -250,7 +288,8 @@
   async function runCheck(lat, lon, source, accuracy) {
     const seq = ++state.checkSeq;
     state.lastCheck = { lat, lon, t: Date.now(), source, accuracy };
-    $('liveLine').textContent = `⏳ checking live (${source === 'me' ? 'your position' : 'pin'})…`;
+    $('status').classList.add('checking');
+    $('liveLine').innerHTML = `<span class="chip"><span class="spinner" style="width:12px;height:12px;border-width:2px"></span>Checking live…</span>`;
     let r;
     try { r = await PT.decide(await ctx(), lat, lon, accuracy); } catch (e) { r = PT.cantVerify('Unexpected error: ' + esc(e.message)); }
     if (seq !== state.checkSeq) return r;
@@ -276,7 +315,7 @@
   function setPin(latlng) {
     state.pin = latlng;
     if (!pinMarker) {
-      pinMarker = L.marker(latlng, { draggable: true }).addTo(map);
+      pinMarker = L.marker(latlng, { draggable: true, icon: PIN_ICON }).addTo(map);
       pinMarker.on('dragend', () => setPin(pinMarker.getLatLng()));
     } else pinMarker.setLatLng(latlng);
     runCheck(latlng.lat, latlng.lng, 'pin');
@@ -307,8 +346,10 @@
     if (!navigator.geolocation) { toast('Location is not available on this device.'); return; }
     state.tracking = true; state.lastStatus = null; state.lastCheck = null;
     $('trackBtn').classList.add('active');
+    $('trackBtn').innerHTML = ICON('navigation');
     if (pinMarker) { map.removeLayer(pinMarker); pinMarker = null; state.pin = null; }
-    $('liveLine').textContent = '⏳ waiting for GPS…';
+    if (state.me) map.setView([state.me.lat, state.me.lon], Math.max(map.getZoom(), 17));
+    $('liveLine').innerHTML = `<span class="chip"><span class="spinner" style="width:12px;height:12px;border-width:2px"></span>Finding your position…</span>`;
     state.watchId = navigator.geolocation.watchPosition(onPosition, (err) => {
       renderStatus(PT.cantVerify('No GPS position: ' + esc(err.message) + '. Allow location for this app.'), 'me');
       stopTracking();
@@ -317,6 +358,7 @@
   function stopTracking() {
     state.tracking = false;
     $('trackBtn').classList.remove('active');
+    $('trackBtn').innerHTML = ICON('locate');
     if (state.watchId != null) navigator.geolocation.clearWatch(state.watchId);
     state.watchId = null;
   }
@@ -336,7 +378,8 @@
 
   $('findBtn').onclick = async () => {
     const from = state.tracking && state.me ? state.me : state.pin ? { lat: state.pin.lat, lon: state.pin.lng } : state.me;
-    if (!from) { toast('Press 📍 or tap the map first.'); return; }
+    if (!from) { toast('Turn on my location, or tap the map first'); if (!state.tracking) startTracking(); return; }
+    $('sheet').classList.remove('compact');
     const best = await showFreeSpots(from.lat, from.lon);
     if (best) map.fitBounds(L.latLngBounds([[from.lat, from.lon], [best.lat, best.lon]]).pad(0.4));
   };
@@ -348,23 +391,24 @@
     const car = store.get('pt.car');
     if (carMarker) { map.removeLayer(carMarker); carMarker = null; }
     if (car) {
-      carMarker = L.marker([car.lat, car.lon], { icon: L.divIcon({ className: '', html: '<div class="car-icon">🚗</div>', iconSize: [28, 28], iconAnchor: [14, 14] }) })
-        .bindPopup(`My car — parked ${new Date(car.t).toLocaleString('fr-BE', { dateStyle: 'short', timeStyle: 'short' })}`).addTo(map);
+      carMarker = L.marker([car.lat, car.lon], { icon: CAR_ICON })
+        .bindPopup(`<b>My car</b><br>Parked ${new Date(car.t).toLocaleString('fr-BE', { dateStyle: 'short', timeStyle: 'short' })}`).addTo(map);
     }
+    $('carBtn').classList.toggle('has-car', !!car);
     renderTimer();
   }
   function renderCarDialog() {
     const car = store.get('pt.car'), timer = store.get('pt.timer');
     $('carInfo').innerHTML = car
-      ? `Parked ${new Date(car.t).toLocaleString('fr-BE', { dateStyle: 'short', timeStyle: 'short' })}${car.status ? ` — the app said <b>${esc(car.status)}</b>` : ''}${car.where ? `<br>${car.where}` : ''}`
-      : 'No car saved. Save it where you park, to find it back and set a reminder.';
+      ? `Parked ${new Date(car.t).toLocaleString('fr-BE', { dateStyle: 'short', timeStyle: 'short' })}${car.where ? ` · ${car.where}` : ''}${car.status ? `<br>The app said: <b>${esc(car.status)}</b>` : ''}`
+      : 'Save where you park, so you can find your car again and get a reminder before your time runs out.';
     $('carActions').innerHTML = car
-      ? `<a class="btnlink primary" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${car.lat.toFixed(6)},${car.lon.toFixed(6)}&travelmode=walking">🚶 Walk to my car</a>
-         <button type="button" id="carShow">Show on the map</button>
-         <button type="button" id="carHere">Update: my car is here now</button>
-         <button type="button" id="carClear">I left (clear)</button>`
-      : '<button type="button" id="carHere" class="primary">📍 My car is parked here</button>';
-    $('timerStop').disabled = !timer;
+      ? `<a class="btn btn-primary btn-block" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${car.lat.toFixed(6)},${car.lon.toFixed(6)}&travelmode=walking">${ICON('walk')}Walk to my car</a>
+         <div class="grid2"><button type="button" class="btn" id="carShow">${ICON('pin')}Show on map</button>
+         <button type="button" class="btn" id="carHere">${ICON('locate')}Car is here now</button></div>
+         <button type="button" class="btn btn-ghost btn-block" id="carClear">I left — forget this spot</button>`
+      : `<button type="button" id="carHere" class="btn btn-primary btn-block">${ICON('car')}My car is parked here</button>`;
+    $('timerStop').classList.toggle('hidden', !timer);
     const bind = (id, fn) => { const el = $(id); if (el) el.onclick = fn; };
     bind('carHere', saveCarHere);
     bind('carShow', () => { const c = store.get('pt.car'); $('carDialog').close(); map.setView([c.lat, c.lon], 18); carMarker?.openPopup(); });
@@ -372,10 +416,10 @@
   }
   function saveCarHere() {
     const at = state.tracking && state.me ? { lat: state.me.lat, lon: state.me.lon } : state.pin ? { lat: state.pin.lat, lon: state.pin.lng } : state.me;
-    if (!at) { toast('No position yet: press 📍 or drop a pin.'); return; }
+    if (!at) { toast('No position yet: turn on my location or tap the map'); return; }
     const box = $('status');
-    store.set('pt.car', { ...at, t: Date.now(), status: box.querySelector('.status-title')?.textContent || '', where: box.querySelector('.status-detail b')?.outerHTML || '' });
-    drawCar(); renderCarDialog(); toast('🚗 Car position saved');
+    store.set('pt.car', { ...at, t: Date.now(), status: box.querySelector('.hero-title')?.textContent || '', where: box.querySelector('.hero-sub b')?.outerHTML || '' });
+    drawCar(); renderCarDialog(); toast('Car position saved');
   }
   async function startTimer() {
     const minutes = Math.max(5, Math.min(1440, +$('carForm').minutes.value || 0));
@@ -396,7 +440,7 @@
     } catch (e) { toast('Could not schedule the reminder: ' + e.message); return; }
     store.set('pt.timer', { end, minutes });
     renderTimer(); renderCarDialog();
-    toast(`⏱️ Reminder set: ${minutes} min`);
+    toast(`Timer set: ${minutes >= 60 ? Math.floor(minutes / 60) + ' h ' + (minutes % 60 ? minutes % 60 + ' min' : '') : minutes + ' min'}`);
   }
   async function stopTimer() {
     store.set('pt.timer', null);
@@ -405,19 +449,37 @@
     renderTimer(); renderCarDialog();
   }
   function renderTimer() {
-    const t = store.get('pt.timer'), el = $('timerLine');
-    if (!t) { el.classList.add('hidden'); syncSheetHeight(); return; }
+    const t = store.get('pt.timer'), car = store.get('pt.car'), el = $('timerLine'), chip = $('carChip');
+    if (!t) {
+      el.classList.add('hidden');
+      chip.classList.toggle('hidden', !car);
+      chip.classList.remove('late');
+      chip.innerHTML = `${ICON('car')}My car`;
+      syncSheetHeight(); return;
+    }
     const left = t.end - Date.now();
+    const hm = `${Math.floor(left / 3600000)}h${String(Math.floor((left % 3600000) / 60000)).padStart(2, '0')}`;
+    const until = new Date(t.end).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' });
     el.classList.remove('hidden');
-    el.innerHTML = left > 0
-      ? `⏱️ Parking time left: <b>${Math.floor(left / 3600000)}h${String(Math.floor((left % 3600000) / 60000)).padStart(2, '0')}</b> (until ${new Date(t.end).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })})`
-      : '⏱️ <b>Your parking time is over.</b>';
+    el.innerHTML = left > 0 ? `${ICON('timer')}<span>Parking time left <b>${hm}</b> · until ${until}</span>` : `${ICON('timer')}<b>Your parking time is over.</b>`;
+    chip.classList.remove('hidden');
+    chip.classList.toggle('late', left <= 10 * 60000);
+    chip.innerHTML = `${ICON('timer')}${left > 0 ? hm + ' left' : 'Time is over'}`;
     syncSheetHeight();
   }
   setInterval(renderTimer, 30000);
-  $('carBtn').onclick = () => { renderCarDialog(); $('carDialog').showModal(); };
+  const openCar = () => { renderCarDialog(); $('carDialog').showModal(); };
+  $('carBtn').onclick = openCar;
+  $('carChip').onclick = openCar;
   $('timerStart').onclick = startTimer;
   $('timerStop').onclick = stopTimer;
+  $('timerPresets').onclick = (e) => {
+    const b = e.target.closest('button[data-min]');
+    if (!b) return;
+    $('carForm').minutes.value = b.dataset.min;
+    for (const x of $('timerPresets').children) x.classList.toggle('on', x === b);
+  };
+  $('layersPanel').addEventListener('click', (e) => { if (e.target.closest('[data-close]')) $('layersPanel').classList.add('hidden'); });
 
   // ---------- address search ----------
   $('searchForm').onsubmit = async (e) => {
@@ -443,7 +505,7 @@
     const tols = window.SECTORS[sectorId]?.tolerances || [];
     $('tolBox').innerHTML = tols.map((t) => `
       <label class="check"><input type="checkbox" name="tol" value="${esc(t.code)}" ${checked.includes(t.code) ? 'checked' : ''} />
-        <span>${esc(t.label)}<small>Only if your card shows the code <b>${esc(t.code)}</b>. Not sure? Ask the City (02 279 22 11).</small></span>
+        <span><b>${esc(t.label)}</b><small>Only if your card shows the code <b>${esc(t.code)}</b>. Not sure? Ask the City (02 279 22 11).</small></span>
       </label>`).join('');
   }
   $('sectorSelect').onchange = () => renderTolerances(form.sector.value);
@@ -542,6 +604,7 @@
   syncSheetHeight();
   window.addEventListener('resize', syncSheetHeight);
   loadSector();
-  if (!state.card) setTimeout(openCard, 300);
+  $('welcomeStart').onclick = () => { $('welcomeDialog').close(); openCard(); };
+  if (!state.card) setTimeout(() => $('welcomeDialog').showModal(), 200);
   else startTracking();
 })();
