@@ -1,0 +1,75 @@
+{
+  "name": "free-spots-louise",
+  "kind": "freeSpots",
+  "clock": "2026-11-17T10:00:00Z",
+  "point": {
+    "lat": 50.826647,
+    "lon": 4.364997
+  },
+  "accuracy": 5,
+  "card": {
+    "number": "B000-000-000",
+    "plate": "1ABC234",
+    "municipality": "bruxelles",
+    "sector": "louise",
+    "from": "2026-01-01",
+    "to": "2027-12-31",
+    "tolerances": [],
+    "mailles": [],
+    "lims": []
+  },
+  "officialList": {
+    "status": "ok",
+    "document": null,
+    "date": null,
+    "why": null
+  },
+  "requests": [
+    {
+      "method": "HEAD",
+      "url": "https://www.bruxelles.be/sites/default/files/bxl/LOUISE.pdf"
+    },
+    {
+      "method": "HEAD",
+      "url": "https://www.bruxelles.be/sites/default/files/bxl/accord%20limitrophe%20Louise%20-%20Ixelles.pdf"
+    },
+    {
+      "method": "GET",
+      "url": "https://ows.parking.brussels/ws/ParkingBrussels/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=ParkingBrussels:regulation_zones&srsName=EPSG:3857&count=3000&bbox=50.822747,4.358757,50.830547,4.371237,urn:ogc:def:crs:EPSG::4326"
+    },
+    {
+      "method": "GET",
+      "url": "https://api.mobility.brussels/datasets/v1/parking/collections/regulations_rules/items/?f=json&limit=500"
+    },
+    {
+      "method": "GET",
+      "url": "https://data.mobility.brussels/geoserver/bm_urbis/wfs?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=bm_urbis:urbadm_adpt&srsName=EPSG:3857&propertyName=adrn,geom&count=5000&bbox=50.823147,4.359397,50.830147,4.370597,urn:ogc:def:crs:EPSG::4326"
+    }
+  ],
+  "expected": [
+    {
+      "lat": 50.826596062709974,
+      "lon": 4.364888145260543,
+      "metres": 9.515174262450664,
+      "street": "Avenue Louise",
+      "commune": "BRUXELLES",
+      "label": "Avenue Louise"
+    },
+    {
+      "lat": 50.826981368723985,
+      "lon": 4.3655518871467915,
+      "metres": 53.86418793140008,
+      "street": "Rue Lens",
+      "commune": "BRUXELLES",
+      "label": "Rue Lens"
+    },
+    {
+      "lat": 50.82638552727581,
+      "lon": 4.364331355972717,
+      "metres": 55.056775412176115,
+      "street": "Rue du Châtelain",
+      "commune": "BRUXELLES",
+      "label": "Rue du Châtelain"
+    }
+  ]
+}

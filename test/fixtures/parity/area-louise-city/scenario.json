@@ -1,0 +1,627 @@
+{
+  "name": "area-louise-city",
+  "kind": "area",
+  "clock": "2026-11-17T10:00:00Z",
+  "point": {
+    "lat": 50.826647,
+    "lon": 4.364997
+  },
+  "accuracy": 5,
+  "card": {
+    "number": "B000-000-000",
+    "plate": "1ABC234",
+    "municipality": "bruxelles",
+    "sector": "louise",
+    "from": "2026-01-01",
+    "to": "2027-12-31",
+    "tolerances": [],
+    "mailles": [],
+    "lims": []
+  },
+  "officialList": {
+    "status": "ok",
+    "document": null,
+    "date": null,
+    "why": null
+  },
+  "requests": [
+    {
+      "method": "HEAD",
+      "url": "https://www.bruxelles.be/sites/default/files/bxl/LOUISE.pdf"
+    },
+    {
+      "method": "HEAD",
+      "url": "https://www.bruxelles.be/sites/default/files/bxl/accord%20limitrophe%20Louise%20-%20Ixelles.pdf"
+    },
+    {
+      "method": "GET",
+      "url": "https://ows.parking.brussels/ws/ParkingBrussels/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=ParkingBrussels:regulation_zones&srsName=EPSG:3857&count=3000&bbox=50.825047,4.362437,50.828247,4.367557,urn:ogc:def:crs:EPSG::4326"
+    },
+    {
+      "method": "GET",
+      "url": "https://api.mobility.brussels/datasets/v1/parking/collections/regulations_rules/items/?f=json&limit=500"
+    },
+    {
+      "method": "GET",
+      "url": "https://data.mobility.brussels/geoserver/bm_urbis/wfs?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=bm_urbis:urbadm_adpt&srsName=EPSG:3857&propertyName=adrn,geom&count=5000&bbox=50.825447,4.363077,50.827847,4.366917,urn:ogc:def:crs:EPSG::4326"
+    }
+  ],
+  "expected": [
+    {
+      "id": 3114508,
+      "kind": "pay",
+      "color": "grey",
+      "street": "Rue Lens",
+      "label": "Rue Lens",
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3114500,
+      "kind": "pay",
+      "color": "grey",
+      "street": "Rue Lesbroussart",
+      "label": "Rue Lesbroussart",
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3114667,
+      "kind": "pay",
+      "color": "grey",
+      "street": "Rue de Hennin",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3112991,
+      "kind": "pay",
+      "color": "grey",
+      "street": "Rue Dautzenberg",
+      "label": "Rue Dautzenberg",
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3115299,
+      "kind": "pay",
+      "color": "grey",
+      "street": "Rue Dautzenberg",
+      "label": "Rue Dautzenberg",
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3115031,
+      "kind": "pay",
+      "color": "grey",
+      "street": "Rue Lesbroussart",
+      "label": "Rue Lesbroussart",
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3068307,
+      "kind": "pay",
+      "color": "grey",
+      "street": "Rue de Livourne",
+      "label": "Rue de Livourne",
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3069166,
+      "kind": "pay",
+      "color": "grey",
+      "street": "Rue Washington",
+      "label": "Rue Washington",
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3113418,
+      "kind": "pay",
+      "color": "grey",
+      "street": "Rue Lesbroussart",
+      "label": "Rue Lesbroussart",
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3113737,
+      "kind": "pay",
+      "color": "grey",
+      "street": "Rue Lesbroussart",
+      "label": "Rue Lesbroussart",
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3113964,
+      "kind": "pay",
+      "color": "grey",
+      "street": "Rue Paul Spaak",
+      "label": "Rue Paul Spaak",
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3068343,
+      "kind": "pay",
+      "color": "grey",
+      "street": "Rue de Livourne",
+      "label": "Rue de Livourne",
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3112831,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Rue Dautzenberg",
+      "label": "Rue Dautzenberg",
+      "near": 6,
+      "covered": 6
+    },
+    {
+      "id": 3113285,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Rue Lesbroussart",
+      "label": "Rue Lesbroussart",
+      "near": 1,
+      "covered": 1
+    },
+    {
+      "id": 3113605,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Rue Lesbroussart",
+      "label": "Rue Lesbroussart",
+      "near": 1,
+      "covered": 1
+    },
+    {
+      "id": 3113979,
+      "kind": "check",
+      "color": "grey",
+      "street": "Rue Paul Spaak",
+      "label": "Rue Paul Spaak",
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3113991,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Rue du Châtelain",
+      "label": "Rue du Châtelain",
+      "near": 1,
+      "covered": 1
+    },
+    {
+      "id": 3114488,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Rue du Châtelain",
+      "label": "Rue du Châtelain",
+      "near": 5,
+      "covered": 5
+    },
+    {
+      "id": 3114506,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Rue Lens",
+      "label": "Rue Lens",
+      "near": 12,
+      "covered": 12
+    },
+    {
+      "id": 3114556,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Rue Dautzenberg",
+      "label": "Rue Dautzenberg",
+      "near": 10,
+      "covered": 10
+    },
+    {
+      "id": 3114772,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Rue du Bailli",
+      "label": "Rue du Bailli",
+      "near": 6,
+      "covered": 6
+    },
+    {
+      "id": 3115656,
+      "kind": "mixed",
+      "color": "grey",
+      "street": "Rue Washington",
+      "label": "Rue Washington",
+      "near": 4,
+      "covered": 2
+    },
+    {
+      "id": 11036856,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 15,
+      "covered": 15
+    },
+    {
+      "id": 11036864,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 4,
+      "covered": 4
+    },
+    {
+      "id": 11036916,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 5,
+      "covered": 5
+    },
+    {
+      "id": 11036870,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 13,
+      "covered": 13
+    },
+    {
+      "id": 11036872,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 3,
+      "covered": 3
+    },
+    {
+      "id": 11036874,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 4,
+      "covered": 4
+    },
+    {
+      "id": 11036878,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 4,
+      "covered": 4
+    },
+    {
+      "id": 11036880,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 2,
+      "covered": 2
+    },
+    {
+      "id": 11036886,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 2,
+      "covered": 2
+    },
+    {
+      "id": 11036890,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 7,
+      "covered": 7
+    },
+    {
+      "id": 11036892,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 4,
+      "covered": 4
+    },
+    {
+      "id": 11036894,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 12,
+      "covered": 12
+    },
+    {
+      "id": 11036902,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 15,
+      "covered": 15
+    },
+    {
+      "id": 11036908,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 10,
+      "covered": 10
+    },
+    {
+      "id": 11036912,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 6,
+      "covered": 6
+    },
+    {
+      "id": 11036924,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 7,
+      "covered": 7
+    },
+    {
+      "id": 11036928,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 1,
+      "covered": 1
+    },
+    {
+      "id": 11036930,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 2,
+      "covered": 2
+    },
+    {
+      "id": 11036932,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 13,
+      "covered": 13
+    },
+    {
+      "id": 11036940,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 4,
+      "covered": 4
+    },
+    {
+      "id": 11036946,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 9,
+      "covered": 9
+    },
+    {
+      "id": 11036950,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 4,
+      "covered": 4
+    },
+    {
+      "id": 11036954,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 7,
+      "covered": 7
+    },
+    {
+      "id": 11036962,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 8,
+      "covered": 8
+    },
+    {
+      "id": 11036966,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 4,
+      "covered": 4
+    },
+    {
+      "id": 11036968,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 27,
+      "covered": 27
+    },
+    {
+      "id": 11036970,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 1,
+      "covered": 1
+    },
+    {
+      "id": 11036980,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 7,
+      "covered": 7
+    },
+    {
+      "id": 11036986,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 6,
+      "covered": 6
+    },
+    {
+      "id": 11036990,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 6,
+      "covered": 6
+    },
+    {
+      "id": 11036994,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 6,
+      "covered": 6
+    },
+    {
+      "id": 11037002,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 2,
+      "covered": 2
+    },
+    {
+      "id": 11037006,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 14,
+      "covered": 14
+    },
+    {
+      "id": 11037008,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 4,
+      "covered": 4
+    },
+    {
+      "id": 11037012,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 13,
+      "covered": 13
+    },
+    {
+      "id": 11037016,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 5,
+      "covered": 5
+    },
+    {
+      "id": 11037018,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 7,
+      "covered": 7
+    },
+    {
+      "id": 11037619,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 3,
+      "covered": 3
+    },
+    {
+      "id": 11037661,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 3,
+      "covered": 3
+    },
+    {
+      "id": 11037673,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 3,
+      "covered": 3
+    },
+    {
+      "id": 11037685,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 2,
+      "covered": 2
+    },
+    {
+      "id": 11037729,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Avenue Louise",
+      "label": "Avenue Louise",
+      "near": 5,
+      "covered": 5
+    }
+  ]
+}

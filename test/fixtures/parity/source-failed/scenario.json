@@ -1,0 +1,50 @@
+{
+  "name": "source-failed",
+  "kind": "decide",
+  "clock": "2026-11-17T10:00:00Z",
+  "point": {
+    "lat": 50.826647,
+    "lon": 4.364997
+  },
+  "accuracy": 5,
+  "card": {
+    "number": "B000-000-000",
+    "plate": "1ABC234",
+    "municipality": "bruxelles",
+    "sector": "louise",
+    "from": "2026-01-01",
+    "to": "2027-12-31",
+    "tolerances": [],
+    "mailles": [],
+    "lims": []
+  },
+  "officialList": {
+    "status": "ok",
+    "document": null,
+    "date": null,
+    "why": null
+  },
+  "requests": [
+    {
+      "method": "HEAD",
+      "url": "https://www.bruxelles.be/sites/default/files/bxl/LOUISE.pdf"
+    },
+    {
+      "method": "HEAD",
+      "url": "https://www.bruxelles.be/sites/default/files/bxl/accord%20limitrophe%20Louise%20-%20Ixelles.pdf"
+    },
+    {
+      "method": "GET",
+      "url": "https://ows.parking.brussels/ws/ParkingBrussels/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=ParkingBrussels:regulation_zones&srsName=EPSG:3857&count=3000&bbox=50.825547,4.363237,50.827747,4.366757,urn:ogc:def:crs:EPSG::4326"
+    }
+  ],
+  "expected": {
+    "status": "unknown",
+    "title": "CAN'T VERIFY",
+    "detail": "Could not reach parking.brussels (parking.brussels HTTP 500).",
+    "notes": [],
+    "tariff": null,
+    "zoneId": null,
+    "zoneStreet": null
+  }
+}

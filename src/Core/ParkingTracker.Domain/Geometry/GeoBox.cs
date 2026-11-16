@@ -23,6 +23,19 @@ public readonly record struct GeoBox(double South, double West, double North, do
 	private const double LongitudeFactor = 1.6;
 	#endregion
 
+	#region Factory Methods
+	/// <summary>
+	/// Creates a box around a point, the same distance north and south and 1.6 times as far east and west.
+	/// </summary>
+	/// <param name="center">The centre of the box.</param>
+	/// <param name="delta">How far the box reaches north and south of the centre, in degrees of latitude.</param>
+	/// <returns>The box.</returns>
+	public static GeoBox Around(GeoPoint center, double delta)
+	{
+		return new GeoBox(center.Latitude - delta, center.Longitude - (delta * LongitudeFactor), center.Latitude + delta, center.Longitude + (delta * LongitudeFactor));
+	}
+	#endregion
+
 	#region Public Methods
 	/// <summary>
 	/// Grows the box so that addresses near its edge still see the streets they face.

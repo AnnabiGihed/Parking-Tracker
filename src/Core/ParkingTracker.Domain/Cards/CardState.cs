@@ -21,12 +21,22 @@ public sealed record CardState(bool IsValid, string? Reason)
 	public static CardState Evaluate(CardPeriod? card, TimeProvider timeProvider)
 	{
 		ArgumentNullException.ThrowIfNull(timeProvider);
+		return Evaluate(card, DateOnly.FromDateTime(timeProvider.GetLocalNow().DateTime));
+	}
+
+	/// <summary>
+	/// Checks a card against a given day.
+	/// </summary>
+	/// <param name="card">The card's validity dates, or <see langword="null"/> when no card is set up.</param>
+	/// <param name="today">The local calendar day to check against.</param>
+	/// <returns>Invalid with a reason when there is no card, it is not valid yet or it has expired; otherwise valid.</returns>
+	public static CardState Evaluate(CardPeriod? card, DateOnly today)
+	{
 		if (card is null)
 		{
 			return new CardState(false, "No parking card set up yet — tap 🪪.");
 		}
 
-		var today = DateOnly.FromDateTime(timeProvider.GetLocalNow().DateTime);
 		if (card.ValidFrom is { } from && today < from)
 		{
 			return new CardState(false, $"Your card is only valid from {Format(from)}.");

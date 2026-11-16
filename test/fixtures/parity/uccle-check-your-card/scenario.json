@@ -1,0 +1,53 @@
+{
+  "name": "uccle-check-your-card",
+  "kind": "decide",
+  "clock": "2026-11-17T10:00:00Z",
+  "point": {
+    "lat": 50.800428,
+    "lon": 4.33781
+  },
+  "accuracy": 5,
+  "card": {
+    "number": "B000-000-000",
+    "plate": "1ABC234",
+    "municipality": "uccle",
+    "sector": null,
+    "from": "2026-01-01",
+    "to": "2027-12-31",
+    "tolerances": [],
+    "mailles": [],
+    "lims": []
+  },
+  "officialList": null,
+  "requests": [
+    {
+      "method": "GET",
+      "url": "https://ows.parking.brussels/ws/ParkingBrussels/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=ParkingBrussels:regulation_zones&srsName=EPSG:3857&count=3000&bbox=50.799328,4.336050,50.801528,4.339570,urn:ogc:def:crs:EPSG::4326"
+    },
+    {
+      "method": "GET",
+      "url": "https://api.mobility.brussels/datasets/v1/parking/collections/regulations_rules/items/?f=json&limit=500&code=UCC2"
+    },
+    {
+      "method": "GET",
+      "url": "https://ows.parking.brussels/ws/ParkingBrussels/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=ParkingBrussels:on_street&srsName=EPSG:3857&count=5000&bbox=50.800028,4.337170,50.800828,4.338450,urn:ogc:def:crs:EPSG::4326"
+    },
+    {
+      "method": "GET",
+      "url": "https://data.mobility.brussels/geoserver/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=bm_osiris:chantiers_actu&srsName=EPSG:3857&count=5000&bbox=50.800028,4.337170,50.800828,4.338450,urn:ogc:def:crs:EPSG::4326"
+    },
+    {
+      "method": "GET",
+      "url": "https://data.mobility.brussels/geoserver/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=bm_traffic:events&srsName=EPSG:3857&count=5000&bbox=50.800028,4.337170,50.800828,4.338450,urn:ogc:def:crs:EPSG::4326"
+    }
+  ],
+  "expected": {
+    "status": "unknown",
+    "title": "CHECK YOUR CARD",
+    "detail": "place Emile Danco: Uccle's card is valid only in the green and blue zones of the sector assigned to your address, but Uccle does not publish the sector boundaries. The app tells you the zone rules; check your sector on your card..",
+    "notes": [],
+    "tariff": "€1,80/h · first 15 min free · Mon–Sat 09:00–18:00 · fine €37,00",
+    "zoneId": 3,
+    "zoneStreet": "place Emile Danco"
+  }
+}

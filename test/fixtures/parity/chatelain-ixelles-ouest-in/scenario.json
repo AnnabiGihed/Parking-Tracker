@@ -1,0 +1,59 @@
+{
+  "name": "chatelain-ixelles-ouest-in",
+  "kind": "decide",
+  "clock": "2026-11-17T10:00:00Z",
+  "point": {
+    "lat": 50.824905,
+    "lon": 4.360564
+  },
+  "accuracy": 5,
+  "card": {
+    "number": "B000-000-000",
+    "plate": "1ABC234",
+    "municipality": "ixelles",
+    "sector": null,
+    "from": "2026-01-01",
+    "to": "2027-12-31",
+    "tolerances": [],
+    "mailles": [
+      "IXLR_Ouest"
+    ],
+    "lims": []
+  },
+  "officialList": null,
+  "requests": [
+    {
+      "method": "GET",
+      "url": "https://ows.parking.brussels/ws/ParkingBrussels/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=ParkingBrussels:regulation_zones&srsName=EPSG:3857&count=3000&bbox=50.823805,4.358804,50.826005,4.362324,urn:ogc:def:crs:EPSG::4326"
+    },
+    {
+      "method": "GET",
+      "url": "https://api.mobility.brussels/datasets/v1/parking/collections/regulations_rules/items/?f=json&limit=500&code=IXE7"
+    },
+    {
+      "method": "GET",
+      "url": "https://ows.parking.brussels/ws/ParkingBrussels/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=ParkingBrussels:permit_secteurs_mailles&srsName=EPSG:3857&count=5000&bbox=50.823805,4.358804,50.826005,4.362324,urn:ogc:def:crs:EPSG::4326"
+    },
+    {
+      "method": "GET",
+      "url": "https://ows.parking.brussels/ws/ParkingBrussels/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=ParkingBrussels:on_street&srsName=EPSG:3857&count=5000&bbox=50.824505,4.359924,50.825305,4.361204,urn:ogc:def:crs:EPSG::4326"
+    },
+    {
+      "method": "GET",
+      "url": "https://data.mobility.brussels/geoserver/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=bm_osiris:chantiers_actu&srsName=EPSG:3857&count=5000&bbox=50.824505,4.359924,50.825305,4.361204,urn:ogc:def:crs:EPSG::4326"
+    },
+    {
+      "method": "GET",
+      "url": "https://data.mobility.brussels/geoserver/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=bm_traffic:events&srsName=EPSG:3857&count=5000&bbox=50.824505,4.359924,50.825305,4.361204,urn:ogc:def:crs:EPSG::4326"
+    }
+  ],
+  "expected": {
+    "status": "free",
+    "title": "FREE ✓",
+    "detail": "Place du Châtelain: in your area Secteur Ouest.",
+    "notes": [],
+    "tariff": "€3,60/h · first 30 min free · max 4 h 30 · Mon–Sat 09:00–21:00 · fine €47,00",
+    "zoneId": 11114930,
+    "zoneStreet": "Place du Châtelain"
+  }
+}

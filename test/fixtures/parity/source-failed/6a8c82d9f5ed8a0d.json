@@ -1,0 +1,1 @@
+{"method":"GET","url":"https://ows.parking.brussels/ws/ParkingBrussels/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=ParkingBrussels:regulation_zones&srsName=EPSG:3857&count=3000&bbox=50.825547,4.363237,50.827747,4.366757,urn:ogc:def:crs:EPSG::4326","simulated":true,"status":500,"bodyText":"Internal Server Error"}

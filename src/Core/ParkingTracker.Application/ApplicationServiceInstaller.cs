@@ -1,6 +1,7 @@
 using FluentValidation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using ParkingTracker.Application.Decisions;
 using Pivot.Framework.Application.Behaviors;
 using Pivot.Framework.Application.Messaging;
 using Pivot.Framework.Tools.DependencyInjection;
@@ -29,6 +30,12 @@ public sealed class ApplicationServiceInstaller : BaseServiceInstaller, IService
 			.AddOpenBehavior(typeof(ValidationPipelineBehavior<,>)));
 
 		services.AddValidatorsFromAssembly(AssemblyReference.Assembly);
+
+		// One instance: the outcome of the official-document check is kept in memory between decisions.
+		services.AddSingleton<IOfficialListChecker, OfficialListChecker>();
+		services.AddTransient<IDecisionContextFactory, DecisionContextFactory>();
+		services.AddTransient<IDecisionStepRunner, DecisionStepRunner>();
+		services.AddTransient<IAreaStatusProvider, AreaStatusProvider>();
 
 		if (includeConventionBasedRegistration)
 		{

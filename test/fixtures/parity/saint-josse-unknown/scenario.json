@@ -1,0 +1,55 @@
+{
+  "name": "saint-josse-unknown",
+  "kind": "decide",
+  "clock": "2026-11-17T10:00:00Z",
+  "point": {
+    "lat": 50.855654,
+    "lon": 4.369047
+  },
+  "accuracy": 5,
+  "card": {
+    "number": "B000-000-000",
+    "plate": "1ABC234",
+    "municipality": "saint-josse",
+    "sector": null,
+    "from": "2026-01-01",
+    "to": "2027-12-31",
+    "tolerances": [],
+    "mailles": [],
+    "lims": []
+  },
+  "officialList": null,
+  "requests": [
+    {
+      "method": "GET",
+      "url": "https://ows.parking.brussels/ws/ParkingBrussels/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=ParkingBrussels:regulation_zones&srsName=EPSG:3857&count=3000&bbox=50.854554,4.367287,50.856754,4.370807,urn:ogc:def:crs:EPSG::4326"
+    },
+    {
+      "method": "GET",
+      "url": "https://api.mobility.brussels/datasets/v1/parking/collections/regulations_rules/items/?f=json&limit=500&code=SJTN2"
+    },
+    {
+      "method": "GET",
+      "url": "https://ows.parking.brussels/ws/ParkingBrussels/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=ParkingBrussels:on_street&srsName=EPSG:3857&count=5000&bbox=50.855254,4.368407,50.856054,4.369687,urn:ogc:def:crs:EPSG::4326"
+    },
+    {
+      "method": "GET",
+      "url": "https://data.mobility.brussels/geoserver/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=bm_osiris:chantiers_actu&srsName=EPSG:3857&count=5000&bbox=50.855254,4.368407,50.856054,4.369687,urn:ogc:def:crs:EPSG::4326"
+    },
+    {
+      "method": "GET",
+      "url": "https://data.mobility.brussels/geoserver/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=bm_traffic:events&srsName=EPSG:3857&count=5000&bbox=50.855254,4.368407,50.856054,4.369687,urn:ogc:def:crs:EPSG::4326"
+    }
+  ],
+  "expected": {
+    "status": "unknown",
+    "title": "CHECK YOUR CARD",
+    "detail": "Rue du Méridien: Saint-Josse does not publish where its residents' card is valid, so the app can tell you the zone rules but not whether your card covers the spot..",
+    "notes": [
+      "🚧 Travaux — Rue du Méridien (until 18/12/2026). Parking may be forbidden: check the signs."
+    ],
+    "tariff": "€1,80/h · first 15 min free · Mon–Sat 09:00–21:00 · fine €37,00",
+    "zoneId": 3075786,
+    "zoneStreet": "Rue du Méridien"
+  }
+}

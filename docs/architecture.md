@@ -86,8 +86,8 @@ parking.brussels does not allow calls from a page origin (the reason for today's
 | Sector model, tolerance codes, street lookup | `live.js` | Domain `Sector` |
 | Zone types, card scope per municipality kind, tunnel exclusion | `live.js` | Domain `ZoneClassifier`, `CardScope` |
 | Paid hours, Brussels time, Belgian holidays, tariff text | `live.js` | Domain `PaidHours`, `BelgianHolidays` |
-| Decision (`decide`, `decideZone`, `surfaceStatus`, free spots) | `live.js` | Domain `SpotDecider` (pure, takes fetched data) and Application handlers (fetch, then decide) |
-| Texts (headlines, details, notes) | `live.js`, `app.js` | Application `DecisionPresenter` |
+| Decision (`decide`, `decideZone`, `surfaceStatus`, free spots) | `live.js` | Domain `SpotDecider`, `SpotAnnotator`, `SurfaceStatusEvaluator`, `AreaDecider` (pure) and Application handlers that fetch what the decider asks for |
+| Texts (headlines, details, notes) | `live.js`, `app.js` | Domain `SpotDecision` and the decider: the same English sentences as plain text (see below) |
 | Parking detector | `app.js` | Domain `ParkingDetector` (ADR-0002) |
 | Card text parsing | `app.js` | Application `CardTextParser` (ADR-0003) |
 | Live sources over HTTP | `fetch` / CapacitorHttp | Infrastructure clients on `HttpClient` |
@@ -95,10 +95,18 @@ parking.brussels does not allow calls from a page origin (the reason for today's
 | Screen, dialogs, sheet, toasts | DOM code | Razor components using the same markup and `style.css` |
 | Map, markers, polygons, WMS, popups | Leaflet | Leaflet in `wwwroot/js/map.js` |
 
-Domain results carry structure, not HTML: a verdict (`Free`, `FreeNow`, `Pay`, `Reserved`, `TimeLimited`,
-`ParkingDisc`, `CheckNumber`, `CheckCard`, `CheckSigns`, `CantVerify`), a reason and its values. The presenter turns them
-into the same English sentences as today, with emphasised parts as separate segments that Razor renders in `<b>`.
-This removes the HTML escaping done by hand in `live.js`.
+Domain results carry no HTML: a verdict (`Free`, `FreeNow`, `Pay`, `Reserved`, `TimeLimited`, `ParkingDisc`,
+`CheckNumber`, `CheckCard`, `CheckSigns`, `CantVerify`) that gives the headline and the colour, and the
+explanation, notes and tariff as plain text identical to `live.js` minus its `<b>` tags and HTML escaping. There is
+no separate presenter: the sentences are built where the decision is made, which keeps them next to the facts they
+state and lets the parity tests compare them one to one. Emphasised segments (the `<b>` parts) are not modelled; the
+screen stage adds them only if the design needs them.
+
+The decider is pure and does no input or output. A decision is a chain of `DecisionStep` values: each asks for one
+source (`NeedZones`, `NeedRule`, `NeedMailles`, `NeedAddresses`, `NeedSpaces`, `NeedWorks`) together with what to do
+with the outcome, or is the answer (`Decided`). `IDecisionStepRunner` in Application fetches what a step asks for
+through the ports and passes the result back, success or failure. A source is only asked when the decision needs
+it, in the order of `live.js`, so a source that is not needed cannot make the answer fail.
 
 ### 3.3 The JavaScript interop boundary
 
@@ -249,19 +257,22 @@ and never stores them. Then build and test everything with `python .agent-kit/ve
 | Type | Kind | Invariants and notes |
 | --- | --- | --- |
 | `GeoPoint` | record struct | Degrees only; the range check (latitude -90..90, longitude -180..180) is done where coordinates enter, by the query validator |
-| `GpsFix` | record | Point, accuracy (m), speed, time; the usability rule (accuracy ≤ 25 m, age ≤ 15 s) is added with the decider |
+| `GpsFix` | record | Point, accuracy (m), speed, time; the accuracy rule (≤ 25 m) is in `SpotDecider`, the age rule stays with the `ParkingDetector` |
 | `HouseNumber`, `HouseRange` | records | Number plus optional lower-case letter; `LowKey`/`HighKey` as `keyLow`/`keyHigh`; a range is a pair of keys |
 | `SideRule`, `SideRuleKind`, `EmptyCellMeaning`, `StreetSide` | record, enums | `All`, `None`, `Ranges` or `Condition` (`check:` text); `SideRule.Parse` returns `Result` (`SideRule.InvalidRange` for an unreadable range, where `live.js` throws) and reads an empty cell by an `EmptyCellMeaning` taken from the row's `EmptyMeansWholeSide` |
 | `RuleSet`, `StreetRules`, `ToleranceRule`, `SectorModel` | records, class | The parsed rules per street; `SectorModel.Build` returns `Result` (`Sector.InvalidRule`); street lookup by normalised French and Dutch name; `RuleSetsFor` applies sector rules only in the City of Brussels and tolerance rules only in their municipality with the card's code |
 | `GeoBox`, `MercatorPoint`, `SurfaceShape`, `ClosestPoint` | record structs, record | Web Mercator conversions, distance, point-in-ring, closest point and bounds of a street surface; `SurfaceFilter` excludes tunnels and viaducts |
 | `SectorDefinition`, `SectorStreet`, `ToleranceAgreement` | records | From reference data; lookup by normalised French and Dutch names |
 | `Municipality`, `MunicipalityKind` | record, enum | `Streets`, `Mailles`, `Whole`, `Wsl`, `Unknown` |
-| `ParkingCard` | record | Municipality, sector, mailles, lims, tolerances, validity dates; serialises to today's `pt.card` JSON. Only `CardPeriod` (the validity dates) and `CardState` (valid, or why not) exist so far |
-| `ZoneSurface`, `ZoneType`, `ParkingRule` | record, enum, record | Live data; `ZoneType`: `Free`, `Payable`, `Derogation`, `Disk`, `Residents`, `Reserved`; `ZoneClassifier` gives the type and detects events; `PaidHours`, `BelgianHolidays`, `BrusselsTime` and `TariffText` answer paid-now, next start and the tariff text from `ParkingRule` |
+| `ParkingCard` | record | Municipality, sector, tolerances, mailles, lims and the validity dates (`CardPeriod`); `CardState` says valid, or why not. The card number and plate, and the `pt.card` JSON, come with the settings store |
+| `ZoneSurface`, `ZoneType`, `ParkingRule` | record, enum, record | Live data; `ZoneType`: `Free`, `Payable`, `Derogation`, `Disk`, `Residents`, `Reserved`; `ZoneClassifier` gives the type and detects events; `PaidHours`, `BelgianHolidays`, `BrusselsTime` and `TariffText` answer paid-now, next start and the tariff text from `ParkingRule`. `ZoneSurface` reads the rule code from `ZoneId1`, or `zoneid1` when that is missing |
+| `SectorMaille`, `ReservedSpace`, `AddressPoint`, `AssignedAddress`, `WorkItem` | records | Live data from the other sources; `AddressAssigner` ties address points to the street surface they face (corner ambiguity and number outliers left out) |
+| `DecisionContext`, `SpotQuestion`, `DecisionStep` | records | What a decision knows (card, municipality, street lists, official-list status), the question (place, accuracy, moment, online) and the chain of steps described above |
+| `SurfaceStatus`, `SurfaceKind`, `FreeSpot` | records, enum | Per-surface status for the map layer and the nearest covered spots (`AreaDecider`) |
 | `ParkingDetector` | class | Fed `GpsFix` values and asked `GetParkedFix(now)` and told `AcknowledgeParked()`; no clock inside |
-| `SpotDecision`, `Verdict` | record, enum | Verdict, reason, notes, tariff, zone; `CantVerify` carries why |
+| `SpotDecision`, `Verdict`, `SpotStatus` | record, enums | Verdict (headline and colour), plain-text detail, notes, tariff, the zone reading (surface, rule, why the rule is missing) and the reserved space; `CantVerify` carries why in its detail |
 | `ParkedCar`, `ParkingTimer`, `LayerSettings` | records | Same JSON as `pt.car`, `pt.timer`, `pt.layers` |
-| `OfficialListStatus` | record | `Ok`, `Changed`, `Unverified`, checked time; re-check every 6 h, after 1 min when not ok |
+| `OfficialListStatus` | record | `Ok`, `Changed`, `Unverified`, checked time; re-check every 6 h, after 1 min when not ok. Kept in memory by `IOfficialListChecker` (singleton), not persisted; the comparison rules (headers, content hash, PDF signature) are in the record |
 
 Expected failures use Pivot `Result`/`Error` with dotted codes (`ParkingBrussels.Unavailable`, `Urbis.BadResponse`,
 `City.DocumentChanged`). A failed source is not a failed query: the handler turns it into a `CantVerify` decision,
@@ -272,11 +283,18 @@ of range, caught by `ValidationPipelineBehavior`).
 
 | Port | Source | Timeout |
 | --- | --- | --- |
-| `IParkingBrusselsClient` | `ows.parking.brussels` WFS: `regulation_zones`, `on_street`, `permit_secteurs_mailles` | 12 s |
+| `IParkingBrusselsClient` | `ows.parking.brussels` WFS: `GetZonesAsync` (`regulation_zones`), `GetSpacesAsync` (`on_street`), `GetMaillesAsync` (`permit_secteurs_mailles`) | 12 s |
 | `IAddressPointsClient` | `data.mobility.brussels` `bm_urbis:urbadm_adpt` | 12 s |
-| `IParkingRulesClient` | `api.mobility.brussels` `regulations_rules` | 12 s |
-| `IMobilityLayersClient` | `data.mobility.brussels` roadworks, events, car parks, EV charging | 12 s |
-| `ICityDocumentsClient` | `www.bruxelles.be` PDFs: HEAD, then GET and SHA-256 when headers differ | 12 s / 30 s |
+| `IParkingRulesClient` | `api.mobility.brussels` `regulations_rules`, per zone code or all, at a moment | 12 s |
+| `IMobilityLayersClient` | `data.mobility.brussels` roadworks and events (`GetWorksAsync`); car parks and EV charging come with the map layers | 12 s |
+| `ICityDocumentsClient` | `www.bruxelles.be` PDFs: `GetHeadersAsync` (HEAD), then `DownloadAsync`, which returns whether the content is a PDF and its SHA-256, not the bytes, when headers differ | 12 s / 30 s |
+
+Two small ports complete the decision: `INetworkStatus` (online or not) and `ISettingsStore`, whose read side
+(`GetCard`) exists so far; the card storage and the other settings come with the app shell. Request addresses, response
+parsers and the HTTP-status failure live in Infrastructure as pure code (`SourceRequests`, `Parsing/*`,
+`SourceResponse`); the `HttpClient` clients that use them come with stage 4. A parser that cannot read an answer gives
+`<Source>.BadResponse` with the message `<name>: unexpected answer`; an HTTP error gives `<Source>.Unavailable` with
+`<name> HTTP <status>`, as `live.js` worded them.
 
 Rules kept from `live.js`: no caching between checks (`no-store`), no retries (a timeout gives CAN'T VERIFY), WFS
 requests with `srsName=EPSG:3857` and an EPSG:4326 bounding box, tunnels and viaducts excluded, disabled surfaces
@@ -286,8 +304,8 @@ Connectivity comes from MAUI `Connectivity` through an `INetworkStatus` port; ti
 
 ### 5.3 Spot decision flow
 
-The main read path: a GPS fix or a pin becomes one query; sources are fetched in the same order as today, then the
-pure decider gives the verdict.
+The main read path: a GPS fix or a pin becomes one query; the pure decider asks for its sources one step at a time, in
+the same order as today, and ends with the verdict.
 
 ```mermaid
 sequenceDiagram
@@ -297,16 +315,17 @@ sequenceDiagram
     participant S as ISettingsStore
     participant C as Live clients
     participant D as SpotDecider (Domain)
-    participant P as DecisionPresenter
     UI->>M: Send(DecideSpotQuery)
     M->>H: Handle (valid input)
-    H->>S: card, official-list status
-    H->>C: zones, rule, mailles, addresses
+    H->>S: card
+    H->>C: official-list check when stale (in memory)
+    H->>D: Begin(question)
+    D-->>H: step: needs zones
+    H->>C: zones
     C-->>H: Result per source
-    H->>D: Decide(card, fix, live data, now)
-    D-->>H: verdict + reason
-    H->>C: reserved spaces, roadworks
-    H->>P: texts, notes, tariff
+    H->>D: Resume(result)
+    D-->>H: steps: rule, mailles, addresses, spaces, roadworks, in turn
+    D-->>H: Decided(verdict, texts, notes, tariff)
     H-->>UI: Result<SpotDecision>
 ```
 
@@ -350,7 +369,7 @@ UI count as test failures. Resilience is honesty, not retries: any failed source
 | Level | What | Where | Runs |
 | --- | --- | --- | --- |
 | Unit | Geometry, street rules, holidays (fixed years incl. Easter), paid hours across DST, zone types, card scope per municipality kind, parking detector with synthetic tracks, card text parser | `test/ParkingTracker.Domain.Tests`, `test/ParkingTracker.Application.Tests` | locally and CI |
-| Parity | For about 15 recorded places (Avenue Louise 216, Place du Châtelain, a mailles municipality, Etterbeek, Uccle, Saint-Josse, a tunnel, a red zone, a reserved space, a `check:` street, outside paid hours, a holiday, City list changed, a failed source, poor GPS): the C# answer equals the `live.js` answer | `test/fixtures`, Application tests | locally and CI |
+| Parity | For 17 recorded places (Avenue Louise 216, Place du Châtelain with a City card and with two mailles cards, Etterbeek, Uccle, Saint-Josse, a tunnel, a red zone, a reserved space, a `check:` street, a limit between house numbers, outside paid hours, a holiday, City list changed, a failed source, poor GPS) plus a free-spot search and two map areas: the C# answer equals the `live.js` answer, and the C# code asks for exactly the requests `live.js` made | `test/fixtures/parity`, `test/ParkingTracker.Infrastructure.Tests/Parity` (they need the parsers and the handlers together) | locally and CI |
 | Integration | Clients against recorded responses through a stub `HttpMessageHandler`: URLs, parsing, filters, timeouts, error mapping; reference data loading | `test/ParkingTracker.Infrastructure.Tests` | locally and CI |
 | Live smoke | Clients against the real services, trait `Live` | Infrastructure tests | on demand, not a gate |
 | Device | Emulator test: Release APK with test hooks | `tools/emulator-test.mjs` in CI | every main build |
@@ -359,10 +378,16 @@ UI count as test failures. Resilience is honesty, not retries: any failed source
 Stack: xUnit, FluentAssertions, NSubstitute (owner's choice; FluentAssertions 8 has a commercial licence for commercial
 use), `Microsoft.Extensions.TimeProvider.Testing` for the clock. Test names `Method_Scenario_ShouldExpectation`.
 
-The parity fixtures are recorded once by `tools/parity/record.mjs`: it runs `live.js` in Node 22 with `window`,
-`navigator` and `fetch` stubbed, a fixed clock, records each request URL and response body, and writes the expected
-`SpotDecision` (verdict, title, plain-text detail, notes, tariff). The recorder and `live.js` are deleted at cut-over;
-the fixtures stay as regression data.
+The parity fixtures are recorded once by `tools/parity/record.mjs` (`node tools/parity/record.mjs`, network needed;
+`--dry` prints the answers without writing): it runs `live.js` in Node 22 or later with `window`, `navigator` and
+`fetch` stubbed and a fixed clock per scenario, and writes into `test/fixtures/parity/<scenario>/` a `scenario.json`
+(the inputs, the answer `live.js` gave as status, title, plain-text detail, notes and tariff, and the result of the
+official-document check) and one `<hash>.json` per HTTP request, keyed by method and address. City PDFs are stored as
+their SHA-256 and a PDF flag, not as bytes. Two scenarios use simulated answers, marked `simulated`: parking.brussels
+answering HTTP 500, and the City answering with a different document. The parity tests replay the files through fake
+ports that build each address with the production `SourceRequests`, so a request that `live.js` did not make fails the
+test, and so does one it made that the C# code did not. The recorder and `live.js` are deleted at cut-over; the fixtures
+stay as regression data.
 
 Emulator test changes:
 

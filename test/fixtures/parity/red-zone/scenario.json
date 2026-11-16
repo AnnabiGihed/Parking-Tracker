@@ -1,0 +1,66 @@
+{
+  "name": "red-zone",
+  "kind": "decide",
+  "clock": "2026-11-17T10:00:00Z",
+  "point": {
+    "lat": 50.826043,
+    "lon": 4.360519
+  },
+  "accuracy": 5,
+  "card": {
+    "number": "B000-000-000",
+    "plate": "1ABC234",
+    "municipality": "bruxelles",
+    "sector": "louise",
+    "from": "2026-01-01",
+    "to": "2027-12-31",
+    "tolerances": [],
+    "mailles": [],
+    "lims": []
+  },
+  "officialList": {
+    "status": "ok",
+    "document": null,
+    "date": null,
+    "why": null
+  },
+  "requests": [
+    {
+      "method": "HEAD",
+      "url": "https://www.bruxelles.be/sites/default/files/bxl/LOUISE.pdf"
+    },
+    {
+      "method": "HEAD",
+      "url": "https://www.bruxelles.be/sites/default/files/bxl/accord%20limitrophe%20Louise%20-%20Ixelles.pdf"
+    },
+    {
+      "method": "GET",
+      "url": "https://ows.parking.brussels/ws/ParkingBrussels/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=ParkingBrussels:regulation_zones&srsName=EPSG:3857&count=3000&bbox=50.824943,4.358759,50.827143,4.362279,urn:ogc:def:crs:EPSG::4326"
+    },
+    {
+      "method": "GET",
+      "url": "https://api.mobility.brussels/datasets/v1/parking/collections/regulations_rules/items/?f=json&limit=500&code=IXE4"
+    },
+    {
+      "method": "GET",
+      "url": "https://ows.parking.brussels/ws/ParkingBrussels/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=ParkingBrussels:on_street&srsName=EPSG:3857&count=5000&bbox=50.825643,4.359879,50.826443,4.361159,urn:ogc:def:crs:EPSG::4326"
+    },
+    {
+      "method": "GET",
+      "url": "https://data.mobility.brussels/geoserver/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=bm_osiris:chantiers_actu&srsName=EPSG:3857&count=5000&bbox=50.825643,4.359879,50.826443,4.361159,urn:ogc:def:crs:EPSG::4326"
+    },
+    {
+      "method": "GET",
+      "url": "https://data.mobility.brussels/geoserver/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=bm_traffic:events&srsName=EPSG:3857&count=5000&bbox=50.825643,4.359879,50.826443,4.361159,urn:ogc:def:crs:EPSG::4326"
+    }
+  ],
+  "expected": {
+    "status": "pay",
+    "title": "PAY",
+    "detail": "Rue du Bailli is a red zone: residents' cards are not valid here. Pay at the meter or with an app.",
+    "notes": [],
+    "tariff": "€3,60/h · first 15 min free · max 2 h · Mon–Sat 09:00–21:00 · fine €42,00",
+    "zoneId": 3068563,
+    "zoneStreet": "Rue du Bailli"
+  }
+}

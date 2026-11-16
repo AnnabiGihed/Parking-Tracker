@@ -1,0 +1,364 @@
+{
+  "name": "area-ixelles-ouest",
+  "kind": "area",
+  "clock": "2026-11-17T10:00:00Z",
+  "point": {
+    "lat": 50.824905,
+    "lon": 4.360564
+  },
+  "accuracy": 5,
+  "card": {
+    "number": "B000-000-000",
+    "plate": "1ABC234",
+    "municipality": "ixelles",
+    "sector": null,
+    "from": "2026-01-01",
+    "to": "2027-12-31",
+    "tolerances": [],
+    "mailles": [
+      "IXLR_Ouest"
+    ],
+    "lims": []
+  },
+  "officialList": null,
+  "requests": [
+    {
+      "method": "GET",
+      "url": "https://ows.parking.brussels/ws/ParkingBrussels/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=ParkingBrussels:regulation_zones&srsName=EPSG:3857&count=3000&bbox=50.823305,4.358004,50.826505,4.363124,urn:ogc:def:crs:EPSG::4326"
+    },
+    {
+      "method": "GET",
+      "url": "https://api.mobility.brussels/datasets/v1/parking/collections/regulations_rules/items/?f=json&limit=500"
+    },
+    {
+      "method": "GET",
+      "url": "https://ows.parking.brussels/ws/ParkingBrussels/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=ParkingBrussels:permit_secteurs_mailles&srsName=EPSG:3857&count=5000&bbox=50.823305,4.358004,50.826505,4.363124,urn:ogc:def:crs:EPSG::4326"
+    }
+  ],
+  "expected": [
+    {
+      "id": 3068563,
+      "kind": "red",
+      "color": "red",
+      "street": "Rue du Bailli",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 11069928,
+      "kind": "red",
+      "color": "red",
+      "street": "Rue du Tabellion",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 11069922,
+      "kind": "red",
+      "color": "red",
+      "street": "Parvis de la Trinité",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 11069924,
+      "kind": "red",
+      "color": "red",
+      "street": "Parvis de la Trinité",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 11069934,
+      "kind": "red",
+      "color": "red",
+      "street": "Parvis de la Trinité",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3068973,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Rue Simonis",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 11069920,
+      "kind": "red",
+      "color": "red",
+      "street": "Rue du Tabellion",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3068047,
+      "kind": "red",
+      "color": "red",
+      "street": "Rue du Bailli",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 11069926,
+      "kind": "red",
+      "color": "red",
+      "street": "Parvis de la Trinité",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 11069938,
+      "kind": "red",
+      "color": "red",
+      "street": "Parvis de la Trinité",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 11069918,
+      "kind": "unknown",
+      "color": "unknown",
+      "street": "Parvis de la Trinité",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3067864,
+      "kind": "red",
+      "color": "red",
+      "street": "Rue Faider",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3068574,
+      "kind": "red",
+      "color": "red",
+      "street": "Rue du Bailli",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3068598,
+      "kind": "red",
+      "color": "red",
+      "street": "Rue du Bailli",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 11069939,
+      "kind": "red",
+      "color": "red",
+      "street": "Parvis de la Trinité",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3067902,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Rue de l'Aqueduc",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3067880,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Place du Châtelain",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3069144,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Rue Armand Campenhout",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 11114930,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Place du Châtelain",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 11114938,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Rue de l'Aqueduc",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 11114964,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Place du Châtelain",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 11114976,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Place du Châtelain",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 11115004,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Place du Châtelain",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3067854,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Place du Châtelain",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3067867,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Place du Châtelain",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3067942,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Rue de l'Aqueduc",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3068003,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Place du Châtelain",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3068453,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Rue de l'Aqueduc",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3068473,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Rue de l'Amazone",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3068525,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Rue Simonis",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3068548,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Place du Châtelain",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3068769,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Rue de l'Aqueduc",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3068791,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Rue de l'Aqueduc",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3068814,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Rue du Page",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3068828,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Place du Châtelain",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    },
+    {
+      "id": 3069118,
+      "kind": "covered",
+      "color": "grey",
+      "street": "Rue du Châtelain",
+      "label": null,
+      "near": 0,
+      "covered": 0
+    }
+  ]
+}

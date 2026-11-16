@@ -1,0 +1,46 @@
+{
+  "name": "poor-gps",
+  "kind": "decide",
+  "clock": "2026-11-17T10:00:00Z",
+  "point": {
+    "lat": 50.826647,
+    "lon": 4.364997
+  },
+  "accuracy": 60,
+  "card": {
+    "number": "B000-000-000",
+    "plate": "1ABC234",
+    "municipality": "bruxelles",
+    "sector": "louise",
+    "from": "2026-01-01",
+    "to": "2027-12-31",
+    "tolerances": [],
+    "mailles": [],
+    "lims": []
+  },
+  "officialList": {
+    "status": "ok",
+    "document": null,
+    "date": null,
+    "why": null
+  },
+  "requests": [
+    {
+      "method": "HEAD",
+      "url": "https://www.bruxelles.be/sites/default/files/bxl/LOUISE.pdf"
+    },
+    {
+      "method": "HEAD",
+      "url": "https://www.bruxelles.be/sites/default/files/bxl/accord%20limitrophe%20Louise%20-%20Ixelles.pdf"
+    }
+  ],
+  "expected": {
+    "status": "unknown",
+    "title": "CAN'T VERIFY",
+    "detail": "GPS is not precise enough yet (±60 m, need ±25 m). Waiting for a better fix…",
+    "notes": [],
+    "tariff": null,
+    "zoneId": null,
+    "zoneStreet": null
+  }
+}

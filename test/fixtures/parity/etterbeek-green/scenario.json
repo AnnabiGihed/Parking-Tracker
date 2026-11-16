@@ -1,0 +1,53 @@
+{
+  "name": "etterbeek-green",
+  "kind": "decide",
+  "clock": "2026-11-17T10:00:00Z",
+  "point": {
+    "lat": 50.836724,
+    "lon": 4.381871
+  },
+  "accuracy": 5,
+  "card": {
+    "number": "B000-000-000",
+    "plate": "1ABC234",
+    "municipality": "etterbeek",
+    "sector": null,
+    "from": "2026-01-01",
+    "to": "2027-12-31",
+    "tolerances": [],
+    "mailles": [],
+    "lims": []
+  },
+  "officialList": null,
+  "requests": [
+    {
+      "method": "GET",
+      "url": "https://ows.parking.brussels/ws/ParkingBrussels/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=ParkingBrussels:regulation_zones&srsName=EPSG:3857&count=3000&bbox=50.835624,4.380111,50.837824,4.383631,urn:ogc:def:crs:EPSG::4326"
+    },
+    {
+      "method": "GET",
+      "url": "https://api.mobility.brussels/datasets/v1/parking/collections/regulations_rules/items/?f=json&limit=500&code=ETT2"
+    },
+    {
+      "method": "GET",
+      "url": "https://ows.parking.brussels/ws/ParkingBrussels/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=ParkingBrussels:on_street&srsName=EPSG:3857&count=5000&bbox=50.836324,4.381231,50.837124,4.382511,urn:ogc:def:crs:EPSG::4326"
+    },
+    {
+      "method": "GET",
+      "url": "https://data.mobility.brussels/geoserver/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=bm_osiris:chantiers_actu&srsName=EPSG:3857&count=5000&bbox=50.836324,4.381231,50.837124,4.382511,urn:ogc:def:crs:EPSG::4326"
+    },
+    {
+      "method": "GET",
+      "url": "https://data.mobility.brussels/geoserver/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=bm_traffic:events&srsName=EPSG:3857&count=5000&bbox=50.836324,4.381231,50.837124,4.382511,urn:ogc:def:crs:EPSG::4326"
+    }
+  ],
+  "expected": {
+    "status": "free",
+    "title": "FREE ✓",
+    "detail": "Rue Général Leman: your card is valid in this zone everywhere in Etterbeek.",
+    "notes": [],
+    "tariff": "€2,20/h · first 15 min free · max 4 h 30 · Mon–Sat 09:00–18:00 · fine €42,00",
+    "zoneId": 3115461,
+    "zoneStreet": "Rue Général Leman"
+  }
+}
