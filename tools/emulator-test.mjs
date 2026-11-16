@@ -28,6 +28,8 @@ const screenshot = (name) => {
 };
 
 const checks = [];
+let step = 'start';
+const stepTo = (s) => { step = s; console.log(`--- ${s}`); };
 const check = (name, ok, detail) => { checks.push({ name, ok: !!ok, detail }); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ' — ' + detail : ''}`); };
 
 // ---------- Chrome DevTools Protocol client (Node 22 has a global WebSocket) ----------
@@ -57,7 +59,7 @@ function send(method, params = {}) {
     const id = ++nextId;
     pending.set(id, { resolve, reject });
     ws.send(JSON.stringify({ id, method, params }));
-    setTimeout(() => { if (pending.has(id)) { pending.delete(id); reject(new Error(`CDP ${method} timed out`)); } }, 90000);
+    setTimeout(() => { if (pending.has(id)) { pending.delete(id); reject(new Error(`CDP ${method} timed out during step: ${step}`)); } }, 45000);
   });
 }
 async function evaluate(expression) {
@@ -75,6 +77,7 @@ async function cdp() {
     if (d.method === 'Runtime.exceptionThrown') logs.push(`EXCEPTION: ${d.params.exceptionDetails.exception?.description || d.params.exceptionDetails.text}`);
   };
   await send('Runtime.enable');
+  await send('Page.enable').catch(() => {});
 }
 const waitFor = async (expr, ms = 60000) => {
   const end = Date.now() + ms;
@@ -88,22 +91,30 @@ async function main() {
   report.device.android = tryAdb('shell getprop ro.build.version.release');
   report.device.webview = tryAdb('shell dumpsys package com.google.android.webview').match(/versionName=(\S+)/)?.[1] || 'unknown';
 
+  stepTo('install');
   // Install and grant what a user grants on first launch ("Allow all the time", notifications).
   console.log(adb(`install -r -g "${APK}"`));
   for (const p of ['ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION', 'ACCESS_BACKGROUND_LOCATION', 'POST_NOTIFICATIONS']) tryAdb(`shell pm grant ${PKG} android.permission.${p}`);
   tryAdb('shell settings put secure location_mode 3');
   geo(HOME);
 
+  stepTo('launch');
   // Launch, add the test card, restart.
   tryAdb(`shell am start -n ${PKG}/.MainActivity`);
+  await sleep(8000);
+  report.aliveAfterLaunch = tryAdb(`shell pidof ${PKG}`);
+  stepTo('connect to WebView');
   await cdp();
+  stepTo('add test card');
   await waitFor('!!window.PT && !!window.__pt', 90000);
   await evaluate(`localStorage.setItem('pt.card', ${JSON.stringify(JSON.stringify(TEST_CARD))}); localStorage.setItem('pt.permSnooze', String(Date.now() + 864e5)); true`);
-  await evaluate('location.reload(); true').catch(() => {});
+  stepTo('reload');
+  await send('Page.reload').catch(() => {});
   await sleep(3000);
   await waitFor('!!window.PT && !!window.__pt && !!window.__pt.state.sector', 90000);
   check('App runs inside Capacitor (native)', await evaluate('!!window.Capacitor && window.PT.IN_APP'));
 
+  stepTo('native plugins');
   // Native plugins available?
   const plugins = await evaluate(`(async () => {
     const P = window.Capacitor.Plugins, out = {};
@@ -116,11 +127,13 @@ async function main() {
     JSON.stringify(plugins));
   check('Location allowed all the time', plugins.LocationAccess?.background === true, JSON.stringify(plugins.LocationAccess));
 
+  stepTo('official list');
   // The official City list check through native HTTP (the bug of v1.0.7).
   const list = await evaluate(`(async () => { const c = await window.__pt.ctx(); return { ...window.__pt.state.list, problem: c.listProblem }; })()`);
   report.list = list;
   check('City sector list confirmed unchanged (native HTTP)', list?.status === 'ok', JSON.stringify(list));
 
+  stepTo('answers');
   // Live answers at known places, through the app's own decision code.
   for (const s of [HOME, CHATELAIN]) {
     const r = await evaluate(`(async () => { const r = await window.PT.decide(await window.__pt.ctx(), ${s.lat}, ${s.lon}, 5);
@@ -129,6 +142,7 @@ async function main() {
     check(`Answer at ${s.name}`, s.expect.includes(r?.title), `${r?.title} — ${r?.detail}`);
   }
 
+  stepTo('GPS on screen');
   // Real GPS path: the emulator's GPS is set to Avenue Louise 216; the screen must show the answer.
   for (let i = 0; i < 12; i++) { geo(HOME); await sleep(1500); }
   const me = await waitFor('window.__pt.state.me && JSON.stringify(window.__pt.state.me)', 60000);
@@ -139,6 +153,7 @@ async function main() {
   check('Screen shows an answer for my position', !!screen && /^Free for you here/.test(screen), screen || 'nothing shown');
   screenshot('avenue-louise-216');
 
+  stepTo('free spots');
   // Nearest free spot from Place du Châtelain (live search).
   const spots = await evaluate(`(async () => (await window.PT.liveFreeSpots(await window.__pt.ctx(), ${CHATELAIN.lat}, ${CHATELAIN.lon}, 3)).map((s) => s.label + ' ' + Math.round(s.m) + ' m'))()`);
   report.freeSpots = spots;
@@ -147,12 +162,23 @@ async function main() {
   const exceptions = logs.filter((l) => l.startsWith('EXCEPTION'));
   check('No JavaScript errors', exceptions.length === 0, exceptions.slice(0, 3).join(' | '));
 
-  writeFileSync(join(OUT, 'logcat.txt'), tryAdb('logcat -d -v time Capacitor:V Capacitor/Console:V chromium:V AndroidRuntime:E *:S'));
   return report;
 }
 
 let report, fatal = null;
-try { report = await main(); } catch (e) { fatal = e; report = { checks, logs, fatal: e.message }; check('Test ran to the end', false, e.message); screenshot('failure'); }
+try { report = await main(); } catch (e) {
+  fatal = e; report = { checks, logs, fatal: e.message, failedStep: step, appRunning: tryAdb(`shell pidof ${PKG}`) || 'NOT RUNNING' };
+  check(`Test ran to the end (failed at: ${step}; app process: ${report.appRunning})`, false, e.message); screenshot('failure');
+}
+// Always keep Android's log: app console, crashes (AndroidRuntime) and Capacitor messages.
+writeFileSync(join(OUT, 'logcat.txt'), tryAdb('logcat -d -v time'));
+const crash = tryAdb('logcat -d -b crash -v time');
+writeFileSync(join(OUT, 'crash.txt'), crash);
+if (/FATAL EXCEPTION/.test(crash)) {
+  const lines = crash.split(/\r?\n/);
+  report.crash = lines.slice(0, 25).join('\n');
+  check('App did not crash', false, lines.find((l) => /Exception|Error/.test(l)) || 'see crash.txt');
+}
 try { ws?.close(); } catch { /* closed */ }
 writeFileSync(join(OUT, 'report.json'), JSON.stringify(report, null, 2));
 const failed = checks.filter((c) => !c.ok);
