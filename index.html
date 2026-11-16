@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Parking Tracker</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/png" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">🅿️ Parking Tracker</div>
+    <form id="searchForm" class="search">
+      <input id="searchInput" type="search" placeholder="Search an address…" autocomplete="off" />
+    </form>
+    <button id="cardBtn" class="iconbtn" title="My parking card">🪪</button>
+  </header>
+
+  <div id="map"></div>
+
+  <div class="fabs">
+    <button id="trackBtn" class="fab" title="Follow my position">📍</button>
+    <button id="findBtn" class="fab" title="Nearest free spot">🟢</button>
+  </div>
+
+  <section id="sheet" class="sheet">
+    <div id="cardLine" class="cardline"></div>
+    <div id="status" class="status idle">
+      <div class="status-title">Tap the map or press 📍</div>
+      <div class="status-detail">I'll tell you if your residential card lets you park there for free.</div>
+    </div>
+    <div id="nearest" class="nearest hidden"></div>
+    <div id="loading" class="loading hidden">Loading sector streets…</div>
+  </section>
+
+  <dialog id="cardDialog">
+    <form method="dialog" id="cardForm">
+      <h2>My residential parking card</h2>
+      <p class="hint">Fill in from your <em>carte riverain / carte de dérogation</em>, or scan a photo of it.</p>
+      <label class="scan">
+        📷 Scan a photo of the card
+        <input id="scanInput" type="file" accept="image/*" capture="environment" hidden />
+      </label>
+      <div id="scanStatus" class="hint"></div>
+      <label>Card number <input name="number" placeholder="B000-000-000" /></label>
+      <label>Plate <input name="plate" placeholder="1ABC234" /></label>
+      <label>Sector
+        <select name="sector" id="sectorSelect"></select>
+      </label>
+      <div id="tolBox"></div>
+      <div class="row">
+        <label>Valid from <input name="from" type="date" required /></label>
+        <label>Valid until <input name="to" type="date" required /></label>
+      </div>
+      <p class="hint">Stored only on this device.</p>
+      <menu>
+        <button value="cancel" formnovalidate>Cancel</button>
+        <button value="save" class="primary">Save</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="sectors.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

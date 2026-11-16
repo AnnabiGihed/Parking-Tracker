@@ -1,0 +1,8 @@
+{
+  "appId": "be.parkingtracker.app",
+  "appName": "Parking Tracker",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false
+  }
+}

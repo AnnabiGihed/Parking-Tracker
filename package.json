@@ -1,0 +1,18 @@
+{
+  "name": "parking-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Is this spot free with my Brussels residential parking card?",
+  "scripts": {
+    "build": "node tools/build-web.mjs",
+    "sync": "npm run build && npx cap sync android",
+    "verify-data": "python tools/verify_sectors.py"
+  },
+  "dependencies": {
+    "@capacitor/android": "7.6.10",
+    "@capacitor/core": "7.6.10"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "7.6.10"
+  }
+}
