@@ -1,7 +1,10 @@
 name: Android APK
 
-# Builds a signed APK on every push to main and publishes it as a GitHub Release,
-# so the phone can download the latest version from the repository's Releases page.
+# On every push to main:
+#   1. build  — the signed APK to publish, plus a debug build of the same code for testing
+#   2. test   — install the debug build on an Android emulator, put the GPS at Avenue Louise 216
+#               and check what the app really does (native HTTP, permissions, GPS, answers)
+#   3. release — publish the signed APK on the Releases page, only if the emulator test passed
 on:
   push:
     branches: [main]
@@ -50,7 +53,7 @@ jobs:
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
           echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
 
-      - name: Build the signed APK
+      - name: Build the signed APK and the test build
         working-directory: android
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -58,20 +61,82 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
-          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/ParkingTracker.apk"
+          ./gradlew assembleRelease assembleDebug --no-daemon
+          mkdir -p "$RUNNER_TEMP/apk"
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/apk/ParkingTracker.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/apk/ParkingTracker-test.apk"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ParkingTracker-apk
-          path: ${{ runner.temp }}/ParkingTracker.apk
+          name: apks
+          path: ${{ runner.temp }}/apk/
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: apks
+          path: apk
+
+      - name: Enable hardware acceleration for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run the app on an Android 14 emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: node tools/emulator-test.mjs apk/ParkingTracker-test.apk
+
+      - name: Keep the test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-report
+          path: emulator-report/
+
+  release:
+    needs: [build, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: apks
+          path: apk
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: emulator-report
+          path: emulator-report
 
       - name: Publish as a GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           TAG="v1.0.${{ github.run_number }}"
-          gh release create "$TAG" "$RUNNER_TEMP/ParkingTracker.apk" \
-            --title "Parking Tracker $TAG" \
-            --notes "Open this page on your Android phone, tap ParkingTracker.apk and install it. Commit: ${{ github.sha }}" \
-            --latest
+          {
+            echo "Open this page on your Android phone, tap **ParkingTracker.apk** and install it."
+            echo
+            cat emulator-report/summary.md
+            echo
+            echo "Commit: ${{ github.sha }}"
+          } > notes.md
+          gh release create "$TAG" apk/ParkingTracker.apk emulator-report/screenshot-avenue-louise-216.png \
+            --title "Parking Tracker $TAG" --notes-file notes.md --latest
