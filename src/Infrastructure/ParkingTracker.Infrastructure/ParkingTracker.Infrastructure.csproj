@@ -9,6 +9,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Data\*.json" LogicalName="ParkingTracker.Infrastructure.Data.%(Filename)%(Extension)" />
+    <InternalsVisibleTo Include="ParkingTracker.Infrastructure.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Pivot.Framework.Tools.DependencyInjection" />
   </ItemGroup>
 

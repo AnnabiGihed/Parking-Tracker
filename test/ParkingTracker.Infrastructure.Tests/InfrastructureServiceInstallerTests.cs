@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using ParkingTracker.Application.ReferenceData;
 
 namespace ParkingTracker.Infrastructure.Tests;
 
@@ -31,12 +32,28 @@ public sealed class InfrastructureServiceInstallerTests
 	}
 
 	/// <summary>
+	/// Verifies that the reference data port resolves to one shared instance that loads.
+	/// </summary>
+	[Fact]
+	public void Install_ShouldRegisterTheReferenceDataAsASingleton()
+	{
+		var services = new ServiceCollection();
+		new InfrastructureServiceInstaller().Install(services, EmptyConfiguration());
+		using var provider = services.BuildServiceProvider(validateScopes: true);
+
+		var first = provider.GetRequiredService<IReferenceData>();
+
+		first.Should().BeSameAs(provider.GetRequiredService<IReferenceData>());
+		first.GetReferenceData().IsSuccess.Should().BeTrue();
+	}
+
+	/// <summary>
 	/// Verifies that a missing configuration is rejected.
 	/// </summary>
 	[Fact]
 	public void Install_NullConfiguration_ShouldThrowArgumentNullException()
 	{
-		var act = () => new InfrastructureServiceInstaller().Install(new ServiceCollection(), null!);
+		var act = () => new InfrastructureServiceInstaller().Install(new ServiceCollection(), null!); // null on purpose: proves the guard clause rejects it
 
 		act.Should().Throw<ArgumentNullException>();
 	}

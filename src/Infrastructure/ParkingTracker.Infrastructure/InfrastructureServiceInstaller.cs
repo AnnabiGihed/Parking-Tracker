@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using ParkingTracker.Application.ReferenceData;
+using ParkingTracker.Infrastructure.ReferenceData;
 using Pivot.Framework.Tools.DependencyInjection;
 using Pivot.Framework.Tools.DependencyInjection.Abstractions;
 
@@ -20,6 +22,9 @@ public sealed class InfrastructureServiceInstaller : BaseServiceInstaller, IServ
 	{
 		ArgumentNullException.ThrowIfNull(services);
 		ArgumentNullException.ThrowIfNull(configuration);
+
+		// One instance: the reference data is loaded once and shared.
+		services.AddSingleton<IReferenceData, ReferenceDataProvider>();
 
 		if (includeConventionBasedRegistration)
 		{

@@ -130,6 +130,17 @@ The JSON keeps today's shapes (`[fr, nl, odd, even, postcode]` rows, `sources` w
 sha256). A `ReferenceDataProvider` loads them once as embedded resources; tests check that every file loads, that each
 City source has a SHA-256, and that the street counts per sector equal those of the JavaScript files at cut-over.
 
+`ReferenceDataProvider` implements the port `IReferenceData.GetReferenceData()`, which returns a
+`Result<ReferenceDataSet>`; a missing or invalid file gives `ReferenceData.ResourceMissing` or
+`ReferenceData.InvalidFormat`. `tolerance-sectors.json` keeps the shape of `sectors.js` (a `louise` object with
+`streets`, `sources` and `tolerances`); `tools/verify_sectors.py` reads it. Until cut-over
+`tools/build_city_sectors.py` also writes `city-sectors.js` for the web app, and `tools/verify_sectors.py` also checks
+that the shipped `sectors.js` and `municipalities.js` agree with the JSON.
+
+An empty side cell has two meanings: in a sector's street list it means the whole side is covered, in a tolerance
+agreement it means the side is not covered. `SectorStreet.EmptyMeansWholeSide` carries this, set by the reader from
+where the row comes from.
+
 ### 3.5 Android platform services and OCR
 
 Background location, parking alerts, timer notifications and the permission flow: ADR-0002 (own foreground service on

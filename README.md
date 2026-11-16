@@ -60,7 +60,7 @@ Tick it in the card dialog if your card has it. Ask the City if you are not sure
 |---|---|---|
 | Street surface under the car, its municipality and zone colour (red = residents' cards never valid, grey/green/orange = card valid in your sector, unregulated, blue = disc…) | **parking.brussels API** (`regulation_zones`) | **live, at every check** |
 | House numbers and where they are | **Brussels Region UrbIS address points** (`bm_urbis:urbadm_adpt`, data.mobility.brussels) | **live, at every check** |
-| Which streets and numbers your card covers | City of Brussels official sector list (`sectors.js`) — no API publishes City of Brussels sectors | the official documents are **checked live** (ETag / size / date) at start and every 6 h; if the City changes them, the app stops answering until the list is updated |
+| Which streets and numbers your card covers | City of Brussels official sector list (`sectors.js`, mirrored in `tolerance-sectors.json`) — no API publishes City of Brussels sectors | the official documents are **checked live** (ETag / size / date) at start and every 6 h; if the City changes them, the app stops answering until the list is updated |
 | Paid days and hours, price, free minutes, max stay, fine for each zone | **Brussels Mobility API** (`api.mobility.brussels` → `parking/regulations_rules`) + Belgian public holidays | **live, at every check** — outside paid hours the answer is "Free for everyone right now" |
 | Reserved spaces (delivery, PMR, taxi, EV…) | **parking.brussels API** (`on_street`) | **live, at every check** |
 | Roadworks, traffic events, car parks, EV charging | **Brussels Mobility** (`bm_osiris:chantiers_actu`, `bm_traffic:events`, `bm_parking:parkingpublic`, `bm_equipment:evse`) | live, when checking / moving the map |
@@ -121,9 +121,12 @@ python tools/verify_sectors.py
 python tools/build_city_sectors.py --check
 ```
 
-Downloads the official City of Brussels PDFs and compares every street and number range with `sectors.js`
-(needs `pdftotext`, which comes with Git for Windows). It prints `ALL MATCH ✓` when everything is identical, and tells you which document fingerprints to put in
-`sectors.js` when the City publishes a new version.
+Downloads the official City of Brussels PDFs and compares every street and number range with `tolerance-sectors.json`
+(needs `pdftotext`, which comes with Git for Windows). It prints `ALL MATCH ✓` when everything is identical, and tells
+you which document fingerprints to put in
+`src/Infrastructure/ParkingTracker.Infrastructure/Data/tolerance-sectors.json` when the City publishes a new version.
+Until the .NET cut-over it also checks that the web copies (`sectors.js`, `municipalities.js`) agree with the JSON
+files.
 
 ## Web version
 
@@ -132,4 +135,6 @@ The same app also runs in a browser. GPS in the browser needs HTTPS, for example
 
 ## Add another sector
 
-Copy the `louise` block in `sectors.js`, fill in the streets from your sheet and set `area` to a box that contains them all.
+Copy the `louise` block in `sectors.js` and in `tolerance-sectors.json`, fill in the streets from your sheet and set
+`area` to a box that contains them all. Until the .NET cut-over both the JavaScript copy and the JSON must change;
+`python tools/verify_sectors.py` checks that they agree.
