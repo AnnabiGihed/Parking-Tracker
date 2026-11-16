@@ -13,7 +13,7 @@ const types = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/ja
 
 createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
-  const proxy = [['/pbapi', 'ows.parking.brussels'], ['/bxl', 'www.bruxelles.be']].find(([p]) => url.pathname.startsWith(p + '/'));
+  const proxy = [['/pbapi', 'ows.parking.brussels'], ['/bxl', 'www.bruxelles.be'], ['/bmapi', 'api.mobility.brussels']].find(([p]) => url.pathname.startsWith(p + '/'));
   if (proxy) {
     const [prefix, host] = proxy;
     const up = request({ host, path: url.pathname.slice(prefix.length) + url.search, method: req.method, headers: { 'User-Agent': 'Mozilla/5.0' } }, (r) => {

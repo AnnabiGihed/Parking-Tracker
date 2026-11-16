@@ -17,6 +17,8 @@
   const bxlUrl = (u) => (IN_APP ? u : u.replace(BXL_SITE, '/bxl')); // browser: through tools/dev-server.mjs
   const URBIS_WFS = 'https://data.mobility.brussels/geoserver/bm_urbis/wfs'; // allows browser calls (CORS *)
   const BM_WFS = 'https://data.mobility.brussels/geoserver/ows'; // Brussels Mobility (roadworks, car parks, charging)
+  // Parking rules per zone code (paid days/hours, prices, max stay, fine). No CORS: browser goes through the dev server.
+  const RULES_API = (IN_APP ? 'https://api.mobility.brussels' : '/bmapi') + '/datasets/v1/parking/collections/regulations_rules/items/';
   // Reserved parking spaces (parking.brussels on_street "typres"). Time-limited zones are allowed for a short time.
   const RESERVED = {
     1: '🚚 Delivery space', 2: '🚛 Trucks only', 3: '🚌 Bus only', 5: '♿ Disabled (PMR) space', 6: '🚕 Taxi rank',
@@ -315,6 +317,90 @@
     });
   }
 
+  // ---------- live source 5: parking rules (hours and prices) ----------
+  // Returns Map(code -> rule) of the rules in force now. With `code`, only that zone's rule.
+  async function liveRules(code) {
+    const url = `${RULES_API}?f=json&limit=500${code ? '&code=' + encodeURIComponent(code) : ''}`;
+    const json = await withTimeout(fetch(url, { cache: 'no-store' }).then((r) => {
+      if (!r.ok) throw new Error('parking rules HTTP ' + r.status);
+      return r.json();
+    }), C.API_TIMEOUT_MS, 'parking rules');
+    if (!json || !Array.isArray(json.features)) throw new Error('parking rules: unexpected answer');
+    const now = new Date().toISOString(), out = new Map();
+    for (const f of json.features) {
+      const p = f.properties || {};
+      if (!p.code || p.active === 0 || (p.disabled_on && p.disabled_on <= now) || (p.active_from && p.active_from > now)) continue;
+      const prev = out.get(p.code);
+      if (!prev || String(p.active_from || '') > String(prev.active_from || '')) out.set(p.code, p);
+    }
+    return out;
+  }
+
+  // Belgian public holidays (paid parking usually doesn't apply: rule.special_day = 0).
+  function easter(y) {
+    const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25),
+      g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4,
+      l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451), mo = Math.floor((h + l - 7 * m + 114) / 31);
+    return Date.UTC(y, mo - 1, ((h + l - 7 * m + 114) % 31) + 1);
+  }
+  function isHoliday(y, m, d) {
+    const fixed = ['1-1', '5-1', '7-21', '8-15', '11-1', '11-11', '12-25'];
+    if (fixed.includes(`${m}-${d}`)) return true;
+    const t = Date.UTC(y, m - 1, d), e = easter(y), day = 86400000;
+    return [e + day, e + 39 * day, e + 50 * day].includes(t); // Easter Monday, Ascension, Whit Monday
+  }
+  // Date/time in Brussels, whatever the phone's time zone.
+  function brussels(date = new Date()) {
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Brussels', year: 'numeric', month: 'numeric', day: 'numeric',
+      hour: 'numeric', minute: 'numeric', weekday: 'short', hourCycle: 'h23' }).formatToParts(date).map((x) => [x.type, x.value]));
+    return { y: +p.year, m: +p.month, d: +p.day, wd: p.weekday, min: +p.hour * 60 + +p.minute };
+  }
+  const DAY_KEYS = { Mon: 'mo', Tue: 'tu', Wed: 'we', Thu: 'th', Fri: 'fr', Sat: 'sa', Sun: 'so' };
+  const hm = (s) => { const m = String(s || '').match(/^(\d{1,2}):(\d{2})/); return m ? +m[1] * 60 + +m[2] : null; };
+  const dayPaid = (rule, t) => rule[DAY_KEYS[t.wd]] === 1 && !(isHoliday(t.y, t.m, t.d) && rule.special_day !== 1);
+  // Is paying (or a disc) required right now under this rule? Unknown hours => assume yes.
+  function paidNow(rule, date = new Date()) {
+    if (!rule) return true; // unknown: never pretend it's free
+    if (rule.type === 'FREE') return false;
+    const t = brussels(date), start = hm(rule.start_hour), end = hm(rule.end_hour);
+    if (!dayPaid(rule, t)) return false;
+    if (start == null || end == null) return true;
+    return t.min >= start && t.min < end;
+  }
+  // When does paying start again? (label like "tomorrow 09:00" / "Monday 09:00")
+  function nextPaid(rule, date = new Date()) {
+    const start = hm(rule?.start_hour);
+    if (start == null) return null;
+    const now = brussels(date);
+    for (let i = 0; i < 9; i++) {
+      const t = brussels(new Date(date.getTime() + i * 86400000));
+      if (!dayPaid(rule, t) || (i === 0 && now.min >= start)) continue;
+      const when = i === 0 ? 'today' : i === 1 ? 'tomorrow' : ({ Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' })[t.wd];
+      return `${when} ${rule.start_hour.slice(0, 5)}`;
+    }
+    return null;
+  }
+  const euro = (v) => (v == null || v === '' ? null : '€' + Number(v).toFixed(2).replace('.', ','));
+  const minutesText = (m) => { m = +m; return !m ? null : m % 60 ? (m > 60 ? `${Math.floor(m / 60)} h ${m % 60}` : `${m} min`) : `${m / 60} h`; };
+  function scheduleText(rule) {
+    const days = ['mo', 'tu', 'we', 'th', 'fr', 'sa', 'so'].filter((k) => rule[k] === 1);
+    const names = { mo: 'Mon', tu: 'Tue', we: 'Wed', th: 'Thu', fr: 'Fri', sa: 'Sat', so: 'Sun' };
+    const span = days.length === 6 && !days.includes('so') ? 'Mon–Sat' : days.length === 7 ? 'every day' : days.map((k) => names[k]).join(', ');
+    return `${span}${rule.start_hour ? ' ' + rule.start_hour.slice(0, 5) + '–' + String(rule.end_hour).slice(0, 5) : ''}`;
+  }
+  // Short tariff description for display.
+  function tariffText(rule) {
+    if (!rule) return null;
+    const parts = [];
+    if (rule.type === 'DISK') parts.push('Blue disc');
+    else if (euro(rule.charge60)) parts.push(`${euro(rule.charge60)}/h`);
+    if (+rule.free_time) parts.push(`first ${rule.free_time} min free`);
+    if (minutesText(rule.max_time)) parts.push(`max ${minutesText(rule.max_time)}`);
+    parts.push(scheduleText(rule));
+    if (euro(rule.fee)) parts.push(`fine ${euro(rule.fee)}`);
+    return parts.join(' · ');
+  }
+
   // ---------- decisions ----------
   function cardState(card) {
     if (!card) return { valid: false, why: 'No parking card set up yet — tap 🪪.' };
@@ -386,6 +472,25 @@
         notes.push(`🚧 ${esc(w.title)}${w.where ? ' — ' + esc(w.where) : ''}${w.to ? ' (until ' + esc(fmtDate(w.to)) + ')' : ''}. Parking may be forbidden: check the signs.`);
       }
     } catch (e) { notes.push(`Could not check roadworks (${esc(e.message)}).`); }
+    // 3. Paid hours and prices of this zone (live rules). Outside paid hours nobody pays.
+    const code = r.zone.ZoneId1 || r.zone.zoneid1;
+    if (code && r.zone.typreg !== 0) {
+      let rule = null;
+      try { rule = (await liveRules(code)).get(code) || null; } catch (e) {
+        notes.push(`Could not check the paid hours (${esc(e.message)}): the app assumes they apply.`);
+      }
+      if (rule) {
+        out.rule = rule;
+        out.tariff = tariffText(rule);
+        const needsPaying = (out.status === 'pay' && out.title !== 'RESERVED') || out.title === 'PARKING DISC' || out.title === 'CHECK THE NUMBER';
+        if (needsPaying && !paidNow(rule)) {
+          const next = nextPaid(rule);
+          notes.unshift(`During paid hours: ${out.detail}`);
+          out = { ...out, status: 'free', title: 'FREE NOW',
+            detail: `No need to pay right now: here, ${rule.type === 'DISK' ? 'the parking disc' : 'paid parking'} applies <b>${esc(scheduleText(rule))}</b>${isHoliday(brussels().y, brussels().m, brussels().d) && rule.special_day !== 1 ? ' (not on public holidays)' : ''}.${next ? ` It starts again <b>${esc(next)}</b>.` : ''}` };
+        }
+      }
+    }
     return out;
   }
 
@@ -493,6 +598,7 @@
     parseHouse, parseRule, ruleCovers, buildSector, streetIndex, ruleSetsFor, setsCover,
     checkOfficialList, liveZones, liveAddresses, liveArea, liveFreeSpots, surfaceStatus, surfaceLatLngs,
     liveSpaces, liveWorks, liveCarParks, liveChargers, RESERVED, TIME_LIMITED,
+    liveRules, paidNow, nextPaid, tariffText, scheduleText, isHoliday,
     cardState, decide, listProblem, cantVerify,
   };
 })();

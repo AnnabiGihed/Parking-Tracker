@@ -1,7 +1,7 @@
 // Service worker: makes the app installable and usable with a weak connection.
 // App files: network first (so updates arrive), cache as fallback.
 // Map tiles and Leaflet: cache first (they rarely change).
-const VERSION = 'pt-v4';
+const VERSION = 'pt-v5';
 const APP = ['./', 'index.html', 'style.css', 'app.js', 'live.js', 'icons.js', 'sectors.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png'];
 const LIBS = ['https://unpkg.com/leaflet@1.9.4/dist/leaflet.css', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'];
@@ -41,7 +41,7 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(caches.match(req).then((hit) => hit || fetch(req)));
     return;
   }
-  if (url.pathname.startsWith('/pbapi/') || url.pathname.startsWith('/bxl/')) return; // live sources: never cached
+  if (/^\/(pbapi|bxl|bmapi)\//.test(url.pathname)) return; // live sources: never cached
   if (url.origin === self.location.origin) {
     e.respondWith(fetch(req).then((res) => {
       if (res.ok) { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); }

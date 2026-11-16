@@ -36,6 +36,7 @@ Tick it in the card dialog if your card has it. Ask the City if you are not sure
 | Street surface under the car, its municipality and zone colour (red = residents' cards never valid, grey/green/orange = card valid in your sector, unregulated, blue = disc…) | **parking.brussels API** (`regulation_zones`) | **live, at every check** |
 | House numbers and where they are | **Brussels Region UrbIS address points** (`bm_urbis:urbadm_adpt`, data.mobility.brussels) | **live, at every check** |
 | Which streets and numbers your card covers | City of Brussels official sector list (`sectors.js`) — no API publishes City of Brussels sectors | the official documents are **checked live** (ETag / size / date) at start and every 6 h; if the City changes them, the app stops answering until the list is updated |
+| Paid days and hours, price, free minutes, max stay, fine for each zone | **Brussels Mobility API** (`api.mobility.brussels` → `parking/regulations_rules`) + Belgian public holidays | **live, at every check** — outside paid hours the answer is "Free for everyone right now" |
 | Reserved spaces (delivery, PMR, taxi, EV…) | **parking.brussels API** (`on_street`) | **live, at every check** |
 | Roadworks, traffic events, car parks, EV charging | **Brussels Mobility** (`bm_osiris:chantiers_actu`, `bm_traffic:events`, `bm_parking:parkingpublic`, `bm_equipment:evse`) | live, when checking / moving the map |
 | Where you are | phone GPS, high accuracy, no cached fixes | continuously; re-checked every 8 m or 30 s |
@@ -43,8 +44,8 @@ Tick it in the card dialog if your card has it. Ask the City if you are not sure
 Nothing is stored between checks. No internet, no answer from one of the sources, GPS worse than ±25 m or a fix
 older than 15 s gives **CAN'T VERIFY** instead of FREE/PAY.
 
-Note: parking.brussels does not publish the hours/prices table through its API, so the app does not know whether
-paid parking is suspended at night or on Sundays; it answers as if the rules apply.
+Paid hours and prices come live from the Brussels Mobility rules API (public holidays are computed:
+1 Jan, Easter Monday, 1 May, Ascension, Whit Monday, 21 Jul, 15 Aug, 1 Nov, 11 Nov, 25 Dec). If that API does not answer, the app assumes paid hours apply.
 
 ## How it decides
 

@@ -16,6 +16,7 @@
     red: { color: '#7f1d1d', label: 'red zone (card never valid)' },
     disc: { color: '#2563eb', label: 'blue zone (parking disc)' },
     free: { color: '#0d9488', label: 'free for everyone' },
+    freenow: { color: '#2dd4bf', label: 'free right now (outside paid hours)' },
     check: { color: '#9ca3af', label: 'unknown, check signs' },
     unknown: { color: '#9ca3af', label: 'unknown, check signs' },
   };
@@ -73,10 +74,14 @@
   const poi = (emoji) => L.divIcon({ className: '', html: `<div class="poi-icon">${emoji}</div>`, iconSize: [22, 22], iconAnchor: [11, 11] });
   const DRAW = {
     async streets(box) {
-      const surfaces = await PT.liveArea(await ctx(), box);
+      const [surfaces, rules] = await Promise.all([PT.liveArea(await ctx(), box), PT.liveRules().catch(() => null)]);
       return (g) => {
         for (const s of surfaces) {
-          const c = KIND_STYLE[s.kind].color;
+          let kind = s.kind;
+          // Outside paid hours: streets you'd pay on are free for everyone right now.
+          const rule = rules?.get(s.zone.ZoneId1);
+          if (['pay', 'red', 'disc', 'mixed'].includes(kind) && rule && !PT.paidNow(rule)) kind = kind === 'mixed' ? 'covered' : 'freenow';
+          const c = KIND_STYLE[kind].color;
           L.polygon(PT.surfaceLatLngs(s.f.g), { color: c, weight: 1, fillColor: c, fillOpacity: 0.55, interactive: false }).addTo(g);
         }
       };
@@ -210,6 +215,7 @@
   // Friendly headline + icon for each answer.
   const HEADLINES = {
     'FREE ✓': ['Free for you here', 'check'],
+    'FREE NOW': ['Free for everyone right now', 'check'],
     PAY: ['Paid parking', 'euro'],
     RESERVED: ['Reserved space', 'block'],
     'CHECK THE NUMBER': ['Check the house number', 'warning'],
@@ -236,9 +242,12 @@
     if (r.status !== 'free' && r.zone) {
       actions.push(`<button type="button" class="btn btn-sm" data-act="park">${ICON('timer')}Park &amp; set timer</button>`);
     }
+    state.lastResult = r;
+    const tariff = r.tariff && (r.status !== 'free' || r.title === 'FREE NOW')
+      ? `<div class="tariff">${ICON('euro')}<span>${esc(r.tariff)}</span></div>` : '';
     box.innerHTML = `<div class="hero"><div class="hero-icon">${ICON(icon)}</div><div class="hero-text">
         <div class="hero-title">${esc(title)}</div><div class="hero-sub">${r.detail}</div></div></div>
-      ${notes}${actions.length ? `<div class="actions">${actions.join('')}</div>` : ''}`;
+      ${tariff}${notes}${actions.length ? `<div class="actions">${actions.join('')}</div>` : ''}`;
     const chips = [`<span class="chip${r.zone ? ' live' : ''}">${ICON('live')}${r.zone ? 'Live' : 'Checked'} · ${clock()}</span>`];
     chips.push(`<span class="chip">${ICON(source === 'me' ? 'navigation' : 'pin')}${source === 'me' ? 'My position' : 'Pin'}${source === 'me' && accuracy != null ? ` ±${Math.round(accuracy)} m` : ''}</span>`);
     if (r.zone) {
@@ -250,7 +259,7 @@
   }
   $('status').addEventListener('click', (e) => {
     const b = e.target.closest('[data-act]');
-    if (b?.dataset.act === 'park') { saveCarHere(); renderCarDialog(); $('carDialog').showModal(); }
+    if (b?.dataset.act === 'park') { saveCarHere(); openCar(); }
   });
 
   // Nearest covered spots — computed from live data at this moment.
@@ -293,6 +302,7 @@
     let r;
     try { r = await PT.decide(await ctx(), lat, lon, accuracy); } catch (e) { r = PT.cantVerify('Unexpected error: ' + esc(e.message)); }
     if (seq !== state.checkSeq) return r;
+    $('status').classList.remove('checking');
     renderStatus(r, source, accuracy);
     renderCardLine();
     if (r.status === 'free') hideFreeSpots();
@@ -351,7 +361,9 @@
     if (state.me) map.setView([state.me.lat, state.me.lon], Math.max(map.getZoom(), 17));
     $('liveLine').innerHTML = `<span class="chip"><span class="spinner" style="width:12px;height:12px;border-width:2px"></span>Finding your position…</span>`;
     state.watchId = navigator.geolocation.watchPosition(onPosition, (err) => {
-      renderStatus(PT.cantVerify('No GPS position: ' + esc(err.message) + '. Allow location for this app.'), 'me');
+      // Don't overwrite the answer for a pin the user dropped meanwhile.
+      if (!state.pin) renderStatus(PT.cantVerify('No GPS position: ' + esc(err.message) + '. Allow location for this app, or tap the map.'), 'me');
+      else toast('No GPS: showing the pin you dropped');
       stopTracking();
     }, { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 });
   }
@@ -468,7 +480,15 @@
     syncSheetHeight();
   }
   setInterval(renderTimer, 30000);
-  const openCar = () => { renderCarDialog(); $('carDialog').showModal(); };
+  const openCar = () => {
+    // Default timer = the zone's maximum stay (from the live rules), when known.
+    const max = +state.lastResult?.rule?.max_time;
+    if (max && !store.get('pt.timer')) {
+      $('carForm').minutes.value = max;
+      for (const x of $('timerPresets').children) x.classList.toggle('on', +x.dataset.min === max);
+    }
+    renderCarDialog(); $('carDialog').showModal();
+  };
   $('carBtn').onclick = openCar;
   $('carChip').onclick = openCar;
   $('timerStart').onclick = startTimer;
