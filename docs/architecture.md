@@ -248,14 +248,17 @@ and never stores them. Then build and test everything with `python .agent-kit/ve
 
 | Type | Kind | Invariants and notes |
 | --- | --- | --- |
-| `GeoPoint` | record struct | Latitude -90..90, longitude -180..180 |
-| `GpsFix` | record | Point, accuracy (m), speed, UTC time; usable when accuracy ≤ 25 m and age ≤ 15 s |
-| `HouseNumber` | record | Number plus optional letter; ordering key as in `keyLow`/`keyHigh` |
-| `SideRule` | record | All, none, ranges, or condition text (`check:`) |
+| `GeoPoint` | record struct | Degrees only; the range check (latitude -90..90, longitude -180..180) is done where coordinates enter, by the query validator |
+| `GpsFix` | record | Point, accuracy (m), speed, time; the usability rule (accuracy ≤ 25 m, age ≤ 15 s) is added with the decider |
+| `HouseNumber`, `HouseRange` | records | Number plus optional lower-case letter; `LowKey`/`HighKey` as `keyLow`/`keyHigh`; a range is a pair of keys |
+| `SideRule`, `SideRuleKind`, `EmptyCellMeaning`, `StreetSide` | record, enums | `All`, `None`, `Ranges` or `Condition` (`check:` text); `SideRule.Parse` returns `Result` (`SideRule.InvalidRange` for an unreadable range, where `live.js` throws) and reads an empty cell by an `EmptyCellMeaning` taken from the row's `EmptyMeansWholeSide` |
+| `RuleSet`, `StreetRules`, `ToleranceRule`, `SectorModel` | records, class | The parsed rules per street; `SectorModel.Build` returns `Result` (`Sector.InvalidRule`); street lookup by normalised French and Dutch name; `RuleSetsFor` applies sector rules only in the City of Brussels and tolerance rules only in their municipality with the card's code |
+| `GeoBox`, `MercatorPoint`, `SurfaceShape`, `ClosestPoint` | record structs, record | Web Mercator conversions, distance, point-in-ring, closest point and bounds of a street surface; `SurfaceFilter` excludes tunnels and viaducts |
 | `SectorDefinition`, `SectorStreet`, `ToleranceAgreement` | records | From reference data; lookup by normalised French and Dutch names |
 | `Municipality`, `MunicipalityKind` | record, enum | `Streets`, `Mailles`, `Whole`, `Wsl`, `Unknown` |
-| `ParkingCard` | record | Municipality, sector, mailles, lims, tolerances, validity dates; serialises to today's `pt.card` JSON |
-| `ZoneSurface`, `ZoneType`, `ZoneRule` | records, enum | Live data; `ZoneType`: `Free`, `Payable`, `Derogation`, `Disk`, `Residents`, `Reserved` |
+| `ParkingCard` | record | Municipality, sector, mailles, lims, tolerances, validity dates; serialises to today's `pt.card` JSON. Only `CardPeriod` (the validity dates) and `CardState` (valid, or why not) exist so far |
+| `ZoneSurface`, `ZoneType`, `ParkingRule` | record, enum, record | Live data; `ZoneType`: `Free`, `Payable`, `Derogation`, `Disk`, `Residents`, `Reserved`; `ZoneClassifier` gives the type and detects events; `PaidHours`, `BelgianHolidays`, `BrusselsTime` and `TariffText` answer paid-now, next start and the tariff text from `ParkingRule` |
+| `ParkingDetector` | class | Fed `GpsFix` values and asked `GetParkedFix(now)` and told `AcknowledgeParked()`; no clock inside |
 | `SpotDecision`, `Verdict` | record, enum | Verdict, reason, notes, tariff, zone; `CantVerify` carries why |
 | `ParkedCar`, `ParkingTimer`, `LayerSettings` | records | Same JSON as `pt.car`, `pt.timer`, `pt.layers` |
 | `OfficialListStatus` | record | `Ok`, `Changed`, `Unverified`, checked time; re-check every 6 h, after 1 min when not ok |
