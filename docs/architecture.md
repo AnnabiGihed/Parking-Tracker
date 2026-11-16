@@ -250,6 +250,11 @@ in the shell that builds: `GITHUB_PACKAGES_USER` (the GitHub user name) and `GIT
 with the `read:packages` scope, for example the output of `gh auth token`). `nuget.config` reads them at restore time
 and never stores them. Then build and test everything with `python .agent-kit/verify.py`.
 
+The live smoke tests (`LiveSourcesSmokeTests`) call each real service once around Avenue Louise 216. They are skipped by
+default, so `verify.py` needs no network beyond the feed. Switch them on with the environment variable
+`PARKING_LIVE_TESTS=1`, for example `PARKING_LIVE_TESTS=1 dotnet test test/ParkingTracker.Infrastructure.Tests --filter
+FullyQualifiedName~LiveSourcesSmokeTests`.
+
 ## 5. Data and integration design
 
 ### 5.1 Domain types
@@ -292,7 +297,14 @@ of range, caught by `ValidationPipelineBehavior`).
 Two small ports complete the decision: `INetworkStatus` (online or not) and `ISettingsStore`, whose read side
 (`GetCard`) exists so far; the card storage and the other settings come with the app shell. Request addresses, response
 parsers and the HTTP-status failure live in Infrastructure as pure code (`SourceRequests`, `Parsing/*`,
-`SourceResponse`); the `HttpClient` clients that use them come with stage 4. A parser that cannot read an answer gives
+`SourceResponse`), and the typed `HttpClient` clients that use them (`ParkingBrusselsClient`, `AddressPointsClient`,
+`ParkingRulesClient`, `MobilityLayersClient`, `CityDocumentsClient`, internal to Infrastructure) are registered by
+`InfrastructureServiceInstaller` with `IHttpClientFactory`. The limit of time is applied per call (`SourceTimeouts`:
+12 s, 30 s for the PDF download), so a timeout (`<Source>.Timeout`, `<name> timed out`) is told apart from the caller's
+cancellation, which is always rethrown; a lost connection gives `<Source>.Unavailable` (`<name> unreachable`). Requests
+carry the generic User-Agent `ParkingTracker/1.0` and `Cache-Control: no-cache, no-store`. `ICityDocumentsClient` only
+fetches (HEAD returns any status; the download returns the PDF flag and SHA-256); the comparison stays in
+`OfficialListChecker`. A parser that cannot read an answer gives
 `<Source>.BadResponse` with the message `<name>: unexpected answer`; an HTTP error gives `<Source>.Unavailable` with
 `<name> HTTP <status>`, as `live.js` worded them.
 

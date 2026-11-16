@@ -33,7 +33,15 @@ internal static class SourceFailures
 	/// </summary>
 	/// <param name="source">The service that did not answer.</param>
 	/// <param name="what">The name of the data in messages.</param>
+	/// <returns>The error, coded <c>&lt;Source&gt;.Timeout</c>.</returns>
+	internal static Error TimedOut(SourceKind source, string what) => new($"{source}.Timeout", $"{what} timed out");
+
+	/// <summary>
+	/// Builds the failure for a request that could not reach the service or lost the connection while reading the answer.
+	/// </summary>
+	/// <param name="source">The service that could not be reached.</param>
+	/// <param name="what">The name of the data in messages.</param>
 	/// <returns>The error, coded <c>&lt;Source&gt;.Unavailable</c>.</returns>
-	internal static Error TimedOut(SourceKind source, string what) => new($"{source}.Unavailable", $"{what} timed out");
+	internal static Error Unreachable(SourceKind source, string what) => new($"{source}.Unavailable", $"{what} unreachable");
 	#endregion
 }

@@ -33,4 +33,8 @@
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.13" />
   </ItemGroup>
 
+  <ItemGroup Label="Runtime (IHttpClientFactory for the live source clients)">
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.13" />
+  </ItemGroup>
+
 </Project>

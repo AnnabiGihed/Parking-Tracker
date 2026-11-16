@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <PackageReference Include="Pivot.Framework.Tools.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
   </ItemGroup>
 
 </Project>
