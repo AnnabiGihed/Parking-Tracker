@@ -41,6 +41,8 @@
     <!-- GPS position: is my current spot covered by my card? -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- "Allow all the time": the user is asked to choose it in the app's location settings -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
     <!-- Parking timer reminders -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />

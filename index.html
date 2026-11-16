@@ -57,6 +57,7 @@
   <!-- Bottom sheet -->
   <section id="sheet" class="sheet" aria-live="polite">
     <button id="sheetHandle" class="handle" type="button" aria-label="Expand or collapse"></button>
+    <div id="permBanner" class="perm-banner hidden"></div>
     <div id="cardLine" class="cardline"></div>
     <div id="timerLine" class="timerline hidden"></div>
     <div id="status" class="result idle">
@@ -84,6 +85,13 @@
         <li><span data-icon="block"></span><span><b>No bad surprises:</b> delivery bays, disabled spaces and roadworks.</span></li>
         <li><span data-icon="timer"></span><span><b>Find your car</b> and get a reminder before paid time ends.</span></li>
       </ul>
+      <div class="perm-box">
+        <div class="perm-title"><span data-icon="locate"></span><b>Location: choose “Allow all the time”</b></div>
+        <p class="muted small">The app needs your position to check the spot where you park. For it to work best, allow location
+          <b>all the time</b>: Android first asks “While using the app”, then lets you pick “Allow all the time” in the app's location settings.</p>
+        <button id="welcomeAlways" type="button" class="btn btn-block">Allow location all the time</button>
+        <p id="welcomePermState" class="muted small"></p>
+      </div>
       <button id="welcomeStart" type="button" class="btn btn-primary btn-block">Add my parking card</button>
       <p class="muted small">Uses official live data from parking.brussels, Brussels Mobility and the City of Brussels. Your card stays on this phone.</p>
     </div>

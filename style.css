@@ -205,6 +205,17 @@ button, input, select { font: inherit; color: inherit; }
 .presets button { border: 1px solid var(--line); background: var(--surface-2); border-radius: 10px; padding: 9px 0; font-weight: 600; cursor: pointer; }
 .presets button.on { background: var(--brand); color: #fff; border-color: var(--brand); }
 
+/* location permission */
+.perm-box { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; display: flex; flex-direction: column; gap: 8px; background: var(--surface-2); }
+.perm-box p { margin: 0; line-height: 1.4; }
+.perm-title { display: flex; align-items: center; gap: 8px; }
+.perm-title .ic { color: var(--brand); }
+.perm-banner { display: flex; gap: 10px; align-items: center; background: var(--warn-bg); border-radius: 14px; padding: 10px 12px; margin-bottom: 10px; font-size: 13.5px; line-height: 1.35; }
+.perm-banner > .ic { flex: none; color: var(--warn); }
+.perm-banner .grow { flex: 1; }
+.perm-banner .btns { display: flex; flex-direction: column; gap: 4px; }
+.perm-banner .btn { padding: 7px 12px; font-size: 13px; }
+
 /* welcome */
 .welcome { align-items: stretch; text-align: left; }
 .welcome-logo { width: 64px; height: 64px; border-radius: 18px; background: var(--brand); color: #fff; display: grid; place-items: center; margin: 6px 0 2px; }

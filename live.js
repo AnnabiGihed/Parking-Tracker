@@ -496,6 +496,7 @@
 
   async function decideZone(ctx, lat, lon, accuracy) {
     const cs = cardState(ctx.card);
+    if (!ctx.card) return cantVerify('Add your residents\' parking card first (card button, top right).');
     if (!cs.valid) return result('pay', 'PAY', cs.why);
     if (!navigator.onLine) return cantVerify('No internet connection. The app only answers with live data.');
     if (accuracy != null && accuracy > C.MAX_GPS_ACCURACY_M) {

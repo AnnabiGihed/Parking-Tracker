@@ -77,7 +77,9 @@ repository's **Releases** page.
 **Install on the phone**
 1. On the phone, open `https://github.com/AnnabiGihed/Parking-Tracker/releases/latest` and tap **ParkingTracker.apk**.
 2. Open the downloaded file. Android asks to allow installing from Chrome ("install unknown apps"): allow it, then **Install**.
-3. Open **Parking Tracker**, add your card (🪪), and allow location when asked.
+3. Open **Parking Tracker**: it asks for your location right away. Allow it, then tap **Allow location all the time**
+   (on the welcome screen or the banner) and choose **Allow all the time** in Android's location settings.
+4. Add your parking card.
 
 **Updating:** install the newer APK from the same page; it replaces the old one and keeps your card.
 

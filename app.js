@@ -365,6 +365,7 @@
       if (!state.pin) renderStatus(PT.cantVerify('No GPS position: ' + esc(err.message) + '. Allow location for this app, or tap the map.'), 'me');
       else toast('No GPS: showing the pin you dropped');
       stopTracking();
+      renderPermission();
     }, { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 });
   }
   function stopTracking() {
@@ -624,7 +625,71 @@
   syncSheetHeight();
   window.addEventListener('resize', syncSheetHeight);
   loadSector();
+  // ---------- location permission ----------
+  // Native helper (Android app only): see android/.../LocationAccessPlugin.java
+  const LA = () => (PT.IN_APP ? window.Capacitor?.Plugins?.LocationAccess || window.Capacitor?.registerPlugin?.('LocationAccess') : null);
+  async function locationStatus() {
+    const la = LA();
+    if (la) { try { return await la.status(); } catch { /* old app build */ } }
+    try {
+      const p = await navigator.permissions?.query({ name: 'geolocation' });
+      if (p) return { foreground: p.state === 'granted', background: null, denied: p.state === 'denied' };
+    } catch { /* not supported */ }
+    return { foreground: null, background: null };
+  }
+  async function askAllTheTime() {
+    const la = LA();
+    if (!la) { toast('In your browser, location can only be allowed while the page is open.'); return; }
+    const s = await locationStatus();
+    if (!s.foreground) { await la.requestForeground(); startTracking(); toast('Allow location, then choose “All the time” in the next step'); return; }
+    await la.requestBackground();
+  }
+  async function renderPermission() {
+    const s = await locationStatus(), el = $('permBanner'), w = $('welcomePermState');
+    const snoozed = Date.now() < (store.get('pt.permSnooze') || 0);
+    let html = '';
+    if (s.foreground === false) {
+      html = `${ICON('locate')}<div class="grow"><b>Location is off.</b> The app needs your position to check where you park.</div>
+        <div class="btns"><button type="button" class="btn btn-primary" data-perm="on">Turn on</button></div>`;
+    } else if (s.background === false && !snoozed) {
+      html = `${ICON('locate')}<div class="grow">For the best results, allow location <b>all the time</b>.</div>
+        <div class="btns"><button type="button" class="btn btn-primary" data-perm="always">Allow</button><button type="button" class="btn btn-ghost" data-perm="later">Later</button></div>`;
+    }
+    el.innerHTML = html;
+    el.classList.toggle('hidden', !html);
+    if (w) {
+      w.textContent = s.background ? '✓ Location allowed all the time.' : s.foreground ? '✓ Allowed while using the app. Tap the button to allow it all the time.' : '';
+      $('welcomeAlways').classList.toggle('hidden', !!s.background || !PT.IN_APP);
+    }
+    syncSheetHeight();
+  }
+  $('permBanner').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-perm]');
+    if (!b) return;
+    if (b.dataset.perm === 'later') { store.set('pt.permSnooze', Date.now() + 7 * 86400000); renderPermission(); return; }
+    if (b.dataset.perm === 'on') {
+      const la = LA();
+      const s = await locationStatus();
+      if (la && s.foreground === false) { await la.requestForeground(); setTimeout(() => { startTracking(); renderPermission(); }, 800); }
+      else if (la) la.openSettings();
+      else startTracking();
+      return;
+    }
+    askAllTheTime();
+  });
+  $('welcomeAlways').onclick = askAllTheTime;
+  // Back from Android's settings / permission screen: refresh and restart GPS if now allowed.
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState !== 'visible') return;
+    await renderPermission();
+    const s = await locationStatus();
+    if (s.foreground && !state.tracking && !state.pin) startTracking();
+  });
+
   $('welcomeStart').onclick = () => { $('welcomeDialog').close(); openCard(); };
-  if (!state.card) setTimeout(() => $('welcomeDialog').showModal(), 200);
-  else startTracking();
+  // Ask for the position as soon as the app opens (the very first time too).
+  startTracking();
+  if (!state.card) setTimeout(() => { $('welcomeDialog').showModal(); renderPermission(); }, 200);
+  renderPermission();
+  setTimeout(renderPermission, 3000); // after the first permission answer
 })();
