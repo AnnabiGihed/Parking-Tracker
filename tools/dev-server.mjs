@@ -13,9 +13,14 @@ const types = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/ja
 
 createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
-  if (url.pathname.startsWith('/pbapi/')) {
-    const up = request({ host: 'ows.parking.brussels', path: url.pathname.slice('/pbapi'.length) + url.search, method: 'GET' }, (r) => {
-      res.writeHead(r.statusCode, { 'Content-Type': r.headers['content-type'] || 'application/json', 'Cache-Control': 'no-store' });
+  const proxy = [['/pbapi', 'ows.parking.brussels'], ['/bxl', 'www.bruxelles.be']].find(([p]) => url.pathname.startsWith(p + '/'));
+  if (proxy) {
+    const [prefix, host] = proxy;
+    const up = request({ host, path: url.pathname.slice(prefix.length) + url.search, method: req.method, headers: { 'User-Agent': 'Mozilla/5.0' } }, (r) => {
+      const keep = ['content-type', 'content-length', 'etag', 'last-modified'];
+      const headers = { 'Cache-Control': 'no-store' };
+      for (const k of keep) if (r.headers[k]) headers[k] = r.headers[k];
+      res.writeHead(r.statusCode, headers);
       r.pipe(res);
     });
     up.on('error', (e) => { res.writeHead(502); res.end(String(e)); });

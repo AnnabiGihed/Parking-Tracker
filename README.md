@@ -10,8 +10,9 @@ and sends you to the nearest covered street in **Waze** or **Google Maps**.
   Data stays in your browser only (localStorage). It warns you 30 days before the card expires, with a link to e-mail the renewal.
 - **Live position** (📍): follows your GPS and shows **FREE ✓** / **PAY** as you drive. Your phone vibrates when the status changes.
 - **Pin**: tap anywhere on the map (or search an address) to check that spot. You can drag the pin.
-- **Nearest free spot** (🟢): the closest covered address, with Waze / Google Maps buttons.
-- Green dots on the map are the covered addresses in your sector.
+- **Nearest free spot** (🟢): the closest street surface covered by your card, computed from live data, with Waze / Google Maps buttons.
+- **Live street colours** on the map (zoom in): green = free with your card, amber = partly (check the number),
+  red = pay, dark red = red zone (card never valid), blue = parking disc, teal = free for everyone.
 
 ## Tolerance zones
 
@@ -24,26 +25,26 @@ Tick it in the card dialog if your card has it. Ask the City if you are not sure
 
 | What | Source | When |
 |---|---|---|
-| Which street surface you are on, its municipality and zone colour (red = residents' cards never valid, grey/green/orange = card valid in your sector, unregulated, blue = disc…) | **parking.brussels API** (`regulation_zones`, WFS) | **live, at every check** |
-| Which streets and house numbers your card covers | City of Brussels official sector list (`sectors.js`) — no API publishes City of Brussels sectors | checked against the official PDFs with `tools/verify_sectors.py` |
-| Which house number you are in front of | OpenStreetMap house-number positions (Overpass API) | downloaded at every app start |
+| Street surface under the car, its municipality and zone colour (red = residents' cards never valid, grey/green/orange = card valid in your sector, unregulated, blue = disc…) | **parking.brussels API** (`regulation_zones`) | **live, at every check** |
+| House numbers and where they are | **Brussels Region UrbIS address points** (`bm_urbis:urbadm_adpt`, data.mobility.brussels) | **live, at every check** |
+| Which streets and numbers your card covers | City of Brussels official sector list (`sectors.js`) — no API publishes City of Brussels sectors | the official documents are **checked live** (ETag / size / date) at start and every 6 h; if the City changes them, the app stops answering until the list is updated |
 | Where you are | phone GPS, high accuracy, no cached fixes | continuously; re-checked every 8 m or 30 s |
 
-The app never answers from old data: no internet, no answer from parking.brussels, GPS worse than ±25 m or a
-fix older than 15 s gives **CAN'T VERIFY** instead of FREE/PAY.
+Nothing is stored between checks. No internet, no answer from one of the sources, GPS worse than ±25 m or a fix
+older than 15 s gives **CAN'T VERIFY** instead of FREE/PAY.
 
 Note: parking.brussels does not publish the hours/prices table through its API, so the app does not know whether
 paid parking is suspended at night or on Sundays; it answers as if the rules apply.
 
 ## How it decides
 
-1. `sectors.js` holds the street list from the paper sheet (street, odd numbers, even numbers).
-   An empty cell means the whole side is covered; `hors` means that side is not covered.
-2. On first launch, the app loads street shapes and house numbers for the sector area from OpenStreetMap (Overpass API)
-   and caches them on the device for 30 days.
-3. For a position it finds the nearest street. If the street is on the list, it uses the nearest house number to know the side
-   (odd or even) and the number, then checks the ranges.
-4. If covered and not-covered numbers are both within GPS accuracy (about 12 m) of the spot, it shows
+1. parking.brussels gives the street surface you are on (street, municipality, zone colour).
+   Red zone → pay. Unregulated → free for everyone. Event zone → follow the signs.
+2. The sector list applies on City of Brussels territory, the tolerance list (if your card has the code) on Ixelles territory.
+3. Each official address point is linked to the street surface it faces. Corner addresses about as close to two
+   streets, and numbers that don't fit their neighbours, are left out.
+4. The nearest house number on your street and side gives odd/even and the number, checked against the ranges.
+5. If covered and not-covered numbers are both within GPS accuracy (at least 12 m) of the spot, it shows
    **CHECK THE NUMBER** instead of guessing.
 
 Always check the street signs: works, delivery zones, disabled spots and other local rules still apply.
@@ -54,8 +55,8 @@ Always check the street signs: works, delivery zones, disabled spots and other l
 node tools/dev-server.mjs 8766
 ```
 
-Then open http://localhost:8766. The dev server forwards `/pbapi/*` to the parking.brussels API, because that API
-does not allow direct calls from web pages (the Android app calls it natively).
+Then open http://localhost:8766. The dev server forwards `/pbapi/*` to the parking.brussels API and `/bxl/*` to
+bruxelles.be, because those sites don't allow direct calls from web pages (the Android app calls them natively).
 
 ## Android app
 
@@ -82,7 +83,8 @@ python tools/verify_sectors.py
 ```
 
 Downloads the official City of Brussels PDFs and compares every street and number range with `sectors.js`
-(needs `pdftotext`, which comes with Git for Windows). It prints `ALL MATCH ✓` when everything is identical.
+(needs `pdftotext`, which comes with Git for Windows). It prints `ALL MATCH ✓` when everything is identical, and tells you which document fingerprints to put in
+`sectors.js` when the City publishes a new version.
 
 ## Web version
 

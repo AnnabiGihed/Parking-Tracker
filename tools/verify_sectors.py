@@ -59,14 +59,37 @@ def parse_rule(raw, empty_means_all):
     return tuple(sorted(out))
 
 
+FINGERPRINTS = {}  # url -> (etag, length, last-modified, sha256) of the downloaded file
+
+
 def pdf_text(url):
+    import hashlib
     with tempfile.TemporaryDirectory() as d:
         pdf = os.path.join(d, "f.pdf")
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=60) as r, open(pdf, "wb") as f:
-            f.write(r.read())
+            body = r.read()
+            f.write(body)
+            FINGERPRINTS[url] = (r.headers.get("ETag"), len(body), r.headers.get("Last-Modified"),
+                                 hashlib.sha256(body).hexdigest())
         return subprocess.run(["pdftotext", "-table", "-enc", "UTF-8", pdf, "-"],
                               capture_output=True, check=True).stdout.decode("utf-8")
+
+
+def check_sources():
+    """The fingerprints in sectors.js must be those of the documents just verified."""
+    src = open(os.path.join(ROOT, "sectors.js"), encoding="utf-8").read()
+    errors = 0
+    for url, (etag, length, modified, sha) in FINGERPRINTS.items():
+        key = f"url: '{url}'"
+        block = src[src.find(key):][:400] if key in src else ""
+        ok = block and sha in block and str(length) in block and (etag or "") in block and (modified or "") in block
+        if not ok:
+            errors += 1
+            print(f"  SOURCE FINGERPRINT out of date for {url}\n     put in sectors.js: etag: '{etag}', length: {length},"
+                  f" lastModified: '{modified}', sha256: '{sha}'")
+    print(f"Source fingerprints: {len(FINGERPRINTS)} checked, {errors} problem(s)")
+    return errors
 
 
 def official_sector():
@@ -136,6 +159,7 @@ def main():
     base, tol = app_tables()
     errors = compare("Sector Louise", official_sector(), base)
     errors += compare("Ixelles – Louise tolerance", official_tolerance(), tol)
+    errors += check_sources()
     print("ALL MATCH ✓" if not errors else "MISMATCHES FOUND ✗")
     sys.exit(1 if errors else 0)
 

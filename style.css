@@ -59,7 +59,12 @@ body { display: flex; flex-direction: column; }
 .nav { flex: 1; text-align: center; padding: 10px; border-radius: 10px; color: #fff; text-decoration: none; font-weight: 700; }
 .nav.waze { background: #33ccff; color: #0f172a; }
 .nav.gmaps { background: #1a73e8; }
-.loading { margin-top: 8px; font-size: 13px; color: var(--muted); }
+.legend { background: rgba(255,255,255,.95); color: #0f172a; border-radius: 10px; padding: 6px 8px; font-size: 11px; line-height: 1.5; box-shadow: 0 2px 8px rgba(0,0,0,.25); cursor: pointer; max-width: 170px; }
+.legend > div:not(.legend-title):not(.legend-state) { display: none; }
+.legend.open > div { display: block !important; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.legend-title { font-weight: 700; }
+.legend-state { color: #64748b; display: block !important; }
 
 dialog { border: 0; border-radius: 14px; padding: 0; width: min(440px, calc(100vw - 32px)); background: var(--bg); color: var(--fg); }
 dialog::backdrop { background: rgba(0,0,0,.5); }

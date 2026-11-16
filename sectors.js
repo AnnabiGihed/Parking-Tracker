@@ -22,6 +22,21 @@ window.SECTORS = {
     name: 'Louise',
     nameNl: 'Louiza',
     area: [50.808, 4.345, 50.845, 4.392],
+    // The official documents this list was verified against (tools/verify_sectors.py).
+    // At every start the app checks them live; if the City changes a document, the app
+    // stops giving answers based on this list until the list is re-verified and updated.
+    sources: [
+      {
+        url: 'https://www.bruxelles.be/sites/default/files/bxl/LOUISE.pdf',
+        etag: '"6989b7d0-9f3b"', length: 40763, lastModified: 'Mon, 09 Feb 2026 10:32:48 GMT',
+        sha256: '0205dfe7ce97bb814b6b98334d1c590bb3bbcd6922d5d637001060d0a045a9d7',
+      },
+      {
+        url: 'https://www.bruxelles.be/sites/default/files/bxl/accord%20limitrophe%20Louise%20-%20Ixelles.pdf',
+        etag: '"6a9ea611-361c5"', length: 221637, lastModified: 'Mon, 07 Sep 2026 11:54:57 GMT',
+        sha256: 'fd6ffc486d37617c84721a251cdd686088577851e0225ad65743e308cf314e08',
+      },
+    ],
     streets: [
       ['Allée du Cloître', 'Kloosterdreef', '', ''],
       ['Avenue du Congo', 'Kongolaan', '7-15', 'hors'],
