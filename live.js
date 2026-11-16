@@ -165,25 +165,49 @@
     const h = await crypto.subtle.digest('SHA-256', buf);
     return [...new Uint8Array(h)].map((b) => b.toString(16).padStart(2, '0')).join('');
   }
+  // Downloads a file as raw bytes. In the Android app, Capacitor's patched fetch() reads non-JSON bodies
+  // as text (which corrupts a PDF), so the native HTTP plugin is asked for base64 instead.
+  async function downloadBytes(url) {
+    const ch = IN_APP ? window.Capacitor?.Plugins?.CapacitorHttp : null;
+    if (ch) {
+      const r = await withTimeout(ch.request({ url, method: 'GET', responseType: 'arraybuffer', headers: {} }), 30000, 'bruxelles.be');
+      if (r.status >= 400) throw new Error('bruxelles.be HTTP ' + r.status);
+      const bin = atob(String(r.data || '').replace(/\s/g, ''));
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return bytes;
+    }
+    const g = await withTimeout(fetch(url, { cache: 'no-store' }), 30000, 'bruxelles.be');
+    if (!g.ok) throw new Error('bruxelles.be HTTP ' + g.status);
+    return new Uint8Array(await g.arrayBuffer());
+  }
+  // Header values can be reshaped on the way (native HTTP layer, proxies, compression), so they are only a
+  // quick hint. A document only counts as CHANGED when its content (SHA-256 of the PDF) differs.
+  const normEtag = (v) => String(v || '').replace(/^W\//i, '').replace(/"/g, '').trim().toLowerCase();
+  const normDate = (v) => { const t = Date.parse(String(v || '')); return Number.isNaN(t) ? null : t; };
   async function checkOfficialList(sector) {
+    const seen = [];
     try {
       for (const s of sector.sources || []) {
-        const r = await withTimeout(fetch(bxlUrl(s.url), { method: 'HEAD', cache: 'no-store' }), C.API_TIMEOUT_MS, 'bruxelles.be');
-        if (!r.ok) throw new Error('bruxelles.be HTTP ' + r.status);
-        const etag = (r.headers.get('etag') || '').replace(/^W\//, ''), len = r.headers.get('content-length'), lm = r.headers.get('last-modified');
-        if (etag || lm) {
-          if ((etag && etag !== s.etag) || (lm && lm !== s.lastModified) || (len && +len !== s.length)) {
-            return { status: 'changed', doc: s.url, date: lm };
-          }
-          continue;
-        }
-        // No headers available: download and compare the file itself.
-        const g = await withTimeout(fetch(bxlUrl(s.url), { cache: 'no-store' }), 30000, 'bruxelles.be');
-        if ((await sha256hex(await g.arrayBuffer())) !== s.sha256) return { status: 'changed', doc: s.url, date: null };
+        let headerSaysSame = false, lm = null;
+        try {
+          const r = await withTimeout(fetch(bxlUrl(s.url), { method: 'HEAD', cache: 'no-store' }), C.API_TIMEOUT_MS, 'bruxelles.be');
+          const etag = r.headers.get('etag'); lm = r.headers.get('last-modified');
+          seen.push(`${r.status} ${lm || '-'} ${etag || '-'}`);
+          const dateSame = normDate(lm) != null && normDate(lm) === normDate(s.lastModified);
+          const etagSame = !!etag && normEtag(etag) === normEtag(s.etag);
+          headerSaysSame = r.ok && (dateSame || etagSame);
+        } catch (e) { seen.push('HEAD failed: ' + e.message); }
+        if (headerSaysSame) continue;
+        // Not sure from the headers: compare the document itself.
+        const bytes = await downloadBytes(bxlUrl(s.url));
+        const isPdf = bytes.length > 4 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46; // "%PDF"
+        if (!isPdf) throw new Error('the City sent something that is not the PDF');
+        if ((await sha256hex(bytes)) !== s.sha256) return { status: 'changed', doc: s.url, date: lm, t: Date.now(), seen };
       }
-      return { status: 'ok', t: Date.now() };
+      return { status: 'ok', t: Date.now(), seen };
     } catch (e) {
-      return { status: 'unverified', why: e.message, t: Date.now() };
+      return { status: 'unverified', why: e.message, t: Date.now(), seen };
     }
   }
 
