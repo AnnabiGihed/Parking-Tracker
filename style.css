@@ -53,6 +53,7 @@ body { display: flex; flex-direction: column; }
 .status.unknown { border-color: var(--unk); background: var(--unk-bg); }
 .status.unknown .status-title { color: var(--unk); }
 
+.liveline { margin-top: 6px; font-size: 12px; color: var(--muted); min-height: 1em; }
 .nearest { margin-top: 10px; font-size: 14px; }
 .nearest .btns { display: flex; gap: 8px; margin-top: 8px; }
 .nav { flex: 1; text-align: center; padding: 10px; border-radius: 10px; color: #fff; text-decoration: none; font-weight: 700; }

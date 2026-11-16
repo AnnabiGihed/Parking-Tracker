@@ -80,6 +80,7 @@ window.SECTORS = {
       {
         code: 'BXL_LIM_IXL_LOUISE',
         label: 'Ixelles – Louise tolerance',
+        commune: 'Ixelles', // applies only on Ixelles territory (municipality given live by parking.brussels)
         // Source: https://www.bruxelles.be/sites/default/files/bxl/accord%20limitrophe%20Louise%20-%20Ixelles.pdf
         // (streets on Ixelles / 1050 territory open to City of Brussels residents)
         streets: [

@@ -20,6 +20,21 @@ The City of Brussels has agreements with neighbouring municipalities. For the Lo
 opens about 40 extra Ixelles streets, but **only if your card carries the code `BXL_LIM_IXL_LOUISE`**.
 Tick it in the card dialog if your card has it. Ask the City if you are not sure.
 
+## Where the information comes from
+
+| What | Source | When |
+|---|---|---|
+| Which street surface you are on, its municipality and zone colour (red = residents' cards never valid, grey/green/orange = card valid in your sector, unregulated, blue = disc…) | **parking.brussels API** (`regulation_zones`, WFS) | **live, at every check** |
+| Which streets and house numbers your card covers | City of Brussels official sector list (`sectors.js`) — no API publishes City of Brussels sectors | checked against the official PDFs with `tools/verify_sectors.py` |
+| Which house number you are in front of | OpenStreetMap house-number positions (Overpass API) | downloaded at every app start |
+| Where you are | phone GPS, high accuracy, no cached fixes | continuously; re-checked every 8 m or 30 s |
+
+The app never answers from old data: no internet, no answer from parking.brussels, GPS worse than ±25 m or a
+fix older than 15 s gives **CAN'T VERIFY** instead of FREE/PAY.
+
+Note: parking.brussels does not publish the hours/prices table through its API, so the app does not know whether
+paid parking is suspended at night or on Sundays; it answers as if the rules apply.
+
 ## How it decides
 
 1. `sectors.js` holds the street list from the paper sheet (street, odd numbers, even numbers).
@@ -36,10 +51,11 @@ Always check the street signs: works, delivery zones, disabled spots and other l
 ## Run locally
 
 ```bash
-python -m http.server 8765
+node tools/dev-server.mjs 8766
 ```
 
-Then open http://localhost:8765.
+Then open http://localhost:8766. The dev server forwards `/pbapi/*` to the parking.brussels API, because that API
+does not allow direct calls from web pages (the Android app calls it natively).
 
 ## Android app
 
