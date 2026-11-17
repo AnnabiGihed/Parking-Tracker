@@ -1,0 +1,9 @@
+@namespace ParkingTracker.Shared.Features.Shared.Components
+@if (IsOpen)
+{
+    <div class="dialog-backdrop">
+        <div class="sheet-dialog" role="dialog" aria-modal="true" aria-label="@Label">
+            @ChildContent
+        </div>
+    </div>
+}

@@ -18,6 +18,9 @@ The .NET migration is in progress and is not part of any release yet: the publis
 - Started the .NET 10 migration on Pivot.Framework: solution skeleton, reference data as embedded JSON, the pure
   decision logic, the spot decision, the area status and the free-spot search, and the HTTP clients of the live
   sources. None of it is shipped yet.
+- Added the view models and Blazor components of the main screen for the .NET app: the spot check keeps the answer of the
+  newest check only, a "can't verify" cannot be overwritten by a late check, a failing background check is told to the user,
+  and the map script builds marker labels as text and handles popup buttons with one delegated listener.
 - Organised the .NET solution in the Pivot.Framework canonical layout: feature folders in every project, a test tree
   that mirrors `src/`, and the layout adapted to a mobile client in ADR-0006.
 - Added the Meziantou analyzers, the StyleCop documentation settings (`stylecop.json`) and the target framework in

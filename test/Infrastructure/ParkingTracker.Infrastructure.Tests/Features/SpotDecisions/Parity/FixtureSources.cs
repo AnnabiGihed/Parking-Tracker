@@ -71,6 +71,12 @@ internal sealed class FixtureSources : IParkingBrusselsClient, IAddressPointsCli
 	{
 		return Task.FromResult(Get(SourceRequests.Mailles(box)).Read(SourceKind.ParkingBrussels, SectorMailleParser.What, SectorMailleParser.Parse));
 	}
+
+	/// <inheritdoc />
+	public Task<Result<IReadOnlyList<MailleOption>>> GetMailleOptionsAsync(CancellationToken cancellationToken)
+	{
+		return Task.FromResult(Get(SourceRequests.MailleList()).Read(SourceKind.ParkingBrussels, SectorMailleParser.What, MailleOptionParser.Parse));
+	}
 	#endregion
 
 	#region IAddressPointsClient Implementation
@@ -102,6 +108,18 @@ internal sealed class FixtureSources : IParkingBrusselsClient, IAddressPointsCli
 
 		var events = Get(SourceRequests.TrafficEvents(box)).Read(SourceKind.Mobility, WorkItemParser.EventsWhat, json => WorkItemParser.ParseEvents(json, now));
 		return Task.FromResult(events.IsFailure ? events : Result.Success<IReadOnlyList<WorkItem>>([.. sites.Value, .. events.Value]));
+	}
+
+	/// <inheritdoc />
+	public Task<Result<IReadOnlyList<CarPark>>> GetCarParksAsync(GeoBox box, CancellationToken cancellationToken)
+	{
+		return Task.FromResult(Get(SourceRequests.CarParks(box)).Read(SourceKind.Mobility, CarParkParser.What, CarParkParser.Parse));
+	}
+
+	/// <inheritdoc />
+	public Task<Result<IReadOnlyList<ChargingPoint>>> GetChargersAsync(GeoBox box, CancellationToken cancellationToken)
+	{
+		return Task.FromResult(Get(SourceRequests.Chargers(box)).Read(SourceKind.Mobility, ChargingPointParser.What, ChargingPointParser.Parse));
 	}
 	#endregion
 

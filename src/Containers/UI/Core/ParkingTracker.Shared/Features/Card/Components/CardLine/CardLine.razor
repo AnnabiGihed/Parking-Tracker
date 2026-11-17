@@ -1,0 +1,22 @@
+@namespace ParkingTracker.Shared.Features.Card.Components
+@inherits ViewModelComponent<CardViewModel>
+@{
+    var line = ViewModel.Line;
+}
+<div id="cardLine" class="cardline">
+    <span class="pill"><Icon Name="card" />@line.Pill</span>
+    @if (line.ShowAddLink)
+    {
+        <a href="#" id="addCardLink" @onclick="OnAddAsync" @onclick:preventDefault>Add my card</a>
+    }
+    else
+    {
+        <span class="@(line.DetailIsWarning ? "warn" : string.Empty)">
+            @line.Detail
+            @if (line.RenewalLink is not null)
+            {
+                <text> · </text><a href="#" @onclick="OnRenewAsync" @onclick:preventDefault>renew</a>
+            }
+        </span>
+    }
+</div>

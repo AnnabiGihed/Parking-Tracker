@@ -14,7 +14,10 @@ namespace ParkingTracker.Domain.Features.Zones.ValueObjects;
 /// <param name="Title">What it is, for example the nature of the works.</param>
 /// <param name="Where">Where it is, in words; empty when unknown.</param>
 /// <param name="To">The last day as <c>yyyy-MM-dd</c>, or <see langword="null"/>.</param>
-public sealed record WorkItem(WorkKind Kind, IReadOnlyList<GeoPoint>? Points, SurfaceShape? Surface, string Title, string Where, string? To)
+/// <param name="From">The first day as <c>yyyy-MM-dd</c>, or <see langword="null"/>; shown on the map only.</param>
+/// <param name="By">Who runs the works or what the event changes; empty when unknown; shown on the map only.</param>
+/// <param name="Link">Address of a page with details, or empty; shown on the map only.</param>
+public sealed record WorkItem(WorkKind Kind, IReadOnlyList<GeoPoint>? Points, SurfaceShape? Surface, string Title, string Where, string? To, string? From = null, string By = "", string Link = "")
 {
 	#region Constants
 	/// <summary>

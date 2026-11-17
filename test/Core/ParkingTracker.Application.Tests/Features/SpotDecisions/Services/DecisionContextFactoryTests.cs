@@ -1,5 +1,6 @@
 using NSubstitute;
 using ParkingTracker.Application.Features.Sectors.Services;
+using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Services;
 using ParkingTracker.Domain.Features.Cards.ValueObjects;

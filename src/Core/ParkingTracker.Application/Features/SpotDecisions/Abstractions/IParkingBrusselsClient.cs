@@ -37,5 +37,12 @@ public interface IParkingBrusselsClient
 	/// <param name="cancellationToken">Cancels the request.</param>
 	/// <returns>The areas, or a failure with a <c>ParkingBrussels.*</c> code.</returns>
 	Task<Result<IReadOnlyList<SectorMaille>>> GetMaillesAsync(GeoBox box, CancellationToken cancellationToken);
+
+	/// <summary>
+	/// Gets the list of every sector area (maille) of the region, with its code and name but without its shape, for the card form.
+	/// </summary>
+	/// <param name="cancellationToken">Cancels the request.</param>
+	/// <returns>The areas that have a zone code, or a failure with a <c>ParkingBrussels.*</c> code.</returns>
+	Task<Result<IReadOnlyList<MailleOption>>> GetMailleOptionsAsync(CancellationToken cancellationToken);
 	#endregion
 }

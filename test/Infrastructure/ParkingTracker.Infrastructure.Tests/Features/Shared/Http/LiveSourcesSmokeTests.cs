@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using ParkingTracker.Application.Features.AddressSearch.Abstractions;
 using ParkingTracker.Application.Features.Sectors.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
 using ParkingTracker.Domain.Features.Shared.ValueObjects;
@@ -9,7 +10,8 @@ namespace ParkingTracker.Infrastructure.Tests.Features.Shared.Http;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : Opt-in smoke tests (<c>PARKING_LIVE_TESTS=1</c>) that call each real service once, through the registered
+/// Purpose     : Opt-in smoke tests (<c>PARKING_LIVE_TESTS=1</c>) that call each real service once (zones, spaces, sectors, address
+///              points, rules, works, car parks, charging points, the City document and Nominatim), through the registered
 ///              clients, around Avenue Louise 216, and check that the answer parses into something sane. They show that the
 ///              addresses and the parsers still match what the services publish; they are not part of the default run.
 /// </summary>
@@ -128,6 +130,67 @@ public sealed class LiveSourcesSmokeTests
 		var result = await provider.GetRequiredService<IMobilityLayersClient>().GetWorksAsync(AvenueLouise216, DateTimeOffset.Now, Token());
 
 		result.IsSuccess.Should().BeTrue(result.IsFailure ? result.Error.Message : null);
+	}
+
+	/// <summary>
+	/// Verifies that the car parks around the address are readable and that every one has a name and a position.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[LiveFact]
+	public async Task Mobility_CarParks_ShouldParseNamedPoints()
+	{
+		using var provider = Provider();
+
+		var result = await provider.GetRequiredService<IMobilityLayersClient>().GetCarParksAsync(AvenueLouise216, Token());
+
+		result.IsSuccess.Should().BeTrue(result.IsFailure ? result.Error.Message : null);
+		result.Value.Should().OnlyContain(park => !string.IsNullOrWhiteSpace(park.Name));
+	}
+
+	/// <summary>
+	/// Verifies that the charging points around the address are readable (there may be none in the box).
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[LiveFact]
+	public async Task Mobility_Chargers_ShouldBeReadable()
+	{
+		using var provider = Provider();
+
+		var result = await provider.GetRequiredService<IMobilityLayersClient>().GetChargersAsync(AvenueLouise216, Token());
+
+		result.IsSuccess.Should().BeTrue(result.IsFailure ? result.Error.Message : null);
+	}
+
+	/// <summary>
+	/// Verifies that the list of sectors (mailles) is read and that every entry has a zone code.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[LiveFact]
+	public async Task ParkingBrussels_MailleList_ShouldParseZoneCodes()
+	{
+		using var provider = Provider();
+
+		var result = await provider.GetRequiredService<IParkingBrusselsClient>().GetMailleOptionsAsync(Token());
+
+		result.IsSuccess.Should().BeTrue(result.IsFailure ? result.Error.Message : null);
+		result.Value.Should().NotBeEmpty().And.OnlyContain(option => !string.IsNullOrWhiteSpace(option.ZoneCode));
+	}
+
+	/// <summary>
+	/// Verifies that Nominatim finds Avenue Louise 216 near its known position.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[LiveFact]
+	public async Task Nominatim_AvenueLouise216_ShouldFindAPositionInBrussels()
+	{
+		using var provider = Provider();
+
+		var result = await provider.GetRequiredService<IAddressSearch>().SearchAsync("Avenue Louise 216", Token());
+
+		result.IsSuccess.Should().BeTrue(result.IsFailure ? result.Error.Message : null);
+		var match = result.Value.Should().NotBeEmpty().And.Subject.First();
+		match.Point.Latitude.Should().BeInRange(50.80, 50.85);
+		match.Point.Longitude.Should().BeInRange(4.33, 4.40);
 	}
 
 	/// <summary>

@@ -1,8 +1,10 @@
 using System.Net.Http.Headers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using ParkingTracker.Application.Features.AddressSearch.Abstractions;
 using ParkingTracker.Application.Features.Sectors.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
+using ParkingTracker.Infrastructure.Features.AddressSearch;
 using ParkingTracker.Infrastructure.Features.PaidHours;
 using ParkingTracker.Infrastructure.Features.Sectors;
 using ParkingTracker.Infrastructure.Features.Shared.Http;
@@ -43,6 +45,9 @@ public sealed class InfrastructureServiceInstaller : BaseServiceInstaller, IServ
 		AddSourceClient<IParkingRulesClient, ParkingRulesClient>(services);
 		AddSourceClient<IMobilityLayersClient, MobilityLayersClient>(services);
 		AddSourceClient<ICityDocumentsClient, CityDocumentsClient>(services);
+
+		// Nominatim answers in the language of the request: French, as the first version of the app asked.
+		AddSourceClient<IAddressSearch, NominatimClient>(services, client => client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("fr"));
 	}
 	#endregion
 
@@ -50,10 +55,11 @@ public sealed class InfrastructureServiceInstaller : BaseServiceInstaller, IServ
 	/// <summary>
 	/// Registers a source client as a typed HTTP client behind its port.
 	/// </summary>
-	/// <typeparam name="TPort">The type of the t port.</typeparam>
-	/// <typeparam name="TClient">The type of the t client.</typeparam>
+	/// <typeparam name="TPort">The port the screens and handlers depend on.</typeparam>
+	/// <typeparam name="TClient">The HTTP client that implements the port.</typeparam>
 	/// <param name="services">The service collection.</param>
-	private static void AddSourceClient<TPort, TClient>(IServiceCollection services)
+	/// <param name="configure">Extra settings of the HTTP client of this source, or <see langword="null"/> for none.</param>
+	private static void AddSourceClient<TPort, TClient>(IServiceCollection services, Action<HttpClient>? configure = null)
 		where TPort : class
 		where TClient : class, TPort
 	{
@@ -63,6 +69,7 @@ public sealed class InfrastructureServiceInstaller : BaseServiceInstaller, IServ
 			client.Timeout = Timeout.InfiniteTimeSpan;
 			client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("ParkingTracker", "1.0"));
 			client.DefaultRequestHeaders.CacheControl = new CacheControlHeaderValue { NoCache = true, NoStore = true };
+			configure?.Invoke(client);
 		});
 	}
 	#endregion

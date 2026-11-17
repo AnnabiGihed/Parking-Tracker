@@ -33,6 +33,11 @@ internal static class SourceRequests
 	internal const string RulesApi = "https://api.mobility.brussels/datasets/v1/parking/collections/regulations_rules/items/";
 
 	/// <summary>
+	/// The OpenStreetMap Nominatim search service.
+	/// </summary>
+	internal const string NominatimSearch = "https://nominatim.openstreetmap.org/search";
+
+	/// <summary>
 	/// The query every WFS request starts with.
 	/// </summary>
 	private const string WfsPrefix = "service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json";
@@ -86,6 +91,39 @@ internal static class SourceRequests
 	/// <param name="box">Bounding box of the area to request.</param>
 	/// <returns>Request address of the traffic events layer for the box.</returns>
 	internal static string TrafficEvents(GeoBox box) => Layer(MobilityWfs, "bm_traffic:events", box);
+
+	/// <summary>
+	/// Builds the request for the public car parks in a box.
+	/// </summary>
+	/// <param name="box">Bounding box of the area to request.</param>
+	/// <returns>Request address of the car parks layer for the box.</returns>
+	internal static string CarParks(GeoBox box) => Layer(MobilityWfs, "bm_parking:parkingpublic", box);
+
+	/// <summary>
+	/// Builds the request for the charging points in a box.
+	/// </summary>
+	/// <param name="box">Bounding box of the area to request.</param>
+	/// <returns>Request address of the charging points layer for the box.</returns>
+	internal static string Chargers(GeoBox box) => Layer(MobilityWfs, "bm_equipment:evse", box);
+
+	/// <summary>
+	/// Builds the request for the list of every sector area (code and names, no shapes), for the card form.
+	/// </summary>
+	/// <returns>Request address of the sector list.</returns>
+	internal static string MailleList()
+	{
+		return $"{ParkingBrusselsWfs}?{WfsPrefix}&typeNames=ParkingBrussels:permit_secteurs_mailles&propertyName=zonecode,namefre,namedut";
+	}
+
+	/// <summary>
+	/// Builds the request for an address search limited to Belgium and the box of the Brussels-Capital Region, best match only.
+	/// </summary>
+	/// <param name="text">What the user typed.</param>
+	/// <returns>Request address of the search.</returns>
+	internal static string AddressSearch(string text)
+	{
+		return $"{NominatimSearch}?format=jsonv2&limit=1&countrycodes=be&viewbox=4.24,50.92,4.48,50.76&bounded=1&q={Uri.EscapeDataString(text)}";
+	}
 
 	/// <summary>
 	/// Builds the request for the parking rules.

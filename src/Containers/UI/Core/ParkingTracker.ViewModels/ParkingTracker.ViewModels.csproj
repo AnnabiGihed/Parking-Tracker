@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\Core\ParkingTracker.Application\ParkingTracker.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Pivot.Framework.Application" />
+    <PackageReference Include="Pivot.Framework.Tools.DependencyInjection" />
+  </ItemGroup>
+
+</Project>

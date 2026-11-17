@@ -31,4 +31,9 @@ internal enum SourceKind
 	/// The City of Brussels website.
 	/// </summary>
 	City,
+
+	/// <summary>
+	/// The OpenStreetMap Nominatim address search.
+	/// </summary>
+	Nominatim,
 }

@@ -1,0 +1,33 @@
+@namespace ParkingTracker.Shared.Features.SpotCheck.Components
+@inherits ViewModelComponent<NearestSpotViewModel>
+<div id="nearest" class="spot @(ViewModel.State == NearestSpotState.Hidden ? "hidden" : string.Empty)">
+    @switch (ViewModel.State)
+    {
+        case NearestSpotState.Loading:
+            <div class="spot-loading"><span class="spinner"></span>Looking for the nearest spot your card covers…</div>
+            break;
+        case NearestSpotState.Failed:
+            <div class="spot-loading">@ViewModel.FailureMessage</div>
+            break;
+        case NearestSpotState.NoneFound:
+            <div class="spot-loading">No spot covered by your card within ~400 m right now.</div>
+            break;
+        case NearestSpotState.Found:
+            <div class="spot-head">
+                <div class="spot-icon"><Icon Name="parking" /></div>
+                <div>
+                    <div class="spot-title">@ViewModel.Best!.Label</div>
+                    <div class="spot-sub">@ViewModel.BestSubtitle</div>
+                </div>
+            </div>
+            <div class="nav-row">
+                <button type="button" class="btn btn-waze" @onclick="OnWazeAsync"><Icon Name="navigation" />Waze</button>
+                <button type="button" class="btn btn-gmaps" @onclick="OnGoogleMapsAsync"><Icon Name="directions" />Google Maps</button>
+            </div>
+            @if (ViewModel.Others.Count > 0)
+            {
+                <div class="spot-more">@ViewModel.OthersText</div>
+            }
+            break;
+    }
+</div>

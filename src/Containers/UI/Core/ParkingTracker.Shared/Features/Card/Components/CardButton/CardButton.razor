@@ -1,0 +1,5 @@
+@namespace ParkingTracker.Shared.Features.Card.Components
+@inherits ViewModelComponent<CardViewModel>
+<button id="cardBtn" type="button" class="avatar" title="My parking card" aria-label="My parking card" @onclick="OnClickAsync">
+    <Icon Name="card" /><i id="cardDot" class="dot @DotClass"></i>
+</button>

@@ -9,8 +9,8 @@ namespace ParkingTracker.Infrastructure.Features.Zones;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : Reads the Brussels Mobility roadworks and traffic events over HTTP. The two layers are asked at the same time,
-///              as the first version of the app did, and both must be readable.
+/// Purpose     : Reads the Brussels Mobility layers over HTTP: the roadworks and traffic events (asked at the same time, as the
+///              first version of the app did, and both must be readable), the public car parks and the charging points.
 /// </summary>
 internal sealed class MobilityLayersClient : IMobilityLayersClient
 {
@@ -43,13 +43,34 @@ internal sealed class MobilityLayersClient : IMobilityLayersClient
 	/// <inheritdoc />
 	public async Task<Result<IReadOnlyList<WorkItem>>> GetWorksAsync(GeoBox box, DateTimeOffset now, CancellationToken cancellationToken)
 	{
-		var sitesCall = SourceHttp.GetAsync(client, new SourceCall(SourceKind.Mobility, WorkItemParser.RoadworksWhat, timeouts.Request), SourceRequests.Roadworks(box), json => WorkItemParser.ParseRoadworks(json, now), cancellationToken);
-		var eventsCall = SourceHttp.GetAsync(client, new SourceCall(SourceKind.Mobility, WorkItemParser.EventsWhat, timeouts.Request), SourceRequests.TrafficEvents(box), json => WorkItemParser.ParseEvents(json, now), cancellationToken);
+		var sitesCall = SourceHttp.GetAsync(client, Call(WorkItemParser.RoadworksWhat), SourceRequests.Roadworks(box), json => WorkItemParser.ParseRoadworks(json, now), cancellationToken);
+		var eventsCall = SourceHttp.GetAsync(client, Call(WorkItemParser.EventsWhat), SourceRequests.TrafficEvents(box), json => WorkItemParser.ParseEvents(json, now), cancellationToken);
 		var results = await Task.WhenAll(sitesCall, eventsCall).ConfigureAwait(false);
 		var failed = results.FirstOrDefault(result => result.IsFailure);
 		return failed is not null
 			? Result.Failure<IReadOnlyList<WorkItem>>(failed.Error)
 			: Result.Success<IReadOnlyList<WorkItem>>([.. results[0].Value, .. results[1].Value]);
 	}
+
+	/// <inheritdoc />
+	public Task<Result<IReadOnlyList<CarPark>>> GetCarParksAsync(GeoBox box, CancellationToken cancellationToken)
+	{
+		return SourceHttp.GetAsync(client, Call(CarParkParser.What), SourceRequests.CarParks(box), CarParkParser.Parse, cancellationToken);
+	}
+
+	/// <inheritdoc />
+	public Task<Result<IReadOnlyList<ChargingPoint>>> GetChargersAsync(GeoBox box, CancellationToken cancellationToken)
+	{
+		return SourceHttp.GetAsync(client, Call(ChargingPointParser.What), SourceRequests.Chargers(box), ChargingPointParser.Parse, cancellationToken);
+	}
+	#endregion
+
+	#region Private Helpers
+	/// <summary>
+	/// Describes a call to Brussels Mobility with its timeout.
+	/// </summary>
+	/// <param name="what">Short description of the request, used in error messages.</param>
+	/// <returns>The call description.</returns>
+	private SourceCall Call(string what) => new(SourceKind.Mobility, what, timeouts.Request);
 	#endregion
 }

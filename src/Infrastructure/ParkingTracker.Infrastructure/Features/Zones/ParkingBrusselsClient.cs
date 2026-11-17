@@ -57,6 +57,12 @@ internal sealed class ParkingBrusselsClient : IParkingBrusselsClient
 	{
 		return SourceHttp.GetAsync(client, Call(SectorMailleParser.What), SourceRequests.Mailles(box), SectorMailleParser.Parse, cancellationToken);
 	}
+
+	/// <inheritdoc />
+	public Task<Result<IReadOnlyList<MailleOption>>> GetMailleOptionsAsync(CancellationToken cancellationToken)
+	{
+		return SourceHttp.GetAsync(client, Call(MailleOptionParser.What), SourceRequests.MailleList(), MailleOptionParser.Parse, cancellationToken);
+	}
 	#endregion
 
 	#region Private Helpers

@@ -87,7 +87,9 @@ internal static partial class WorkItemParser
 			return null;
 		}
 
-		return Create(feature, WorkKind.Works, FirstNonEmpty(JsonValues.Text(properties, "nature_fr")) ?? "Roadworks", FirstNonEmpty(JsonValues.Text(properties, "road_impl_fr"), JsonValues.Text(properties, "nom_fr")) ?? string.Empty, end);
+		var title = FirstNonEmpty(JsonValues.Text(properties, "nature_fr")) ?? "Roadworks";
+		var where = FirstNonEmpty(JsonValues.Text(properties, "road_impl_fr"), JsonValues.Text(properties, "nom_fr")) ?? string.Empty;
+		return Create(feature, WorkKind.Works, new WorkText(title, where, JsonValues.Text(properties, "pilote_fr") ?? string.Empty, JsonValues.Text(properties, "link_fr") ?? string.Empty), new WorkPeriod(start, end));
 	}
 
 	/// <summary>
@@ -109,7 +111,9 @@ internal static partial class WorkItemParser
 
 		var title = (FirstNonEmpty(JsonValues.Text(properties, "type_fr")) ?? "Event").Trim();
 		var until = string.IsNullOrEmpty(endTime) ? null : endTime[..Math.Min(IsoDateLength, endTime.Length)];
-		return Create(feature, WorkKind.Event, title, FirstNonEmpty(JsonValues.Text(properties, "location_fr")) ?? string.Empty, until);
+		var from = string.IsNullOrEmpty(startTime) ? null : startTime[..Math.Min(IsoDateLength, startTime.Length)];
+		var text = new WorkText(title, FirstNonEmpty(JsonValues.Text(properties, "location_fr")) ?? string.Empty, JsonValues.Text(properties, "consequences_fr") ?? string.Empty, string.Empty);
+		return Create(feature, WorkKind.Event, text, new WorkPeriod(from, until));
 	}
 
 	/// <summary>
@@ -117,19 +121,18 @@ internal static partial class WorkItemParser
 	/// </summary>
 	/// <param name="feature">The GeoJSON feature object.</param>
 	/// <param name="kind">Kind of work item.</param>
-	/// <param name="title">Title of the work item.</param>
-	/// <param name="where">Location text of the work item.</param>
-	/// <param name="until">End date text, or null when unknown.</param>
+	/// <param name="text">What the item says about itself.</param>
+	/// <param name="period">The first and last day of the item.</param>
 	/// <returns>The work item.</returns>
-	private static WorkItem Create(JsonElement feature, WorkKind kind, string title, string where, string? until)
+	private static WorkItem Create(JsonElement feature, WorkKind kind, WorkText text, WorkPeriod period)
 	{
 		if (GeoJson.IsPointShaped(feature))
 		{
 			var points = GeoJson.ReadPoints(feature).Select(WebMercator.ToGeo).ToList();
-			return new WorkItem(kind, points, null, title, where, until);
+			return new WorkItem(kind, points, null, text.Title, text.Where, period.To, period.From, text.By, text.Link);
 		}
 
-		return new WorkItem(kind, null, GeoJson.ReadShape(feature), title, where, until);
+		return new WorkItem(kind, null, GeoJson.ReadShape(feature), text.Title, text.Where, period.To, period.From, text.By, text.Link);
 	}
 
 	/// <summary>
@@ -149,5 +152,27 @@ internal static partial class WorkItemParser
 	/// <param name="values">Candidate texts, in order of preference.</param>
 	/// <returns>The first non-empty value, or <see langword="null"/> when there is none.</returns>
 	private static string? FirstNonEmpty(params string?[] values) => values.FirstOrDefault(value => !string.IsNullOrEmpty(value));
+	#endregion
+
+	#region Nested Types
+	/// <summary>
+	/// Author      : Gihed Annabi
+	/// Date        : 11-2026
+	/// Purpose     : The words of a work item, read from whichever fields the roadworks or event layer fills.
+	/// </summary>
+	/// <param name="Title">What it is.</param>
+	/// <param name="Where">Where it is, in words.</param>
+	/// <param name="By">Who runs it, or what it changes.</param>
+	/// <param name="Link">Address of a page with details, or empty.</param>
+	private sealed record WorkText(string Title, string Where, string By, string Link);
+
+	/// <summary>
+	/// Author      : Gihed Annabi
+	/// Date        : 11-2026
+	/// Purpose     : The days a work item runs, kept as ISO text because the parser compares dates as text.
+	/// </summary>
+	/// <param name="From">The first day as ISO text, or <see langword="null"/>.</param>
+	/// <param name="To">The last day as ISO text, or <see langword="null"/>.</param>
+	private sealed record WorkPeriod(string? From, string? To);
 	#endregion
 }

@@ -1,0 +1,101 @@
+@namespace ParkingTracker.Shared.Features.Card.Components
+@inherits ViewModelComponent<CardViewModel>
+@using ParkingTracker.Domain.Features.Sectors.ValueObjects
+<DialogShell IsOpen="ViewModel.IsOpen" Label="My parking card">
+    <form id="cardForm" @onsubmit="OnSave" @onsubmit:preventDefault>
+        <div class="dialog-head">
+            <h2>My parking card</h2>
+            <button type="button" class="icon-btn" aria-label="Close" @onclick="OnClose"><Icon Name="close" /></button>
+        </div>
+        <div class="field">
+            <label for="muniSelect">Municipality that issued the card</label>
+            <select name="municipality" id="muniSelect" value="@ViewModel.MunicipalityId" @onchange="OnMunicipalityChangedAsync">
+                @foreach (var municipality in ViewModel.Municipalities)
+                {
+                    <option value="@municipality.Id">@municipality.Name@(municipality.NameNl != municipality.Name ? " / " + municipality.NameNl : string.Empty)</option>
+                }
+            </select>
+        </div>
+        <div id="sectorBox">
+            @switch (ViewModel.SelectedMunicipality?.Kind)
+            {
+                case MunicipalityKind.Streets:
+                    <div class="field">
+                        <label for="sectorSelect">Sector (on your card)</label>
+                        <select name="sector" id="sectorSelect" value="@ViewModel.SectorId" @onchange="OnSectorChanged">
+                            @foreach (var sector in ViewModel.Sectors)
+                            {
+                                <option value="@sector.Id">@sector.Name@(sector.NameNl != sector.Name ? " / " + sector.NameNl : string.Empty)</option>
+                            }
+                        </select>
+                    </div>
+                    break;
+                case MunicipalityKind.Mailles:
+                    @switch (ViewModel.MailleState)
+                    {
+                        case MailleLoadState.Loading:
+                            <p class="muted small"><span class="spinner" style="display:inline-block;width:12px;height:12px;border-width:2px"></span> Loading the areas from parking.brussels…</p>
+                            break;
+                        case MailleLoadState.Failed:
+                            <p class="muted small">@ViewModel.MailleError</p>
+                            break;
+                        case MailleLoadState.Loaded:
+                            <div class="field"><label>Areas on your card</label><p class="muted small">Tick every area (secteur / maille / zone) printed on your card.</p></div>
+                            <div class="stack">
+                                @foreach (var area in ViewModel.Mailles!.Areas)
+                                {
+                                    <label class="check">
+                                        <input type="checkbox" name="maille" value="@area.ZoneCode" checked="@ViewModel.SelectedMailles.Contains(area.ZoneCode)"
+                                               @onchange="e => ViewModel.Toggle(ViewModel.SelectedMailles, area.ZoneCode, (bool)e.Value!)" />
+                                        <span><b>@area.DisplayName</b><small>@area.ZoneCode</small></span>
+                                    </label>
+                                }
+                            </div>
+                            @if (ViewModel.Mailles!.BorderZones.Count > 0)
+                            {
+                                <div class="field"><label>Border zones</label></div>
+                                <div class="stack">
+                                    @foreach (var zone in ViewModel.Mailles!.BorderZones)
+                                    {
+                                        <label class="check">
+                                            <input type="checkbox" name="lim" value="@zone.ZoneCode" checked="@ViewModel.SelectedLims.Contains(zone.ZoneCode)"
+                                                   @onchange="e => ViewModel.Toggle(ViewModel.SelectedLims, zone.ZoneCode, (bool)e.Value!)" />
+                                            <span><b>@zone.DisplayName</b><small>@zone.ZoneCode</small></span>
+                                        </label>
+                                    }
+                                </div>
+                            }
+                            break;
+                    }
+                    break;
+                default:
+                    <p class="muted small">@ViewModel.SelectedMunicipality?.Note</p>
+                    break;
+            }
+        </div>
+        <div class="grid2">
+            <div class="field"><label for="cardFrom">Valid from</label><input id="cardFrom" name="from" type="date" required value="@ViewModel.ValidFrom" @onchange="e => ViewModel.ValidFrom = e.Value?.ToString() ?? string.Empty" /></div>
+            <div class="field"><label for="cardTo">Valid until</label><input id="cardTo" name="to" type="date" required value="@ViewModel.ValidTo" @onchange="e => ViewModel.ValidTo = e.Value?.ToString() ?? string.Empty" /></div>
+        </div>
+        <div class="grid2">
+            <div class="field"><label for="cardPlate">Plate</label><input id="cardPlate" name="plate" placeholder="1ABC234" autocapitalize="characters" @bind="ViewModel.Plate" /></div>
+            <div class="field"><label for="cardNumber">Card number</label><input id="cardNumber" name="number" placeholder="B000-000-000" @bind="ViewModel.Number" /></div>
+        </div>
+        <div id="tolBox">
+            @foreach (var tolerance in ViewModel.Tolerances)
+            {
+                <label class="check">
+                    <input type="checkbox" name="tol" value="@tolerance.Code" checked="@ViewModel.SelectedTolerances.Contains(tolerance.Code)"
+                           @onchange="e => ViewModel.Toggle(ViewModel.SelectedTolerances, tolerance.Code, (bool)e.Value!)" />
+                    <span><b>@tolerance.Label</b><small>Only if your card shows the code <b>@tolerance.Code</b>. Not sure? Ask the City (02 279 22 11).</small></span>
+                </label>
+            }
+        </div>
+        @if (!string.IsNullOrEmpty(ViewModel.FormError))
+        {
+            <p class="muted small warn" role="alert">@ViewModel.FormError</p>
+        }
+        <p class="muted small">Stored only on this phone.</p>
+        <button type="submit" class="btn btn-primary btn-block">Save card</button>
+    </form>
+</DialogShell>

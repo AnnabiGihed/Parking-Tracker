@@ -102,6 +102,18 @@ internal static class JsonValues
 	}
 
 	/// <summary>
+	/// Reads a property that is text or a number as text, treating a missing, empty or zero value as unknown, as the first version
+	/// of the app did when it printed optional values.
+	/// </summary>
+	/// <param name="element">JSON object to read from.</param>
+	/// <param name="name">JSON property name to read.</param>
+	/// <returns>The text, or <see langword="null"/> when the value is missing, empty or zero.</returns>
+	internal static string? Present(JsonElement element, string name)
+	{
+		return IsTruthy(element, name) ? TextOrNumber(element, name) : null;
+	}
+
+	/// <summary>
 	/// Tells whether a property holds a value that counts as true: not missing, null, false, 0 or empty text.
 	/// </summary>
 	/// <param name="element">JSON object to read from.</param>

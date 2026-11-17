@@ -115,12 +115,18 @@ Leaflet map. Leaflet 1.9.4 is shipped in `wwwroot/lib` instead of loaded from un
 
 | Direction | Calls |
 | --- | --- |
-| C# to JS | `init(element, view, callbacks)`, `setView`, `fitBounds`, `setMe(lat, lon, accuracy)`, `setPin`, `setCar`, `setTarget`, `drawSurfaces(layer, items)`, `drawPoints(layer, items)`, `showZonesWms(on)`, `clear(layer)` |
+| C# to JS | `init(element, view, callbacks)`, `setView`, `setViewAtLeast`, `fitBounds`, `setMe(lat, lon, accuracy)`, `setPin`, `setCar`, `openCarPopup`, `setTarget`, `drawSurfaces(layer, items)`, `drawPoints(layer, items)`, `showZonesWms(on)`, `clear(layer)` |
 | JS to C# (`DotNetObjectReference`, `[JSInvokable]`) | `OnMapClick(lat, lon)`, `OnPinMoved(lat, lon)`, `OnViewChanged(south, west, north, east, zoom)`, `OnPopupAction(kind, id)` |
+| Housekeeping | `observeSheet(element)` keeps `--sheet-h` equal to the bottom sheet height; `dispose()` removes the map and every reference, and the component disposes the module and the `DotNetObjectReference` |
 
 Payloads are compact: polygons as arrays of `[lat, lon]` rounded to 6 decimals, a style key per surface (`covered`,
 `mixed`, `pay`, …) and popup text already escaped by C#. Map-drawing code holds no rules: colours per style key stay in
 `map.js` as today's `KIND_STYLE`. Navigation links (Waze, Google Maps, pay apps, e-mail) open through MAUI `Launcher`.
+
+Texts from services never become markup in the script: a marker label is set with `textContent` (and escaped by C#), and the popup
+buttons are handled by one delegated click listener on the map container, registered in `init` and removed in `dispose()`.
+The position source (`ILocationTracker`) may raise its events on any thread and must keep delivering fixes while the device
+stands still, because the main screen reports a lost signal after 15 seconds without a fix.
 
 ### 3.4 Reference data
 
@@ -171,6 +177,7 @@ flowchart LR
     urbis[UrbIS address points<br/>WFS<br/>house numbers]
     bxl[bruxelles.be<br/>official sector PDFs]
     osm[OpenStreetMap<br/>map tiles]
+    nom[Nominatim<br/>OpenStreetMap address search<br/>typed text only]
     nav[Waze / Google Maps / pay apps]
 
     driver -->|uses| app
@@ -179,6 +186,7 @@ flowchart LR
     app -->|house numbers<br/>HTTPS GeoJSON| urbis
     app -->|unchanged check<br/>HTTPS HEAD / GET| bxl
     app -->|tiles<br/>HTTPS| osm
+    app -->|address search<br/>HTTPS JSON| nom
     app -->|opens links<br/>Android intents| nav
 
     classDef person   fill:#fce5cd,stroke:#b45f06,stroke-width:1px,color:#000
@@ -186,7 +194,7 @@ flowchart LR
     classDef external fill:#e8e8e8,stroke:#666,stroke-width:1px,color:#000
     class driver person
     class app system
-    class pb,bm,urbis,bxl,osm,nav external
+    class pb,bm,urbis,bxl,osm,nom,nav external
 ```
 
 Inside the app, dependencies point inward: the thin MAUI host composes everything, Infrastructure and the Android code
@@ -200,10 +208,10 @@ flowchart TB
         prefs[(MAUI SecureStorage: pt.card<br/>Preferences: pt.car, pt.timer,<br/>pt.layers, pt.bgAlerts)]
     end
     subgraph shared[ParkingTracker.Shared - Razor class library]
-        ui[Razor pages and components<br/>style.css, icons<br/>screen and dialogs]
+        ui[Razor page and components per feature<br/>style.css, icons<br/>screen and dialogs]
         mapjs[wwwroot/js/map.js<br/>Leaflet 1.9.4<br/>map drawing only]
     end
-    vm[ParkingTracker.ViewModels<br/>view models per feature]
+    vm[ParkingTracker.ViewModels<br/>view models per feature:<br/>tracking rules, status, layers]
     app[ParkingTracker.Application<br/>Pivot queries and commands,<br/>ports, presenter, card parser]
     domain[ParkingTracker.Domain<br/>rules, geometry, decider,<br/>paid hours, parking detector]
     infra[ParkingTracker.Infrastructure<br/>HttpClient sources,<br/>embedded reference data]
@@ -216,7 +224,8 @@ flowchart TB
     droid -->|parked: ISender.Send<br/>in process| app
     app -->|uses| domain
     infra -->|implements ports| app
-    droid -->|implements ports| app
+    droid -->|implements device ports<br/>ILocationTracker, ILocationPermissions,<br/>ILinkLauncher, ISettingsStore| app
+    vm -->|uses device ports| app
     droid -->|reads/writes<br/>ISettingsStore| prefs
 
     classDef internal fill:#cfe2f3,stroke:#2c5aa0,stroke-width:1px,color:#000
@@ -237,21 +246,29 @@ Directory.Packages.props    central versions; Pivot.Framework.* pinned together
 nuget.config                nuget.org + GitHub Packages, source mapping Pivot.* -> GitHub
 src/
   Core/
-    ParkingTracker.Domain          Features/{Cards,Sectors,Zones,PaidHours,ParkingDetection,SpotDecisions,Shared}
+    ParkingTracker.Domain          Features/{Cards,Cars,Sectors,Zones,PaidHours,ParkingDetection,SpotDecisions,MapLayers,AddressSearch,Shared}
                                    each with ValueObjects/, Services/ (and Errors/ when needed)
     ParkingTracker.Application     Features/SpotDecisions/{Queries,Services,Abstractions}
-                                   Features/Sectors/{Services,Abstractions}
+                                   Features/Sectors/{Queries,Services,Abstractions}
+                                   Features/MapLayers/Queries, Features/AddressSearch/{Queries,Abstractions}
+                                   Features/Shared/Abstractions (ISettingsStore, ILinkLauncher, ILocationPermissions)
   Infrastructure/
-    ParkingTracker.Infrastructure  Features/{Zones,PaidHours,Sectors,Shared/Http,Shared/Parsing}
+    ParkingTracker.Infrastructure  Features/{Zones,PaidHours,Sectors,AddressSearch,Shared/Http,Shared/Parsing}
                                    Data/*.json (embedded resources)
   Containers/
     UI/
       Core/
-        ParkingTracker.Shared      planned: Razor class library, pages and components per feature
-        ParkingTracker.ViewModels  planned: view models per feature
+        ParkingTracker.Shared      Razor class library: Features/<Feature>/Pages and Components/<Name>/, Features/Shared/{Layout,Components},
+                                   wwwroot/{css,js,lib/leaflet}
+        ParkingTracker.ViewModels  Features/{SpotCheck,Card,Car,MapLayers,Welcome,Shared}: view models and the pure UI rules
       Hosting/
         ParkingTracker.App         planned: thin .NET MAUI Blazor Hybrid host (net10.0-android)
 test/
+  Containers/
+    UI/
+      Core/
+        ParkingTracker.ViewModels.Tests   xUnit, NSubstitute, fake clock
+        ParkingTracker.Shared.Tests       bUnit, JavaScript interop in strict mode
   Core/
     ParkingTracker.Domain.Tests
     ParkingTracker.Application.Tests
@@ -286,6 +303,32 @@ PARKING_LIVE_TESTS=1 dotnet test test/Infrastructure/ParkingTracker.Infrastructu
   --filter FullyQualifiedName~LiveSourcesSmokeTests
 ```
 
+### 4.2 Device ports and the screens
+
+The phone is reached through four ports of the Application layer. The thin host implements them with MAUI and Android
+APIs; the view models and the tests only see the interfaces.
+
+| Port | Feature folder | What it does | Implemented by |
+| --- | --- | --- | --- |
+| `ILocationTracker` | `SpotDecisions/Abstractions` | Starts and stops high-accuracy fixes (`GpsFix`: position, accuracy, speed or none, time) and reports them and failures as events | host, fused location |
+| `ILocationPermissions` | `Shared/Abstractions` | Reads the foreground and background permission, asks for the foreground one, opens the app's location settings for "Allow all the time" | host |
+| `ILinkLauncher` | `Shared/Abstractions` | Opens an address (Waze, Google Maps, payment app, e-mail) outside the app | host, MAUI `Launcher` |
+| `ISettingsStore` | `Shared/Abstractions` | Card, parked car, layer switches, welcome seen, location banner postponement | host, `SecureStorage` and `Preferences` |
+
+`ISettingsStore` keeps the values of the first version of the app (`pt.card`, `pt.car`, `pt.layers`, `pt.permSnooze`), so
+that stage 6 can copy them unchanged; the welcome flag `pt.welcomeSeen` is new and is not migrated. `ParkingCard` carries
+the card number and plate next to the validity data, and `ParkedCar` the position, moment, headline and place.
+
+The screens are split in two projects. `ParkingTracker.ViewModels` holds everything that is not markup and needs no
+browser: the tracking rules (a fix older than 15 s is ignored; a new check after 8 m, 30 s or the first accurate fix; the
+nearest-spot search again after 60 m or 60 s, always for a pin), the status block per verdict, the card line with the
+30-day expiry warning, the layer zoom levels (zone image zoomed out, street colours from 15, house-number detail from 16,
+spaces from 17), the 700 ms layer debounce and the official-list recheck. View models send queries through `ISender` and
+use the ports; they have no MAUI type. `ParkingTracker.Shared` holds the Razor page, the components, `style.css`, the icon
+component and `wwwroot/js/map.js`; every component sits in its own folder with a code-behind. The map module and its
+Leaflet 1.9.4 files ship inside the class library (`_content/ParkingTracker.Shared/`), and `MapScript` is the typed face of
+the module's functions.
+
 ## 5. Data and integration design
 
 ### 5.1 Domain types
@@ -300,14 +343,15 @@ PARKING_LIVE_TESTS=1 dotnet test test/Infrastructure/ParkingTracker.Infrastructu
 | `GeoBox`, `MercatorPoint`, `SurfaceShape`, `ClosestPoint` | record structs, record | Web Mercator conversions, distance, point-in-ring, closest point and bounds of a street surface; `SurfaceFilter` excludes tunnels and viaducts |
 | `SectorDefinition`, `SectorStreet`, `ToleranceAgreement` | records | From reference data; lookup by normalised French and Dutch names |
 | `Municipality`, `MunicipalityKind` | record, enum | `Streets`, `Mailles`, `Whole`, `Wsl`, `Unknown` |
-| `ParkingCard` | record | Municipality, sector, tolerances, mailles, lims and the validity dates (`CardPeriod`); `CardState` says valid, or why not. The card number and plate, and the `pt.card` JSON, come with the settings store |
+| `ParkingCard` | record | Municipality, sector, tolerances, mailles, lims and the validity dates (`CardPeriod`); `CardState` says valid, or why not. The card number and plate are optional fields of the record, kept as typed (plate in capitals); the `pt.card` JSON is the settings store's job |
 | `ZoneSurface`, `ZoneType`, `ParkingRule` | record, enum, record | Live data; `ZoneType`: `Free`, `Payable`, `Derogation`, `Disk`, `Residents`, `Reserved`; `ZoneClassifier` gives the type and detects events; `PaidHours`, `BelgianHolidays`, `BrusselsTime` and `TariffText` answer paid-now, next start and the tariff text from `ParkingRule`. `ZoneSurface` reads the rule code from `ZoneId1`, or `zoneid1` when that is missing |
 | `SectorMaille`, `ReservedSpace`, `AddressPoint`, `AssignedAddress`, `WorkItem` | records | Live data from the other sources; `AddressAssigner` ties address points to the street surface they face (corner ambiguity and number outliers left out) |
 | `DecisionContext`, `SpotQuestion`, `DecisionStep` | records | What a decision knows (card, municipality, street lists, official-list status), the question (place, accuracy, moment, online) and the chain of steps described above |
 | `SurfaceStatus`, `SurfaceKind`, `FreeSpot` | records, enum | Per-surface status for the map layer and the nearest covered spots (`AreaDecider`) |
 | `ParkingDetector` | class | Fed `GpsFix` values and asked `GetParkedFix(now)` and told `AcknowledgeParked()`; no clock inside |
 | `SpotDecision`, `Verdict`, `SpotStatus` | record, enums | Verdict (headline and colour), plain-text detail, notes, tariff, the zone reading (surface, rule, why the rule is missing) and the reserved space; `CantVerify` carries why in its detail |
-| `ParkedCar`, `ParkingTimer`, `LayerSettings` | records | Same JSON as `pt.car`, `pt.timer`, `pt.layers` |
+| `ParkedCar`, `LayerSettings` | records | Same JSON as `pt.car` and `pt.layers`; `ParkingTimer` (`pt.timer`) comes with stage 6 |
+| `CarPark`, `ChargingPoint`, `MailleOption`, `AddressMatch` | records | Map layer markers, the sector list of the card form and the address search answer; values are kept as the services wrote them because the map only prints them |
 | `OfficialListStatus` | record | `Ok`, `Changed`, `Unverified`, checked time; re-check every 6 h, after 1 min when not ok. Kept in memory by `IOfficialListChecker` (singleton), not persisted; the comparison rules (headers, content hash, PDF signature) are in the record |
 
 Expected failures use Pivot `Result`/`Error` with dotted codes (`ParkingBrussels.Unavailable`, `Urbis.BadResponse`,
@@ -319,18 +363,18 @@ of range, caught by `ValidationPipelineBehavior`).
 
 | Port | Source | Timeout |
 | --- | --- | --- |
-| `IParkingBrusselsClient` | `ows.parking.brussels` WFS: `GetZonesAsync` (`regulation_zones`), `GetSpacesAsync` (`on_street`), `GetMaillesAsync` (`permit_secteurs_mailles`) | 12 s |
+| `IParkingBrusselsClient` | `ows.parking.brussels` WFS: `GetZonesAsync` (`regulation_zones`), `GetSpacesAsync` (`on_street`), `GetMaillesAsync` (`permit_secteurs_mailles`), `GetMailleOptionsAsync` (the same layer without shapes: zone code and names, for the card form) | 12 s |
 | `IAddressPointsClient` | `data.mobility.brussels` `bm_urbis:urbadm_adpt` | 12 s |
 | `IParkingRulesClient` | `api.mobility.brussels` `regulations_rules`, per zone code or all, at a moment | 12 s |
-| `IMobilityLayersClient` | `data.mobility.brussels` roadworks and events (`GetWorksAsync`); car parks and EV charging come with the map layers | 12 s |
+| `IMobilityLayersClient` | `data.mobility.brussels` roadworks and events (`GetWorksAsync`), car parks (`bm_parking:parkingpublic`, `GetCarParksAsync`) and EV charging (`bm_equipment:evse`, `GetChargersAsync`) | 12 s |
+| `IAddressSearch` | `nominatim.openstreetmap.org` search, `countrycodes=be`, bounded to the Brussels box, `Accept-Language: fr`, best match only; only the typed text is sent | 12 s |
 | `ICityDocumentsClient` | `www.bruxelles.be` PDFs: `GetHeadersAsync` (HEAD), then `DownloadAsync`, which returns whether the content is a PDF and its SHA-256, not the bytes, when headers differ | 12 s / 30 s |
 
-Two small ports complete the decision: `INetworkStatus` (online or not) and `ISettingsStore`, whose read side
-(`GetCard`) exists so far; the card storage and the other settings come with the app shell. Request addresses, response
+Two small ports complete the decision: `INetworkStatus` (online or not) and `ISettingsStore` (section 4.2). Request addresses, response
 parsers and the HTTP-status failure live in Infrastructure as pure code (`SourceRequests` and `SourceResponse` under
 `Features/Shared/Http`, the parsers under `Features/Shared/Parsing` and the feature folders), and the typed
 `HttpClient` clients that use them (`ParkingBrusselsClient`, `AddressPointsClient`, `ParkingRulesClient`,
-`MobilityLayersClient`, `CityDocumentsClient`, internal to Infrastructure) are registered by
+`MobilityLayersClient`, `CityDocumentsClient`, `NominatimClient`, internal to Infrastructure) are registered by
 `InfrastructureServiceInstaller` with `IHttpClientFactory`. The limit of time is applied per call (`SourceTimeouts`:
 12 s, 30 s for the PDF download), so a timeout (`<Source>.Timeout`, `<name> timed out`) is told apart from the caller's
 cancellation, which is always rethrown; a lost connection gives `<Source>.Unavailable` (`<name> unreachable`). Requests
@@ -516,9 +560,11 @@ separate pull requests into `chore/maui-migration` (or separate reviewed commits
    tests pass.
 4. **Infrastructure.** HTTP clients and the official-list check. Done when fixture tests cover every source's URL,
    parsing, filters, timeout and error mapping, and the opt-in live smoke tests pass once by hand.
-5. **App shell and UI.** MAUI project, `MainActivity` name, Razor screens with `style.css`, Leaflet interop, settings
-   store, permission flow, links. CI builds the APK on the branch (`workflow_dispatch`, no release). Done when the
-   emulator test's answer and screen checks pass on the new app.
+5. **App shell and UI.** Stage 5a (done): the device ports, the missing sources, `ParkingTracker.ViewModels`,
+   `ParkingTracker.Shared` with `map.js` and the Leaflet files, and their tests. Stage 5b: MAUI project,
+   `MainActivity` name, the Android implementations of the device ports and of the settings store, the composition
+   root. CI builds the APK on the branch (`workflow_dispatch`, no release). Done when the emulator test's answer and
+   screen checks pass on the new app.
 6. **Platform services, OCR, migration.** ADR-0002, ADR-0003, ADR-0004. Done when the emulator test's background
    parking alert and timer checks pass and the upgrade test shows the card kept.
 7. **CI and cut-over.** Final `android.yml` (version and certificate guards, test-hooks build, release on `main`
