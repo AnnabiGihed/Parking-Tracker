@@ -30,7 +30,7 @@ mkdirSync(OUT, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // Arguments go to adb as an array, never through a shell, so that nothing taken from argv is interpreted as shell syntax.
 const adb = (args, opts = {}) => execFileSync('adb', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim();
-const tryAdb = (args) => { try { return adb(args); } catch (e) { return `ERR ${e.message.split('\n')[0]}`; } };
+const tryAdb = (args, opts = {}) => { try { return adb(args, opts); } catch (e) { return `ERR ${e.message.split('\n')[0]}`; } };
 const geo = (p) => tryAdb(['emu', 'geo', 'fix', String(p.lon), String(p.lat)]); // longitude first
 const screenshot = (name) => {
   const r = spawnSync('adb', ['exec-out', 'screencap', '-p'], { maxBuffer: 50 * 1024 * 1024 });
@@ -176,11 +176,13 @@ try { report = await main(); } catch (e) {
   check(`Test ran to the end (failed at: ${step}; app process: ${report.appRunning})`, false, e.message); screenshot('failure');
 }
 // Always keep Android's log: app output, crashes (AndroidRuntime) and .NET messages.
-const logcat = tryAdb(['logcat', '-d', '-v', 'time']);
+// A full log is several megabytes; the default 1 MB output buffer would make the call fail.
+const LOG_BUFFER = { maxBuffer: 64 * 1024 * 1024 };
+const logcat = tryAdb(['logcat', '-d', '-v', 'time'], LOG_BUFFER);
 writeFileSync(join(OUT, 'logcat.txt'), logcat);
 const dotnetFailures = logcat.split(/\r?\n/).filter((l) => DOTNET_FAILURE.test(l));
 check('No unhandled .NET exception in logcat', dotnetFailures.length === 0, dotnetFailures.slice(0, 2).join(' | '));
-const crash = tryAdb(['logcat', '-d', '-b', 'crash', '-v', 'time']);
+const crash = tryAdb(['logcat', '-d', '-b', 'crash', '-v', 'time'], LOG_BUFFER);
 writeFileSync(join(OUT, 'crash.txt'), crash);
 if (/FATAL EXCEPTION/.test(crash)) {
   const lines = crash.split(/\r?\n/);
