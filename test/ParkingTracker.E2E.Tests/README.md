@@ -11,7 +11,8 @@ must be the Release build made with test hooks:
 ```bash
 dotnet publish src/Containers/UI/Hosting/ParkingTracker.App/ParkingTracker.App.csproj \
   -f net10.0-android -c Release -p:EnableTestHooks=true -o artifacts/hooks
-node test/ParkingTracker.E2E.Tests/emulator-test.mjs path/to/ParkingTracker-test.apk
+bash test/ParkingTracker.E2E.Tests/collect-apk.sh artifacts/hooks apk/ParkingTracker-test.apk
+node test/ParkingTracker.E2E.Tests/emulator-test.mjs   # reads apk/ParkingTracker-test.apk
 ```
 
 The host builds only where the `maui-android` workload is installed; CI does it in `.github/workflows/android.yml`.

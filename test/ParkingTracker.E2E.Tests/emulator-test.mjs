@@ -1,7 +1,8 @@
 // Runs the .NET MAUI Android app in an emulator (GitHub Actions) and checks what it really does on Android:
 // permissions, GPS, the official-list check and the answers at known places, through the Blazor web view.
 //
-// Usage (emulator already booted, adb on PATH):  node test/ParkingTracker.E2E.Tests/emulator-test.mjs path/to/ParkingTracker-test.apk
+// Usage (emulator already booted, ANDROID_HOME set; run from the repository root, with the test APK at
+// apk/ParkingTracker-test.apk as the workflow downloads it):  node test/ParkingTracker.E2E.Tests/emulator-test.mjs
 // Output: emulator-report/ (report.json, summary.md, screenshot-*.png, logcat.txt, crash.txt) and exit code 1 on failure.
 //
 // The test APK is the Release build made with -p:EnableTestHooks=true: its web view can be inspected through the Chrome
@@ -13,7 +14,8 @@ import { mkdirSync, writeFileSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { adbPath, apkArgument } from './adb-tool.mjs';
 
-const APK = process.argv[2];
+// A fixed path, not a command-line argument: nothing given to the script can reach adb.
+const APK = 'apk/ParkingTracker-test.apk';
 const PKG = 'be.parkingtracker.app';
 const ACTIVITY = `${PKG}/${PKG}.MainActivity`; // the Java name is fixed by [Activity(Name = ...)], see ADR-0001
 const OUT = 'emulator-report';
@@ -27,10 +29,6 @@ const TEST_CARD = { number: 'TEST', plate: '1TST000', sector: 'louise', from: '2
 // What logcat shows when .NET or Blazor lets an exception escape.
 const DOTNET_FAILURE = /FATAL UNHANDLED EXCEPTION|Unhandled managed exception|Unhandled exception rendering component|AndroidRuntime.*FATAL EXCEPTION/i;
 
-if (!APK) {
-  console.error('Usage: node emulator-test.mjs path/to/ParkingTracker-test.apk');
-  process.exit(2);
-}
 
 mkdirSync(OUT, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
