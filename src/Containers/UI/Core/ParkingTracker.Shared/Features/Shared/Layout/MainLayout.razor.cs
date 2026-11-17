@@ -7,8 +7,9 @@ namespace ParkingTracker.Shared.Features.Shared.Layout;
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
 /// Purpose     : The shell of the app: the page, which fills the screen, and the toast that every feature can use. The page is shown
-///              only after the copy of the saved data of the previous version finished (ADR-0004), so that no screen reads the card
-///              or the car before it was copied; the copy is quick and never fails the app, so the wait is short and always ends.
+///              only after the copy of the saved data of the previous version finished (ADR-0008), so that no screen reads the card
+///              or the car before it was copied. The wait is bounded: the copy ends, successfully or not, within its own time limit
+///              (<see cref="LegacyDataMigration.RunTimeout"/>) and never throws, so the page always opens.
 /// </summary>
 public sealed partial class MainLayout : LayoutComponentBase
 {

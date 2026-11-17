@@ -9,20 +9,22 @@ namespace ParkingTracker.ViewModels.Features.Shared.Settings.Legacy;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : The one-time copy of what the Capacitor version saved (ADR-0004). While the preference <c>pt.migration</c> is absent
-///              it reads the old <c>pt.*</c> values through <see cref="ILegacyStorageReader"/>, checks each one with
+/// Purpose     : The one-time copy of what the Capacitor version saved (ADR-0004, ADR-0008). While the preference <c>pt.migration</c> is
+///              absent it reads the old <c>pt.*</c> values through <see cref="ILegacyStorageReader"/>, checks each one with
 ///              <see cref="SettingsJson"/> (a value that does not read is skipped and logged, never fatal), saves the card through
 ///              the settings store (encrypted storage) and the other values to the plain preferences, and never replaces a value that
 ///              the new app already holds. The marker is written only after a successful read, so a failed read is tried again at the
-///              next launch; after <see cref="MaxAttempts"/> failures the marker records the failure and the user enters the card
-///              again. A run is shared by every caller of <see cref="RunOnceAsync"/>, so the screens can wait for it before they read
-///              the settings. The old data is never deleted.
+///              next launch; every failed attempt is counted (a failed read, a value that cannot be saved, an unexpected exception and
+///              a run that takes longer than <see cref="RunTimeout"/>), and after <see cref="MaxAttempts"/> failures the marker records
+///              the failure and the user enters the card again. The whole run is bounded by <see cref="RunTimeout"/>, so the screens
+///              that wait for it always get on. A run is shared by every caller of <see cref="RunOnceAsync"/>. The old data is never
+///              deleted.
 /// </summary>
 public sealed partial class LegacyDataMigration
 {
 	#region Constants
 	/// <summary>
-	/// The key of the marker that the migration ran; its value is JSON with <c>version</c>, <c>outcome</c>, <c>found</c> and <c>at</c>.
+	/// The key of the marker that the migration ran; its value is JSON with <c>version</c>, <c>outcome</c>, <c>reader</c>, <c>found</c> and <c>at</c>.
 	/// </summary>
 	public const string MarkerKey = "pt.migration";
 
@@ -59,9 +61,15 @@ public sealed partial class LegacyDataMigration
 
 	#region Static Instances
 	/// <summary>
-	/// How long a read of the old storage may take; the app must not wait longer for data that is only a convenience.
+	/// How long the whole run (read and import) may take; the app must not wait longer for data that is only a convenience. A
+	/// longer run counts as a failed attempt.
 	/// </summary>
-	public static readonly TimeSpan ReadTimeout = TimeSpan.FromSeconds(10);
+	public static readonly TimeSpan RunTimeout = TimeSpan.FromSeconds(15);
+
+	/// <summary>
+	/// How long counting a failed attempt may take after the run timed out, so that a stuck storage cannot hold the start-up either.
+	/// </summary>
+	private static readonly TimeSpan CountTimeout = TimeSpan.FromSeconds(2);
 
 	/// <summary>
 	/// The keys that are copied to the plain preferences.
@@ -138,6 +146,67 @@ public sealed partial class LegacyDataMigration
 	}
 	#endregion
 
+	#region Logging
+	/// <summary>
+	/// Logs a run that failed because the storage of the phone failed.
+	/// </summary>
+	/// <param name="logger">The log.</param>
+	/// <param name="exception">What went wrong.</param>
+	[LoggerMessage(Level = LogLevel.Error, Message = "Migrating the saved data of the previous version failed")]
+	private static partial void LogRunFailed(ILogger logger, Exception exception);
+
+	/// <summary>
+	/// Logs that an attempt to migrate failed.
+	/// </summary>
+	/// <param name="logger">The log.</param>
+	/// <param name="problem">What went wrong.</param>
+	/// <param name="attempt">The number of this attempt.</param>
+	/// <param name="maxAttempts">The number of attempts allowed.</param>
+	[LoggerMessage(Level = LogLevel.Warning, Message = "The saved data of the previous version could not be migrated: {Problem} (attempt {Attempt} of {MaxAttempts})")]
+	private static partial void LogAttemptFailed(ILogger logger, string problem, int attempt, int maxAttempts);
+
+	/// <summary>
+	/// Logs a value that was skipped because it did not read.
+	/// </summary>
+	/// <param name="logger">The log.</param>
+	/// <param name="key">The key of the value.</param>
+	[LoggerMessage(Level = LogLevel.Warning, Message = "The old value {Key} is not readable and was skipped")]
+	private static partial void LogSkippedUnreadable(ILogger logger, string key);
+
+	/// <summary>
+	/// Logs a value that was skipped because the new app already holds one.
+	/// </summary>
+	/// <param name="logger">The log.</param>
+	/// <param name="key">The key of the value.</param>
+	[LoggerMessage(Level = LogLevel.Information, Message = "The old value {Key} was skipped: the new app already has one")]
+	private static partial void LogSkippedExisting(ILogger logger, string key);
+
+	/// <summary>
+	/// Logs a value that could not be saved.
+	/// </summary>
+	/// <param name="logger">The log.</param>
+	/// <param name="key">The key of the value.</param>
+	/// <param name="exception">What went wrong.</param>
+	[LoggerMessage(Level = LogLevel.Error, Message = "The old value {Key} could not be saved")]
+	private static partial void LogImportFailed(ILogger logger, string key, Exception exception);
+
+	/// <summary>
+	/// Logs that a time-out could not be counted either.
+	/// </summary>
+	/// <param name="logger">The log.</param>
+	[LoggerMessage(Level = LogLevel.Error, Message = "The migration timed out and the failed attempt could not be counted; the next launch tries again")]
+	private static partial void LogAttemptNotCounted(ILogger logger);
+
+	/// <summary>
+	/// Logs that the migration finished.
+	/// </summary>
+	/// <param name="logger">The log.</param>
+	/// <param name="outcome">What the run did.</param>
+	/// <param name="count">How many values were copied.</param>
+	[LoggerMessage(Level = LogLevel.Information, Message = "Migration of the saved data finished: {Outcome}, {Count} value(s) copied")]
+	private static partial void LogFinished(ILogger logger, LegacyMigrationOutcome outcome, int count);
+	#endregion
+
 	#region Public Methods
 	/// <summary>
 	/// Runs the migration once in this process; every later call returns the same run, so the caller can wait for it. It never
@@ -148,7 +217,7 @@ public sealed partial class LegacyDataMigration
 	{
 		lock (gate)
 		{
-			return run ??= Task.Run(RunAsync);
+			return run ??= Task.Run(RunLimitedAsync);
 		}
 	}
 
@@ -161,10 +230,46 @@ public sealed partial class LegacyDataMigration
 
 	#region Private Helpers
 	/// <summary>
-	/// Runs the migration: nothing when the marker exists, otherwise read, import and mark.
+	/// Runs the migration within <see cref="RunTimeout"/>; a run that takes longer counts as a failed attempt and the caller gets on
+	/// while the slow run may still finish in the background (it checks the limit between its steps).
 	/// </summary>
 	/// <returns>A task with what the run did.</returns>
-	private async Task<LegacyMigrationOutcome> RunAsync()
+	private async Task<LegacyMigrationOutcome> RunLimitedAsync()
+	{
+		using var limit = new CancellationTokenSource(RunTimeout, clock);
+		try
+		{
+			return await RunAsync(limit.Token).WaitAsync(limit.Token).ConfigureAwait(false);
+		}
+		catch (OperationCanceledException)
+		{
+			return await RecordTimeoutAsync().ConfigureAwait(false);
+		}
+	}
+
+	/// <summary>
+	/// Counts the time-out as a failed attempt, itself bounded by <see cref="CountTimeout"/>.
+	/// </summary>
+	/// <returns>A task with the outcome of the failed attempt.</returns>
+	private async Task<LegacyMigrationOutcome> RecordTimeoutAsync()
+	{
+		try
+		{
+			return await FailSafelyAsync($"the migration took longer than {RunTimeout.TotalSeconds} seconds").WaitAsync(CountTimeout, clock).ConfigureAwait(false);
+		}
+		catch (TimeoutException)
+		{
+			LogAttemptNotCounted(logger);
+			return LegacyMigrationOutcome.WillRetry;
+		}
+	}
+
+	/// <summary>
+	/// Runs the migration: nothing when the marker exists, otherwise read, import and mark.
+	/// </summary>
+	/// <param name="cancellationToken">Ends the run when the time limit is reached.</param>
+	/// <returns>A task with what the run did.</returns>
+	private async Task<LegacyMigrationOutcome> RunAsync(CancellationToken cancellationToken)
 	{
 		try
 		{
@@ -173,35 +278,31 @@ public sealed partial class LegacyDataMigration
 				return LegacyMigrationOutcome.AlreadyDone;
 			}
 
-			var reading = await ReadLegacyAsync().ConfigureAwait(false);
+			var reading = await ReadLegacyAsync(cancellationToken).ConfigureAwait(false);
 			return reading.Succeeded
-				? await ImportAsync(reading.Values).ConfigureAwait(false)
+				? await ImportAsync(reading, cancellationToken).ConfigureAwait(false)
 				: await FailAsync(reading.Problem!).ConfigureAwait(false);
 		}
-		catch (Exception exception)
+		catch (Exception exception) when (exception is not OperationCanceledException)
 		{
-			// The storage of the phone itself failed; the app starts anyway and the next launch tries again.
+			// The storage of the phone itself failed; the app starts anyway, and the failure counts like any other.
 			LogRunFailed(logger, exception);
-			return LegacyMigrationOutcome.WillRetry;
+			return await FailSafelyAsync($"{exception.GetType().Name}: {exception.Message}").ConfigureAwait(false);
 		}
 	}
 
 	/// <summary>
-	/// Reads the old storage within <see cref="ReadTimeout"/>, turning an exception or a time-out into a failed reading.
+	/// Reads the old storage, turning an exception into a failed reading; a cancellation goes on to the caller.
 	/// </summary>
+	/// <param name="cancellationToken">Cancels the read when the time limit is reached.</param>
 	/// <returns>A task with the reading.</returns>
-	private async Task<LegacyStorageReading> ReadLegacyAsync()
+	private async Task<LegacyStorageReading> ReadLegacyAsync(CancellationToken cancellationToken)
 	{
-		using var timeout = new CancellationTokenSource(ReadTimeout, clock);
 		try
 		{
-			return await reader.ReadAsync(timeout.Token).ConfigureAwait(false);
+			return await reader.ReadAsync(cancellationToken).ConfigureAwait(false);
 		}
-		catch (OperationCanceledException)
-		{
-			return LegacyStorageReading.Failure($"reading the old storage took longer than {ReadTimeout.TotalSeconds} seconds");
-		}
-		catch (Exception exception)
+		catch (Exception exception) when (exception is not OperationCanceledException)
 		{
 			return LegacyStorageReading.Failure($"{exception.GetType().Name}: {exception.Message}");
 		}
@@ -210,14 +311,17 @@ public sealed partial class LegacyDataMigration
 	/// <summary>
 	/// Copies the usable values, then writes the marker unless a value could not be saved.
 	/// </summary>
-	/// <param name="values">The values of the old storage by key.</param>
+	/// <param name="reading">The successful reading of the old storage.</param>
+	/// <param name="cancellationToken">Ends the import when the time limit is reached.</param>
 	/// <returns>A task with what the run did.</returns>
-	private async Task<LegacyMigrationOutcome> ImportAsync(IReadOnlyDictionary<string, string> values)
+	private async Task<LegacyMigrationOutcome> ImportAsync(LegacyStorageReading reading, CancellationToken cancellationToken)
 	{
+		var values = reading.Values;
 		var found = new List<string>();
 		var allSaved = true;
 		foreach (var key in values.Keys.Where(IsKnownKey).Order(StringComparer.Ordinal))
 		{
+			cancellationToken.ThrowIfCancellationRequested();
 			try
 			{
 				if (await ImportValueAsync(key, values[key]).ConfigureAwait(false))
@@ -225,7 +329,7 @@ public sealed partial class LegacyDataMigration
 					found.Add(key);
 				}
 			}
-			catch (Exception exception)
+			catch (Exception exception) when (exception is not OperationCanceledException)
 			{
 				LogImportFailed(logger, key, exception);
 				allSaved = false;
@@ -238,7 +342,7 @@ public sealed partial class LegacyDataMigration
 		}
 
 		var outcome = found.Count > 0 ? LegacyMigrationOutcome.Migrated : LegacyMigrationOutcome.NothingFound;
-		await WriteMarkerAsync(found.Count > 0 ? MigratedName : NothingName, found).ConfigureAwait(false);
+		await WriteMarkerAsync(found.Count > 0 ? MigratedName : NothingName, reading.Reader, found).ConfigureAwait(false);
 		LogFinished(logger, outcome, found.Count);
 		return outcome;
 	}
@@ -290,6 +394,24 @@ public sealed partial class LegacyDataMigration
 	}
 
 	/// <summary>
+	/// Records a failed attempt like <see cref="FailAsync"/>, and treats a failure of the counting itself as a retry.
+	/// </summary>
+	/// <param name="problem">What went wrong.</param>
+	/// <returns>A task with <see cref="LegacyMigrationOutcome.WillRetry"/> or <see cref="LegacyMigrationOutcome.GaveUp"/>.</returns>
+	private async Task<LegacyMigrationOutcome> FailSafelyAsync(string problem)
+	{
+		try
+		{
+			return await FailAsync(problem).ConfigureAwait(false);
+		}
+		catch (Exception exception) when (exception is not OperationCanceledException)
+		{
+			LogRunFailed(logger, exception);
+			return LegacyMigrationOutcome.WillRetry;
+		}
+	}
+
+	/// <summary>
 	/// Records a failed attempt; in the last allowed attempt the marker records the failure so that the user enters the card again.
 	/// </summary>
 	/// <param name="problem">What went wrong.</param>
@@ -303,7 +425,7 @@ public sealed partial class LegacyDataMigration
 			return LegacyMigrationOutcome.WillRetry;
 		}
 
-		await WriteMarkerAsync(GaveUpName, []).ConfigureAwait(false);
+		await WriteMarkerAsync(GaveUpName, LegacyStorageReading.NoReader, []).ConfigureAwait(false);
 		return LegacyMigrationOutcome.GaveUp;
 	}
 
@@ -324,9 +446,10 @@ public sealed partial class LegacyDataMigration
 	/// Writes the marker.
 	/// </summary>
 	/// <param name="outcome">The outcome name: <c>migrated</c>, <c>nothing</c> or <c>gaveUp</c>.</param>
+	/// <param name="readerName">The name of the reader that found the values, or <c>none</c>.</param>
 	/// <param name="found">The keys that were copied.</param>
 	/// <returns>A task that completes when the marker is saved.</returns>
-	private async Task WriteMarkerAsync(string outcome, IReadOnlyList<string> found)
+	private async Task WriteMarkerAsync(string outcome, string readerName, IReadOnlyList<string> found)
 	{
 		using var stream = new MemoryStream();
 		using (var writer = new Utf8JsonWriter(stream))
@@ -334,6 +457,7 @@ public sealed partial class LegacyDataMigration
 			writer.WriteStartObject();
 			writer.WriteNumber("version", MarkerVersion);
 			writer.WriteString("outcome", outcome);
+			writer.WriteString("reader", readerName);
 			writer.WriteStartArray("found");
 			foreach (var key in found)
 			{
@@ -395,59 +519,5 @@ public sealed partial class LegacyDataMigration
 			return false;
 		}
 	}
-	#endregion
-
-	#region Logging
-	/// <summary>
-	/// Logs a run that failed because the storage of the phone failed.
-	/// </summary>
-	/// <param name="logger">The log.</param>
-	/// <param name="exception">What went wrong.</param>
-	[LoggerMessage(Level = LogLevel.Error, Message = "Migrating the saved data of the previous version failed; the next launch tries again")]
-	private static partial void LogRunFailed(ILogger logger, Exception exception);
-
-	/// <summary>
-	/// Logs that an attempt to migrate failed.
-	/// </summary>
-	/// <param name="logger">The log.</param>
-	/// <param name="problem">What went wrong.</param>
-	/// <param name="attempt">The number of this attempt.</param>
-	/// <param name="maxAttempts">The number of attempts allowed.</param>
-	[LoggerMessage(Level = LogLevel.Warning, Message = "The saved data of the previous version could not be migrated: {Problem} (attempt {Attempt} of {MaxAttempts})")]
-	private static partial void LogAttemptFailed(ILogger logger, string problem, int attempt, int maxAttempts);
-
-	/// <summary>
-	/// Logs a value that was skipped because it did not read.
-	/// </summary>
-	/// <param name="logger">The log.</param>
-	/// <param name="key">The key of the value.</param>
-	[LoggerMessage(Level = LogLevel.Warning, Message = "The old value {Key} is not readable and was skipped")]
-	private static partial void LogSkippedUnreadable(ILogger logger, string key);
-
-	/// <summary>
-	/// Logs a value that was skipped because the new app already holds one.
-	/// </summary>
-	/// <param name="logger">The log.</param>
-	/// <param name="key">The key of the value.</param>
-	[LoggerMessage(Level = LogLevel.Information, Message = "The old value {Key} was skipped: the new app already has one")]
-	private static partial void LogSkippedExisting(ILogger logger, string key);
-
-	/// <summary>
-	/// Logs a value that could not be saved.
-	/// </summary>
-	/// <param name="logger">The log.</param>
-	/// <param name="key">The key of the value.</param>
-	/// <param name="exception">What went wrong.</param>
-	[LoggerMessage(Level = LogLevel.Error, Message = "The old value {Key} could not be saved")]
-	private static partial void LogImportFailed(ILogger logger, string key, Exception exception);
-
-	/// <summary>
-	/// Logs that the migration finished.
-	/// </summary>
-	/// <param name="logger">The log.</param>
-	/// <param name="outcome">What the run did.</param>
-	/// <param name="count">How many values were copied.</param>
-	[LoggerMessage(Level = LogLevel.Information, Message = "Migration of the saved data finished: {Outcome}, {Count} value(s) copied")]
-	private static partial void LogFinished(ILogger logger, LegacyMigrationOutcome outcome, int count);
 	#endregion
 }

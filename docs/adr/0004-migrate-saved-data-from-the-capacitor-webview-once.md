@@ -1,6 +1,6 @@
 # ADR-0004: Migrate saved data from the Capacitor WebView storage once; keep the card in SecureStorage
 
-- Status: Accepted
+- Status: Superseded by ADR-0008
 - Date: 2026-11-16
 - Deciders: Gihed Annabi
 

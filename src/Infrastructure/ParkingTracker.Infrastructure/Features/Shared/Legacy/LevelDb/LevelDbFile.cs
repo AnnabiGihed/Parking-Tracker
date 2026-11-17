@@ -1,4 +1,4 @@
-namespace ParkingTracker.ViewModels.Features.Shared.Settings.Legacy.LevelDb;
+namespace ParkingTracker.Infrastructure.Features.Shared.Legacy.LevelDb;
 
 /// <summary>
 /// Author      : Gihed Annabi

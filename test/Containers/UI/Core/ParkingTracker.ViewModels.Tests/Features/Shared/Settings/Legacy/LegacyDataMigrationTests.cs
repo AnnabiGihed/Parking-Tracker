@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
+using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.ViewModels.Features.Shared.Settings;
 using ParkingTracker.ViewModels.Features.Shared.Settings.Legacy;
 using ParkingTracker.ViewModels.Tests.Features.Shared.TestDoubles;
@@ -11,9 +12,10 @@ namespace ParkingTracker.ViewModels.Tests.Features.Shared.Settings.Legacy;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : Unit tests for <see cref="LegacyDataMigration"/> (ADR-0004): what is copied where, that unreadable values are
-///              skipped, that values already set are kept, that the marker is written only after a successful read, and the retry
-///              and re-entry fallback after failed reads, time-outs and failed saves.
+/// Purpose     : Unit tests for <see cref="LegacyDataMigration"/> (ADR-0004, ADR-0008): what is copied where, that unreadable values are
+///              skipped, that values already set are kept, that the marker (with the reader that was used) is written only after a
+///              successful read, and the retry and re-entry fallback after failed reads, time-outs of the whole run, failed saves and
+///              unexpected exceptions, each of which counts as an attempt.
 /// </summary>
 public sealed class LegacyDataMigrationTests
 {
@@ -76,6 +78,7 @@ public sealed class LegacyDataMigrationTests
 		using var marker = JsonDocument.Parse(plain.Values["pt.migration"]);
 		marker.RootElement.GetProperty("version").GetInt32().Should().Be(1);
 		marker.RootElement.GetProperty("outcome").GetString().Should().Be("migrated");
+		marker.RootElement.GetProperty("reader").GetString().Should().Be("leveldb");
 		marker.RootElement.GetProperty("found").EnumerateArray().Select(e => e.GetString()).Should().BeEquivalentTo("pt.card", "pt.car", "pt.timer", "pt.bgAlerts", "pt.layers", "pt.permSnooze");
 		marker.RootElement.GetProperty("at").GetInt64().Should().Be(clock.GetUtcNow().ToUnixTimeMilliseconds());
 	}
@@ -178,6 +181,21 @@ public sealed class LegacyDataMigrationTests
 		using var marker = JsonDocument.Parse(plain.Values["pt.migration"]);
 		marker.RootElement.GetProperty("outcome").GetString().Should().Be("nothing");
 	}
+
+	/// <summary>
+	/// Verifies that the marker names the reader that found the values, here the fallback web view.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task RunOnceAsync_ValuesFromTheWebView_ShouldRecordThatReader()
+	{
+		Returns(LegacyStorageReading.Success(new Dictionary<string, string>(StringComparer.Ordinal) { ["pt.car"] = CarJson }, LegacyStorageReading.WebViewReader));
+
+		await Create().RunOnceAsync();
+
+		using var marker = JsonDocument.Parse(plain.Values["pt.migration"]);
+		marker.RootElement.GetProperty("reader").GetString().Should().Be("webview");
+	}
 	#endregion
 
 	#region Once Tests
@@ -266,6 +284,7 @@ public sealed class LegacyDataMigrationTests
 		outcomes.Should().Equal(LegacyMigrationOutcome.WillRetry, LegacyMigrationOutcome.WillRetry, LegacyMigrationOutcome.GaveUp);
 		using var marker = JsonDocument.Parse(plain.Values["pt.migration"]);
 		marker.RootElement.GetProperty("outcome").GetString().Should().Be("gaveUp");
+		marker.RootElement.GetProperty("reader").GetString().Should().Be("none");
 		(await Create().RunOnceAsync()).Should().Be(LegacyMigrationOutcome.AlreadyDone);
 	}
 
@@ -302,26 +321,124 @@ public sealed class LegacyDataMigrationTests
 	}
 
 	/// <summary>
-	/// Verifies that a read that takes longer than the time limit is a failed read.
+	/// Verifies that a read that takes longer than the time limit of the run is a failed attempt and is counted.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
-	public async Task RunOnceAsync_ReaderTooSlow_ShouldBeAFailedRead()
+	public async Task RunOnceAsync_ReaderTooSlow_ShouldCountAFailedAttempt()
 	{
 		var started = new TaskCompletionSource();
 		reader.ReadAsync(Arg.Any<CancellationToken>()).Returns(async call =>
 		{
 			started.SetResult();
 			await Task.Delay(Timeout.Infinite, call.Arg<CancellationToken>()).ConfigureAwait(false);
-			return LegacyStorageReading.Success(new Dictionary<string, string>(StringComparer.Ordinal));
+			return LegacyStorageReading.Success(new Dictionary<string, string>(StringComparer.Ordinal), LegacyStorageReading.LevelDbReader);
 		});
 
 		var run = Create().RunOnceAsync();
 		await started.Task;
-		clock.Advance(LegacyDataMigration.ReadTimeout + TimeSpan.FromSeconds(1));
+		clock.Advance(LegacyDataMigration.RunTimeout + TimeSpan.FromSeconds(1));
 
 		(await run).Should().Be(LegacyMigrationOutcome.WillRetry);
 		plain.Values.Should().NotContainKey("pt.migration");
+		plain.Values["pt.migrationAttempts"].Should().Be("1");
+	}
+
+	/// <summary>
+	/// Verifies that the whole run is limited even when the reader ignores its cancellation token: the start-up gate must open.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task RunOnceAsync_ReaderIgnoresCancellation_ShouldStillEndAtTheRunTimeout()
+	{
+		var started = new TaskCompletionSource();
+		var never = new TaskCompletionSource<LegacyStorageReading>();
+		reader.ReadAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+		{
+			started.SetResult();
+			return never.Task;
+		});
+
+		var run = Create().RunOnceAsync();
+		await started.Task;
+		clock.Advance(LegacyDataMigration.RunTimeout + TimeSpan.FromSeconds(1));
+
+		(await run).Should().Be(LegacyMigrationOutcome.WillRetry);
+		plain.Values["pt.migrationAttempts"].Should().Be("1");
+	}
+
+	/// <summary>
+	/// Verifies that the third time-out gives up, so that "three tries at most" also holds for a run that is too slow.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task RunOnceAsync_ThirdTimeout_ShouldGiveUp()
+	{
+		plain.Values["pt.migrationAttempts"] = "2";
+		var started = new TaskCompletionSource();
+		reader.ReadAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+		{
+			started.SetResult();
+			return new TaskCompletionSource<LegacyStorageReading>().Task;
+		});
+
+		var run = Create().RunOnceAsync();
+		await started.Task;
+		clock.Advance(LegacyDataMigration.RunTimeout + TimeSpan.FromSeconds(1));
+
+		(await run).Should().Be(LegacyMigrationOutcome.GaveUp);
+		plain.Values.Should().ContainKey("pt.migration");
+	}
+
+	/// <summary>
+	/// Verifies that an unexpected exception of the storage (the catch-all path) counts as an attempt too.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task RunOnceAsync_MarkerReadThrows_ShouldCountTheAttempt()
+	{
+		var storage = Substitute.For<IKeyValueStorage>();
+		storage.ReadAsync(LegacyDataMigration.MarkerKey).Returns<Task<string?>>(_ => throw new IOException("preferences"));
+		storage.ReadAsync(LegacyDataMigration.AttemptsKey).Returns("1");
+
+		var outcome = await new LegacyDataMigration(reader, new SettingsStore(secure, storage), storage, clock, NullLogger<LegacyDataMigration>.Instance).RunOnceAsync();
+
+		outcome.Should().Be(LegacyMigrationOutcome.WillRetry);
+		await storage.Received().WriteAsync(LegacyDataMigration.AttemptsKey, "2");
+	}
+
+	/// <summary>
+	/// Verifies that the catch-all path gives up after the allowed number of attempts.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task RunOnceAsync_MarkerReadThrowsInTheLastAttempt_ShouldGiveUp()
+	{
+		var storage = Substitute.For<IKeyValueStorage>();
+		storage.ReadAsync(LegacyDataMigration.MarkerKey).Returns<Task<string?>>(_ => throw new IOException("preferences"));
+		storage.ReadAsync(LegacyDataMigration.AttemptsKey).Returns("2");
+
+		var outcome = await new LegacyDataMigration(reader, new SettingsStore(secure, storage), storage, clock, NullLogger<LegacyDataMigration>.Instance).RunOnceAsync();
+
+		outcome.Should().Be(LegacyMigrationOutcome.GaveUp);
+		await storage.Received().WriteAsync(LegacyDataMigration.AttemptsKey, "3");
+	}
+
+	/// <summary>
+	/// Verifies that a value that cannot be saved counts as an attempt.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task RunOnceAsync_SaveFails_ShouldCountTheAttempt()
+	{
+		var failing = Substitute.For<IKeyValueStorage>();
+		failing.ReadAsync(Arg.Any<string>()).Returns((string?)null);
+		failing.WriteAsync("pt.car", Arg.Any<string>()).Returns<Task>(_ => throw new IOException("full"));
+		Returns(Success(("pt.car", CarJson)));
+
+		await new LegacyDataMigration(reader, new SettingsStore(secure, failing), failing, clock, NullLogger<LegacyDataMigration>.Instance).RunOnceAsync();
+
+		await failing.Received().WriteAsync(LegacyDataMigration.AttemptsKey, "1");
 	}
 
 	/// <summary>
@@ -412,7 +529,7 @@ public sealed class LegacyDataMigrationTests
 	/// <returns>The reading.</returns>
 	private static LegacyStorageReading Success(params (string Key, string Json)[] values)
 	{
-		return LegacyStorageReading.Success(values.ToDictionary(v => v.Key, v => v.Json, StringComparer.Ordinal));
+		return LegacyStorageReading.Success(values.ToDictionary(v => v.Key, v => v.Json, StringComparer.Ordinal), LegacyStorageReading.LevelDbReader);
 	}
 	#endregion
 }

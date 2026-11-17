@@ -1,5 +1,6 @@
 using Bunit;
 using NSubstitute;
+using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Shared.Features.Shared.Components;
 using ParkingTracker.Shared.Features.Shared.Layout;
 using ParkingTracker.Shared.Tests.Features.Shared.TestDoubles;
@@ -109,7 +110,7 @@ public sealed class SharedComponentsTests : UiTestContext
 
 		cut.FindAll("main").Should().BeEmpty();
 		cut.Find("#toast").Should().NotBeNull();
-		release.SetResult(LegacyStorageReading.Success(new Dictionary<string, string>(StringComparer.Ordinal)));
+		release.SetResult(LegacyStorageReading.Success(new Dictionary<string, string>(StringComparer.Ordinal), LegacyStorageReading.LevelDbReader));
 		await cut.WaitForAssertionAsync(() => cut.Find("main").TextContent.Should().Be("page"));
 	}
 

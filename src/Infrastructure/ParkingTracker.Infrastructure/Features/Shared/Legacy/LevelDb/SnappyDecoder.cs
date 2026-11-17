@@ -1,4 +1,4 @@
-namespace ParkingTracker.ViewModels.Features.Shared.Settings.Legacy.LevelDb;
+namespace ParkingTracker.Infrastructure.Features.Shared.Legacy.LevelDb;
 
 /// <summary>
 /// Author      : Gihed Annabi
@@ -12,9 +12,9 @@ internal static class SnappyDecoder
 {
 	#region Constants
 	/// <summary>
-	/// The largest block that is decompressed; table blocks are about 4 KB, so a larger claim is a corrupt length.
+	/// The largest block that is decompressed; table blocks are about 4 KB (Chromium may grow one to a few hundred KB), so a claim above 4 MB is a corrupt length.
 	/// </summary>
-	private const int MaxOutput = 64 * 1024 * 1024;
+	private const int MaxOutput = 4 * 1024 * 1024;
 	#endregion
 
 	#region Public Methods

@@ -1,12 +1,13 @@
 using System.Text;
+using Microsoft.Extensions.Logging;
 
-namespace ParkingTracker.ViewModels.Features.Shared.Settings.Legacy.LevelDb;
+namespace ParkingTracker.Infrastructure.Features.Shared.Legacy.LevelDb;
 
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
 /// Purpose     : Reads the <c>localStorage</c> of one origin out of the files of Chromium's <c>Local Storage/leveldb</c> directory, the
-///              way the old web view wrote it, without starting a web view (ADR-0004). A key of the database is <c>_</c>, the origin,
+///              way the old web view wrote it, without starting a web view (ADR-0008). A key of the database is <c>_</c>, the origin,
 ///              a zero byte, then a format byte and the name; a value is a format byte and the text. Format byte 1 means the text is
 ///              Latin-1 (one byte per character), 0 means UTF-16 little-endian, which Chromium picks when a character does not fit in
 ///              Latin-1. The newest write of a key, by sequence number across the log and the tables, decides; a deleted key is absent.
@@ -37,17 +38,19 @@ public static class ChromiumLocalStorageParser
 	/// <param name="files">The files of the directory; other kinds of file (<c>CURRENT</c>, <c>MANIFEST-*</c>, <c>LOCK</c>) are ignored.</param>
 	/// <param name="origin">The origin as Chromium serializes it, for example <c>https://localhost</c>.</param>
 	/// <param name="keyPrefix">Only keys that start with this text are returned, for example <c>pt.</c>.</param>
+	/// <param name="logger">The log, which hears of a log file that was read only in part.</param>
 	/// <returns>The text of each key that exists, by key name.</returns>
 	/// <exception cref="InvalidDataException">Thrown when a file of the database is corrupt or uses a compression that is not supported.</exception>
-	public static IReadOnlyDictionary<string, string> Read(IEnumerable<LevelDbFile> files, string origin, string keyPrefix)
+	public static IReadOnlyDictionary<string, string> Read(IEnumerable<LevelDbFile> files, string origin, string keyPrefix, ILogger logger)
 	{
 		ArgumentNullException.ThrowIfNull(files);
 		ArgumentException.ThrowIfNullOrEmpty(origin);
 		ArgumentNullException.ThrowIfNull(keyPrefix);
+		ArgumentNullException.ThrowIfNull(logger);
 
 		var newest = new Dictionary<string, LevelDbEntry>(StringComparer.Ordinal);
 		var prefixes = new[] { Encoding.UTF8.GetBytes("_" + origin).Append(OriginEnd).ToArray(), Encoding.UTF8.GetBytes("_" + origin + "/").Append(OriginEnd).ToArray() };
-		foreach (var entry in files.SelectMany(ReadEntries))
+		foreach (var entry in files.SelectMany(file => ReadEntries(file, logger)))
 		{
 			if (TryReadName(entry.Key, prefixes) is { } name && name.StartsWith(keyPrefix, StringComparison.Ordinal)
 				&& (!newest.TryGetValue(name, out var known) || entry.Sequence > known.Sequence))
@@ -74,12 +77,13 @@ public static class ChromiumLocalStorageParser
 	/// Reads the writes of a file by its extension.
 	/// </summary>
 	/// <param name="file">The file.</param>
+	/// <param name="logger">The log.</param>
 	/// <returns>The writes; none for a file that is neither a log nor a table.</returns>
-	private static List<LevelDbEntry> ReadEntries(LevelDbFile file)
+	private static List<LevelDbEntry> ReadEntries(LevelDbFile file, ILogger logger)
 	{
 		if (file.Name.EndsWith(".log", StringComparison.OrdinalIgnoreCase))
 		{
-			return LevelDbLogReader.ReadEntries(file.Content);
+			return LevelDbLogReader.ReadEntries(file.Name, file.Content, logger);
 		}
 
 		return file.Name.EndsWith(".ldb", StringComparison.OrdinalIgnoreCase) || file.Name.EndsWith(".sst", StringComparison.OrdinalIgnoreCase)

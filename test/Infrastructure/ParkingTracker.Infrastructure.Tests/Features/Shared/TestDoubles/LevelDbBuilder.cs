@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
 
-namespace ParkingTracker.ViewModels.Tests.Features.Shared.TestDoubles;
+namespace ParkingTracker.Infrastructure.Tests.Features.Shared.TestDoubles;
 
 /// <summary>
 /// Author      : Gihed Annabi

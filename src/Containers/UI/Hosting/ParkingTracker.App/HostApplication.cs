@@ -9,7 +9,7 @@ namespace ParkingTracker.App;
 /// Purpose     : The MAUI application: opens the one window with the page that hosts the Blazor screens and tells the rest of the app
 ///              when the user comes back to it, so that the location permission is read again after a visit to the settings, and
 ///              whether the window is on screen, so that a parking alert is shown as a message instead of a notification. It also starts the
-///              one-time copy of the saved data of the previous version (ADR-0004).
+///              one-time copy of the saved data of the previous version (ADR-0008).
 /// </summary>
 public sealed class HostApplication : Microsoft.Maui.Controls.Application
 {

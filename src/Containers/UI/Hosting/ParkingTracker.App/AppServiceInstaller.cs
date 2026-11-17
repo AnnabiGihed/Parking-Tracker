@@ -12,6 +12,7 @@ using ParkingTracker.Application.Features.Cards.Abstractions;
 using ParkingTracker.Application.Features.ParkingDetection.Abstractions;
 using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
+using ParkingTracker.Infrastructure.Features.Shared.Legacy;
 using ParkingTracker.ViewModels.Features.Shared.Settings;
 using ParkingTracker.ViewModels.Features.Shared.Settings.Legacy;
 using Pivot.Framework.Tools.DependencyInjection.Abstractions;
@@ -46,9 +47,13 @@ public sealed class AppServiceInstaller : IServiceInstaller
 			new SecureValueStorage(provider.GetRequiredService<ILogger<SecureValueStorage>>()),
 			new PreferencesValueStorage()));
 
-		// One run of the copy of the previous version's data (ADR-0004); the Blazor screens wait for it before they read the settings.
+		// One run of the copy of the previous version's data (ADR-0004, ADR-0008); the Blazor screens wait for it before they read the
+		// settings. The LevelDB files are read first, and a hidden web view is the fallback when they cannot be parsed.
 		services.AddSingleton(provider => new LegacyDataMigration(
-			new LegacyLocalStorageReader(LegacyStorageDirectory()),
+			new CompositeLegacyStorageReader(
+				new LegacyLocalStorageReader(LegacyStorageDirectory(), provider.GetRequiredService<ILogger<LegacyLocalStorageReader>>()),
+				new WebViewLegacyStorageReader(provider.GetRequiredService<TimeProvider>(), provider.GetRequiredService<ILogger<WebViewLegacyStorageReader>>()),
+				provider.GetRequiredService<ILogger<CompositeLegacyStorageReader>>()),
 			provider.GetRequiredService<ISettingsStore>(),
 			new PreferencesValueStorage(),
 			provider.GetRequiredService<TimeProvider>(),

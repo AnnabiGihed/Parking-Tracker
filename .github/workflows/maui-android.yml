@@ -6,7 +6,7 @@ name: MAUI Android APK
 #   1. build - Release APK, and the same code with the test hooks (-p:EnableTestHooks=true); both signed with the debug key
 #   2. test  - install the test-hooks APK on an Android 14 emulator and check the answers, the screen, the parking alert service and the timer
 #   3. upgrade-test - build the last Capacitor code, sign it and the test-hooks APK with one throwaway key, install the first, store a card,
-#      install the second over it and check that the card came over (ADR-0004); runs in parallel to the emulator test
+#      install the second over it and check that the card came over (ADR-0004, ADR-0008); runs in parallel to the emulator test
 on:
   push:
     branches: [chore/maui-migration]
@@ -138,7 +138,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  # ADR-0004: the saved card must survive the update. The Capacitor build and the MAUI test-hooks build both get the same throwaway
+  # ADR-0004, ADR-0008: the saved card must survive the update. The Capacitor build and the MAUI test-hooks build both get the same throwaway
   # key, so that `adb install -r` accepts the update and keeps the app data. Until cut-over the Capacitor code is on this branch.
   upgrade-test:
     name: Upgrade test
@@ -171,13 +171,15 @@ jobs:
           name: maui-apks
           path: apk
 
-      # The password is random, masked and lives only in this job.
+      # The key is throwaway: it lives in the runner's temp directory, is valid for two days and signs nothing that is published, so
+      # its password is no secret. It is given to the steps that need it through their own env block, never through GITHUB_ENV.
       - name: Create a throwaway signing key
+        env:
+          UPGRADE_KEY_PASSWORD: upgrade-test-only
         run: |
-          password="$(openssl rand -hex 16)"
-          echo "::add-mask::$password"
-          echo "UPGRADE_KEY_PASSWORD=$password" >> "$GITHUB_ENV"
-          keytool -genkeypair -keystore "$RUNNER_TEMP/upgrade.p12" -storetype PKCS12 -storepass "$password" -keypass "$password"             -alias upgrade -keyalg RSA -keysize 2048 -validity 2 -dname "CN=Parking Tracker upgrade test"
+          keytool -genkeypair -keystore "$RUNNER_TEMP/upgrade.p12" -storetype PKCS12 \
+            -storepass "$UPGRADE_KEY_PASSWORD" -keypass "$UPGRADE_KEY_PASSWORD" \
+            -alias upgrade -keyalg RSA -keysize 2048 -validity 2 -dname "CN=Parking Tracker upgrade test"
 
       # A debug build has web view debugging on (Capacitor's webContentsDebuggingEnabled defaults to the debuggable flag).
       - name: Build the Capacitor debug APK
@@ -192,6 +194,8 @@ jobs:
           ./gradlew assembleDebug --no-daemon
 
       - name: Sign both APKs with the throwaway key
+        env:
+          UPGRADE_KEY_PASSWORD: upgrade-test-only
         run: |
           bash test/ParkingTracker.E2E.Tests/resign-apk.sh android/app/build/outputs/apk/debug/app-debug.apk upgrade/capacitor.apk "$RUNNER_TEMP/upgrade.p12" upgrade
           bash test/ParkingTracker.E2E.Tests/resign-apk.sh apk/ParkingTracker-test.apk upgrade/maui-test.apk "$RUNNER_TEMP/upgrade.p12" upgrade

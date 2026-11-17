@@ -1,4 +1,4 @@
-// Proves that the saved data of the Capacitor version survives the update to the .NET MAUI version (ADR-0004).
+// Proves that the saved data of the Capacitor version survives the update to the .NET MAUI version (ADR-0004, ADR-0008).
 //
 // Usage (emulator booted, adb on PATH):
 //   node test/ParkingTracker.E2E.Tests/upgrade-test.mjs path/to/capacitor-debug.apk path/to/maui-test.apk
@@ -7,9 +7,11 @@
 // Output: upgrade-report/ (report.json, summary.md, logcat.txt, screenshot-*.png) and exit code 1 on failure.
 //
 // Steps: install the Capacitor build, launch it, write pt.card, pt.car, pt.layers, pt.bgAlerts and pt.permSnooze into the localStorage
-// of https://localhost through the devtools protocol, wait until the web view flushed them to disk, force-stop, install the MAUI build
-// over it with `adb install -r`, launch it, and read the card, the car and the migration marker through window.ptTest. The welcome
-// dialog, which shows when there is no card, must not be shown. See docs/architecture.md section 6.3.
+// of https://localhost through the devtools protocol, wait until the web view flushed them to disk, force-stop, launch the old app once
+// more and wait (so that LevelDB recovery or compaction writes table files, as for a real user who used the app for a while),
+// force-stop again, record the files of Local Storage/leveldb, install the MAUI build over it with `adb install -r`, launch it, and
+// read the card, the car and the migration marker (with the reader that was used) through window.ptTest. The welcome dialog, which
+// shows when there is no card, must not be shown. See docs/architecture.md section 6.3.
 import { mkdirSync, writeFileSync, appendFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
@@ -24,6 +26,10 @@ const WEB_VIEW_DIRECTORY = 'app_webview/Default'; // inside the data directory o
 // Chromium writes localStorage to disk a few seconds after the last change, so the test waits before it stops the old app.
 const MIN_FLUSH_WAIT_MS = 12000;
 const MAX_FLUSH_WAIT_MS = 60000;
+// How long the old app runs the second time; LevelDB replays its log and may write a table file when it opens the database.
+const RELAUNCH_WAIT_MS = 15000;
+const LEVELDB_DIRECTORY = 'app_webview/Default/Local Storage/leveldb';
+const KNOWN_READERS = ['leveldb', 'webview'];
 const DOTNET_FAILURE = /FATAL UNHANDLED EXCEPTION|Unhandled managed exception|Unhandled exception rendering component|AndroidRuntime.*FATAL EXCEPTION/i;
 
 // What the old app wrote, in the JSON shapes of app.js (ADR-0004).
@@ -69,6 +75,24 @@ async function waitForFlush() {
   return null;
 }
 
+// Lists the files of the old web view's LevelDB directory (name, size, time); run-as works for the debug build only.
+function listLevelDbFiles() {
+  return tryAdb(['shell', `run-as ${PKG} ls -la '${LEVELDB_DIRECTORY}'`]);
+}
+
+// Starts the old app once more and stops it after a wait, so that the files on disk are those of an app that was used before.
+async function relaunchOldApp(report) {
+  stepTo('relaunch the Capacitor build once');
+  report.leveldbFilesBeforeRelaunch = listLevelDbFiles();
+  tryAdb(['shell', 'am', 'start', '-n', CAPACITOR_ACTIVITY]);
+  await sleep(RELAUNCH_WAIT_MS);
+  tryAdb(['shell', 'am', 'force-stop', PKG]);
+  await sleep(2000);
+  report.leveldbFiles = listLevelDbFiles();
+  console.log(`LevelDB files before the update:\n${report.leveldbFiles}`);
+  check('The old web view left LevelDB files', /\.(log|ldb)\b/.test(report.leveldbFiles), report.leveldbFiles.split(/\r?\n/).map((l) => l.split(/\s+/).pop()).join(' '));
+}
+
 // Installs the old build, stores the data the old app would have saved and stops the app.
 async function prepareOldInstall(report) {
   stepTo('install the Capacitor build');
@@ -93,6 +117,7 @@ async function prepareOldInstall(report) {
   console.log(`localStorage on disk: ${flushed ?? 'not confirmed (continuing after the maximum wait)'}`);
   tryAdb(['shell', 'am', 'force-stop', PKG]);
   await sleep(2000);
+  await relaunchOldApp(report);
 }
 
 // Installs the MAUI build over the old one, launches it and returns its web view.
@@ -127,6 +152,8 @@ async function checkMigratedData(app, report) {
   const marker = JSON.parse((await app.evaluate('ptTest.migration()')) || 'null');
   report.marker = marker;
   check('The migration marker pt.migration is set', marker?.version === 1 && marker?.outcome === 'migrated' && marker?.found?.includes('pt.card') && marker?.found?.includes('pt.car'), JSON.stringify(marker));
+  report.reader = marker?.reader;
+  check('The migration marker names the reader that was used', KNOWN_READERS.includes(marker?.reader), `reader ${marker?.reader}`);
   check('The alerts switch and the layers were copied', ['pt.bgAlerts', 'pt.layers', 'pt.permSnooze'].every((k) => marker?.found?.includes(k)), JSON.stringify(marker?.found));
   // The welcome dialog opens on start when there is no card; give it time to appear before concluding it did not.
   await sleep(5000);
@@ -167,7 +194,8 @@ check('No unhandled .NET exception in logcat', dotnetFailures.length === 0, dotn
 writeFileSync(join(OUT, 'report.json'), JSON.stringify(report, null, 2));
 const failed = checks.filter((c) => !c.ok);
 const md = [`## Upgrade test (Capacitor to .NET MAUI) — ${failed.length ? '❌ ' + failed.length + ' failed' : '✅ all passed'}`,
-  '', `Android ${report.device?.android || '?'} · versionCode ${report.capacitorVersionCode ?? '?'} → ${report.mauiVersionCode ?? '?'}`, '',
+  '', `Android ${report.device?.android || '?'} · versionCode ${report.capacitorVersionCode ?? '?'} → ${report.mauiVersionCode ?? '?'} · migration reader ${report.reader ?? '?'}`,
+  '', 'LevelDB files of the old app before the update:', '', '```', String(report.leveldbFiles ?? 'not listed'), '```', '',
   '| Check | Result | Detail |', '|---|---|---|',
   ...checks.map((c) => `| ${c.name} | ${c.ok ? '✅' : '❌'} | ${String(c.detail || '').replace(/\|/g, '/').slice(0, 300)} |`)].join('\n');
 writeFileSync(join(OUT, 'summary.md'), md + '\n');

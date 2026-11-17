@@ -1,15 +1,18 @@
 using System.Text;
-using ParkingTracker.ViewModels.Features.Shared.Settings.Legacy.LevelDb;
-using ParkingTracker.ViewModels.Tests.Features.Shared.TestDoubles;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using ParkingTracker.Infrastructure.Features.Shared.Legacy.LevelDb;
+using ParkingTracker.Infrastructure.Tests.Features.Shared.TestDoubles;
 
-namespace ParkingTracker.ViewModels.Tests.Features.Shared.Settings.Legacy;
+namespace ParkingTracker.Infrastructure.Tests.Features.Shared.Legacy.LevelDb;
 
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
 /// Purpose     : Unit tests for <see cref="ChromiumLocalStorageParser"/> on byte layouts of a LevelDB log and table as the old web view
 ///              wrote them: Latin-1 and UTF-16 values, the origin filter, the newest write winning across files, deletions, split
-///              records, Snappy blocks and the failures that must not be hidden (unsupported compression, truncated table).
+///              records, Snappy blocks and the failures that must not be hidden (unsupported compression, truncated table, the three
+///              Snappy error paths, a half-written log record and its warning).
 /// </summary>
 public sealed class ChromiumLocalStorageParserTests
 {
@@ -112,6 +115,51 @@ public sealed class ChromiumLocalStorageParserTests
 		var values = Parse(new LevelDbFile("000003.log", log[..^5]));
 
 		values.Keys.Should().Equal("pt.card");
+	}
+
+	/// <summary>
+	/// Verifies that the early stop at a half-written record is logged with the file name, so that it can be told from a clean log.
+	/// </summary>
+	[Fact]
+	public void Read_LogCutInTheLastRecord_ShouldLogTheEarlyStop()
+	{
+		var log = LevelDbBuilder.Log(
+			(1, [(LevelDbBuilder.Key("pt.card"), LevelDbBuilder.Value(CardJson))]),
+			(2, [(LevelDbBuilder.Key("pt.layers"), LevelDbBuilder.Value("{}"))]));
+		var logger = new CapturingLogger();
+
+		ChromiumLocalStorageParser.Read([new LevelDbFile("000003.log", log[..^5])], Origin, "pt.", logger);
+
+		logger.Entries.Should().ContainSingle(entry => entry.Level == LogLevel.Warning && entry.Message.Contains("000003.log", StringComparison.Ordinal));
+	}
+
+	/// <summary>
+	/// Verifies that a complete log writes no warning.
+	/// </summary>
+	[Fact]
+	public void Read_CompleteLog_ShouldLogNothing()
+	{
+		var log = LevelDbBuilder.Log((1, [(LevelDbBuilder.Key("pt.card"), LevelDbBuilder.Value(CardJson))]));
+		var logger = new CapturingLogger();
+
+		ChromiumLocalStorageParser.Read([new LevelDbFile("000003.log", log)], Origin, "pt.", logger);
+
+		logger.Entries.Should().BeEmpty();
+	}
+
+	/// <summary>
+	/// Verifies that a record of an unknown type stops the reading there and is logged.
+	/// </summary>
+	[Fact]
+	public void Read_LogWithUnknownRecordType_ShouldKeepTheEarlierWritesAndLog()
+	{
+		var log = LevelDbBuilder.Log((1, [(LevelDbBuilder.Key("pt.card"), LevelDbBuilder.Value(CardJson))])).Concat(new byte[] { 0, 0, 0, 0, 1, 0, 9, 42 }).ToArray();
+		var logger = new CapturingLogger();
+
+		var values = ChromiumLocalStorageParser.Read([new LevelDbFile("000003.log", log)], Origin, "pt.", logger);
+
+		values.Keys.Should().Equal("pt.card");
+		logger.Entries.Should().ContainSingle();
 	}
 
 	/// <summary>
@@ -234,10 +282,10 @@ public sealed class ChromiumLocalStorageParserTests
 	}
 
 	/// <summary>
-	/// Verifies that a Snappy stream that copies from before its start fails.
+	/// Verifies that a Snappy stream that copies from before its start (a bad copy offset) fails.
 	/// </summary>
 	[Fact]
-	public void Read_SnappyCopyOutsideOutput_ShouldThrow()
+	public void Read_SnappyBadCopyOffset_ShouldThrow()
 	{
 		var table = LevelDbBuilder.Table(
 			[(LevelDbBuilder.Key("pt.card"), 5, LevelDbBuilder.Value(CardJson))],
@@ -245,7 +293,37 @@ public sealed class ChromiumLocalStorageParserTests
 
 		var read = () => Parse(new LevelDbFile("000005.ldb", table));
 
-		read.Should().Throw<InvalidDataException>();
+		read.Should().Throw<InvalidDataException>().WithMessage("*copy points outside*");
+	}
+
+	/// <summary>
+	/// Verifies that a Snappy stream whose elements fill less than the announced size fails.
+	/// </summary>
+	[Fact]
+	public void Read_SnappySizeMismatch_ShouldThrow()
+	{
+		var table = LevelDbBuilder.Table(
+			[(LevelDbBuilder.Key("pt.card"), 5, LevelDbBuilder.Value(CardJson))],
+			_ => [10, 2 << 2, 1, 2, 3]);
+
+		var read = () => Parse(new LevelDbFile("000005.ldb", table));
+
+		read.Should().Throw<InvalidDataException>().WithMessage("*size does not match*");
+	}
+
+	/// <summary>
+	/// Verifies that a Snappy stream that announces more than 4 MB fails before anything that large is allocated.
+	/// </summary>
+	[Fact]
+	public void Read_SnappyOversizedOutput_ShouldThrow()
+	{
+		var table = LevelDbBuilder.Table(
+			[(LevelDbBuilder.Key("pt.card"), 5, LevelDbBuilder.Value(CardJson))],
+			_ => [0x80, 0x80, 0xC0, 0x02, 0]);
+
+		var read = () => Parse(new LevelDbFile("000005.ldb", table));
+
+		read.Should().Throw<InvalidDataException>().WithMessage("*not plausible*");
 	}
 
 	/// <summary>
@@ -264,6 +342,6 @@ public sealed class ChromiumLocalStorageParserTests
 	/// </summary>
 	/// <param name="files">The files.</param>
 	/// <returns>The values by key.</returns>
-	private static IReadOnlyDictionary<string, string> Parse(params LevelDbFile[] files) => ChromiumLocalStorageParser.Read(files, Origin, "pt.");
+	private static IReadOnlyDictionary<string, string> Parse(params LevelDbFile[] files) => ChromiumLocalStorageParser.Read(files, Origin, "pt.", NullLogger.Instance);
 	#endregion
 }
