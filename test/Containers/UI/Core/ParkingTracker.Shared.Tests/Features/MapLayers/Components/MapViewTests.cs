@@ -146,7 +146,7 @@ public sealed class MapViewTests : UiTestContext
 		await cut.Find("input[data-layer=carparks]").ChangeAsync(true);
 
 		await Task.Yield();
-		Settings.Received(1).SaveLayers(new ParkingTracker.Domain.Features.MapLayers.ValueObjects.LayerSettings(true, true, true, true, false));
+		_ = Settings.Received(1).SaveLayersAsync(new ParkingTracker.Domain.Features.MapLayers.ValueObjects.LayerSettings(true, true, true, true, false));
 		Resolve<MapLayersViewModel>().Switches.CarParks.Should().BeTrue();
 	}
 

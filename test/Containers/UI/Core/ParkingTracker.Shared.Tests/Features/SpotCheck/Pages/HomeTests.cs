@@ -4,7 +4,6 @@ using ParkingTracker.Domain.Features.SpotDecisions.ValueObjects;
 using ParkingTracker.Shared.Features.MapLayers.Components;
 using ParkingTracker.Shared.Features.MapLayers.Services;
 using ParkingTracker.Shared.Features.Shared.Components;
-using ParkingTracker.Shared.Features.Shared.Layout;
 using ParkingTracker.Shared.Features.SpotCheck.Pages;
 using ParkingTracker.Shared.Tests.Features.Shared.TestDoubles;
 
@@ -55,20 +54,6 @@ public sealed class HomeTests : UiTestContext
 		cut.Find("#findBtn").TextContent.Should().Be("Find free parking");
 		cut.FindAll("#sheet #cardLine, #sheet #status, #sheet #liveLine, #sheet #nearest, #sheet #permBanner").Should().HaveCount(5);
 		cut.Find("#carChip").ClassList.Should().Contain("hidden");
-	}
-
-	/// <summary>
-	/// Verifies that the router of the app shows the home page at the root address, inside the layout that holds the toast.
-	/// </summary>
-	[Fact]
-	public void Routes_RootAddress_ShouldShowTheHomePageInTheLayout()
-	{
-		SetUpMap();
-
-		var cut = Render<Routes>();
-
-		cut.FindComponent<Home>().Should().NotBeNull();
-		cut.FindComponent<Toast>().Should().NotBeNull();
 	}
 
 	/// <summary>

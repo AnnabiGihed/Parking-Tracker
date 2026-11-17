@@ -21,16 +21,17 @@ public sealed class CarViewModelTests
 	/// <summary>
 	/// Verifies that without a position nothing is saved and the user is told.
 	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
-	public void SaveHere_NoPosition_ShouldTellTheUserAndSaveNothing()
+	public async Task SaveHere_NoPosition_ShouldTellTheUserAndSaveNothing()
 	{
 		using var ui = new UiFixture();
 
-		var saved = ui.Car.SaveHere();
+		var saved = await ui.Car.SaveHereAsync();
 
 		saved.Should().BeFalse();
 		ui.Toast.Message.Should().Be("No position yet: turn on my location or tap the map");
-		ui.Settings.DidNotReceiveWithAnyArgs().SaveCar(default!);
+		_ = ui.Settings.DidNotReceiveWithAnyArgs().SaveCarAsync(default!);
 	}
 
 	/// <summary>
@@ -44,10 +45,10 @@ public sealed class CarViewModelTests
 		ui.AnswerChecks(SpotDecision.Create(Verdict.Pay, "x"));
 		await ui.Spot.HandleMapClickAsync(UiFixture.Here);
 
-		var saved = ui.Car.SaveHere();
+		var saved = await ui.Car.SaveHereAsync();
 
 		saved.Should().BeTrue();
-		ui.Settings.Received(1).SaveCar(new ParkedCar(UiFixture.Here, UiFixture.Start, "Paid parking", string.Empty));
+		_ = ui.Settings.Received(1).SaveCarAsync(new ParkedCar(UiFixture.Here, UiFixture.Start, "Paid parking", string.Empty));
 		ui.Car.Car.Should().NotBeNull();
 		ui.Toast.Message.Should().Be("Car position saved");
 		ui.Car.Info.Should().Be("Parked 17/11/2026 10:00");
@@ -65,7 +66,7 @@ public sealed class CarViewModelTests
 		ui.AnswerChecks(SpotDecision.Create(Verdict.Free, "x"));
 		await ui.Spot.HandleMapClickAsync(UiFixture.Here);
 
-		ui.Car.ParkHere();
+		await ui.Car.ParkHereAsync();
 
 		ui.Car.IsOpen.Should().BeTrue();
 		ui.Car.Car.Should().NotBeNull();
@@ -74,14 +75,14 @@ public sealed class CarViewModelTests
 
 	#region Saved Car Tests
 	/// <summary>
-	/// Verifies that the saved car is read at start and walking directions to it are opened in Google Maps.
+	/// Verifies that the saved car is read when loaded and walking directions to it are opened in Google Maps.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
 	public async Task WalkToCar_SavedCar_ShouldOpenWalkingDirections()
 	{
 		using var ui = SavedCarFixture();
-		var car = BuildCarViewModel(ui);
+		var car = await BuildCarViewModelAsync(ui);
 		car.Open();
 
 		await car.WalkToCarAsync();
@@ -92,11 +93,12 @@ public sealed class CarViewModelTests
 	/// <summary>
 	/// Verifies that "show on map" closes the dialog and asks the map to centre on the car at zoom level 18.
 	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
-	public void ShowOnMap_SavedCar_ShouldAskTheMapToCentreOnTheCar()
+	public async Task ShowOnMap_SavedCar_ShouldAskTheMapToCentreOnTheCar()
 	{
 		using var ui = SavedCarFixture();
-		var car = BuildCarViewModel(ui);
+		var car = await BuildCarViewModelAsync(ui);
 		MapViewRequest? shown = null;
 		car.ShowRequested += (_, e) => shown = e.Value;
 		car.Open();
@@ -110,16 +112,17 @@ public sealed class CarViewModelTests
 	/// <summary>
 	/// Verifies that forgetting the car clears the setting, the car and its popup.
 	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
-	public void Forget_SavedCar_ShouldClearTheSettingAndTheCar()
+	public async Task Forget_SavedCar_ShouldClearTheSettingAndTheCar()
 	{
 		using var ui = SavedCarFixture();
-		var car = BuildCarViewModel(ui);
+		var car = await BuildCarViewModelAsync(ui);
 		car.Open();
 
-		car.Forget();
+		await car.ForgetAsync();
 
-		ui.Settings.Received(1).ClearCar();
+		_ = ui.Settings.Received(1).ClearCarAsync();
 		car.Car.Should().BeNull();
 		car.PopupHtml.Should().BeEmpty();
 	}
@@ -132,14 +135,19 @@ public sealed class CarViewModelTests
 	/// <returns>The fixture.</returns>
 	private static UiFixture SavedCarFixture()
 	{
-		return new UiFixture(settings => settings.GetCar().Returns(new ParkedCar(UiFixture.Here, UiFixture.Start, "Free for you here", string.Empty)));
+		return new UiFixture(settings => settings.GetCarAsync().Returns(new ParkedCar(UiFixture.Here, UiFixture.Start, "Free for you here", string.Empty)));
 	}
 
 	/// <summary>
-	/// Builds a car view model over the fixture, so that it reads the saved car at construction.
+	/// Builds a car view model over the fixture and lets it read the saved car.
 	/// </summary>
 	/// <param name="ui">The fixture.</param>
-	/// <returns>The car view model.</returns>
-	private static CarViewModel BuildCarViewModel(UiFixture ui) => new(ui.Settings, ui.Launcher, ui.Spot, ui.Toast, ui.Clock);
+	/// <returns>A task with the car view model, after it read the saved car.</returns>
+	private static async Task<CarViewModel> BuildCarViewModelAsync(UiFixture ui)
+	{
+		var car = new CarViewModel(ui.Settings, ui.Launcher, ui.Spot, ui.Toast, ui.Clock);
+		await car.LoadAsync().ConfigureAwait(false);
+		return car;
+	}
 	#endregion
 }

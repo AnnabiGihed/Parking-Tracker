@@ -96,7 +96,6 @@ public sealed class CardViewModel : ViewModelBase
 		this.launcher = launcher;
 		this.clock = clock;
 		Line = CardLinePresenter.Present(null, null, null, null, Today());
-		RefreshLine();
 	}
 	#endregion
 
@@ -224,9 +223,9 @@ public sealed class CardViewModel : ViewModelBase
 	/// </summary>
 	/// <param name="cancellationToken">Cancels the loading of the areas.</param>
 	/// <returns>A task that completes when the areas, if the municipality needs them, were loaded.</returns>
-	public Task OpenAsync(CancellationToken cancellationToken = default)
+	public async Task OpenAsync(CancellationToken cancellationToken = default)
 	{
-		var saved = settings.GetCard();
+		var saved = await settings.GetCardAsync().ConfigureAwait(false);
 		Number = saved?.Number ?? string.Empty;
 		Plate = saved?.Plate ?? string.Empty;
 		ValidFrom = saved?.Period.ValidFrom?.ToString(DateInputFormat, CultureInfo.InvariantCulture) ?? string.Empty;
@@ -236,7 +235,7 @@ public sealed class CardViewModel : ViewModelBase
 		FormError = string.Empty;
 		IsOpen = true;
 		NotifyChanged();
-		return LoadMaillesAsync(cancellationToken);
+		await LoadMaillesAsync(cancellationToken).ConfigureAwait(false);
 	}
 
 	/// <summary>
@@ -290,8 +289,8 @@ public sealed class CardViewModel : ViewModelBase
 	/// Saves the card through the settings store and closes the dialog. The dates are required; the plate is stored in capitals
 	/// without spaces or dashes.
 	/// </summary>
-	/// <returns><see langword="true"/> when the card was saved; <see langword="false"/> when the form is incomplete.</returns>
-	public bool Save()
+	/// <returns>A task with <see langword="true"/> when the card was saved; <see langword="false"/> when the form is incomplete.</returns>
+	public async Task<bool> SaveAsync()
 	{
 		if (!TryReadDate(ValidFrom, out var from) || !TryReadDate(ValidTo, out var to))
 		{
@@ -300,8 +299,8 @@ public sealed class CardViewModel : ViewModelBase
 			return false;
 		}
 
-		var first = settings.GetCard() is null;
-		settings.SaveCard(new ParkingCard(
+		var first = await settings.GetCardAsync().ConfigureAwait(false) is null;
+		await settings.SaveCardAsync(new ParkingCard(
 			MunicipalityId,
 			SectorId,
 			new CardPeriod(from, to),
@@ -309,20 +308,22 @@ public sealed class CardViewModel : ViewModelBase
 			[.. SelectedMailles],
 			[.. SelectedLims],
 			Number.Trim(),
-			NormalisePlate(Plate)));
+			NormalisePlate(Plate))).ConfigureAwait(false);
 		FormError = string.Empty;
 		IsOpen = false;
-		RefreshLine();
+		await RefreshLineAsync().ConfigureAwait(false);
 		CardSaved?.Invoke(this, new ValueEventArgs<bool>(first));
 		return true;
 	}
 
 	/// <summary>
-	/// Builds the card line again from the saved card and the last known state of the official list.
+	/// Builds the card line again from the saved card and the last known state of the official list. Call it once when the screen
+	/// starts, and after the card changed.
 	/// </summary>
-	public void RefreshLine()
+	/// <returns>A task that completes when the line was rebuilt.</returns>
+	public async Task RefreshLineAsync()
 	{
-		var saved = settings.GetCard();
+		var saved = await settings.GetCardAsync().ConfigureAwait(false);
 		var municipality = saved is null ? null : Municipalities.FirstOrDefault(m => string.Equals(m.Id, saved.Municipality, StringComparison.Ordinal))
 			?? Municipalities.FirstOrDefault(m => string.Equals(m.Id, DefaultMunicipalityId, StringComparison.Ordinal));
 		var sectorName = Sectors.FirstOrDefault(s => string.Equals(s.Id, saved?.Sector ?? DefaultSectorId, StringComparison.Ordinal))?.Name;
@@ -338,14 +339,14 @@ public sealed class CardViewModel : ViewModelBase
 	/// <returns>A task that completes when the line was rebuilt.</returns>
 	public async Task RefreshListIfStaleAsync(CancellationToken cancellationToken = default)
 	{
-		if (settings.GetCard() is null || !OfficialListStatus.IsStale(officialList, clock.GetUtcNow()))
+		if (await settings.GetCardAsync().ConfigureAwait(false) is null || !OfficialListStatus.IsStale(officialList, clock.GetUtcNow()))
 		{
 			return;
 		}
 
 		var result = await sender.Send(new GetOfficialListStatusQuery(), cancellationToken).ConfigureAwait(false);
 		officialList = result.IsSuccess ? result.Value.Status : officialList;
-		RefreshLine();
+		await RefreshLineAsync().ConfigureAwait(false);
 	}
 
 	/// <summary>

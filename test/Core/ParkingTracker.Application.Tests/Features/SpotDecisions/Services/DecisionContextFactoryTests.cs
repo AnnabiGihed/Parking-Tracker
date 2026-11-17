@@ -58,7 +58,7 @@ public sealed class DecisionContextFactoryTests
 	private static (DecisionContextFactory Factory, IOfficialListChecker Checker) Factory(ParkingCard? card, Result<ReferenceDataSet>? data = null)
 	{
 		var settings = Substitute.For<ISettingsStore>();
-		settings.GetCard().Returns(card);
+		settings.GetCardAsync().Returns(card);
 		var referenceData = Substitute.For<IReferenceData>();
 		referenceData.GetReferenceData().Returns(data ?? Result.Success(Data));
 		var checker = Substitute.For<IOfficialListChecker>();

@@ -25,8 +25,10 @@ public sealed class TestHookBridge
 	/// Initializes a new instance of the <see cref="TestHookBridge"/> class.
 	/// </summary>
 	/// <param name="hooks">The service that does the work.</param>
+	/// <exception cref="ArgumentNullException">Thrown when <paramref name="hooks"/> is <see langword="null"/>.</exception>
 	public TestHookBridge(TestHookService hooks)
 	{
+		ArgumentNullException.ThrowIfNull(hooks);
 		this.hooks = hooks;
 	}
 	#endregion
@@ -36,15 +38,16 @@ public sealed class TestHookBridge
 	/// Saves a card given as the JSON of <c>pt.card</c>.
 	/// </summary>
 	/// <param name="json">The card JSON.</param>
+	/// <returns>A task that completes when the card is saved.</returns>
 	[JSInvokable("SetCard")]
-	public void SetCard(string json) => hooks.SetCard(json);
+	public Task SetCard(string json) => hooks.SetCardAsync(json);
 
 	/// <summary>
 	/// Reads the saved card as the JSON of <c>pt.card</c>.
 	/// </summary>
-	/// <returns>The JSON, or <see langword="null"/> when none is saved.</returns>
+	/// <returns>A task with the JSON, or <see langword="null"/> when none is saved.</returns>
 	[JSInvokable("GetCard")]
-	public string? GetCard() => hooks.GetCard();
+	public Task<string?> GetCard() => hooks.GetCardAsync();
 
 	/// <summary>
 	/// Decides a place.

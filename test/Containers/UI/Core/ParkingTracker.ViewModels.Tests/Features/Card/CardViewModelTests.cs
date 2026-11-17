@@ -45,7 +45,7 @@ public sealed class CardViewModelTests
 	public async Task Open_SavedCard_ShouldFillTheForm()
 	{
 		using var ui = new UiFixture();
-		ui.Settings.GetCard().Returns(new ParkingCard("bruxelles", "louise", new CardPeriod(new DateOnly(2026, 1, 1), new DateOnly(2027, 1, 1)), ["IXL_LOUISE"], [], [], "B000-000-001", "1ABC234"));
+		ui.Settings.GetCardAsync().Returns(new ParkingCard("bruxelles", "louise", new CardPeriod(new DateOnly(2026, 1, 1), new DateOnly(2027, 1, 1)), ["IXL_LOUISE"], [], [], "B000-000-001", "1ABC234"));
 
 		await ui.Card.OpenAsync();
 
@@ -76,10 +76,10 @@ public sealed class CardViewModelTests
 		ui.Card.ValidTo = "2027-01-01";
 		ui.Card.Toggle(ui.Card.SelectedTolerances, "IXL_LOUISE", true);
 
-		var saved = ui.Card.Save();
+		var saved = await ui.Card.SaveAsync();
 
 		saved.Should().BeTrue();
-		ui.Settings.Received(1).SaveCard(Arg.Is<ParkingCard>(card => string.Equals(card.Municipality, "bruxelles", StringComparison.Ordinal)
+		_ = ui.Settings.Received(1).SaveCardAsync(Arg.Is<ParkingCard>(card => string.Equals(card.Municipality, "bruxelles", StringComparison.Ordinal)
 			&& string.Equals(card.Sector, "louise", StringComparison.Ordinal)
 			&& string.Equals(card.Number, "B000-000-001", StringComparison.Ordinal)
 			&& string.Equals(card.Plate, "1ABC234", StringComparison.Ordinal)
@@ -99,11 +99,11 @@ public sealed class CardViewModelTests
 		using var ui = new UiFixture();
 		await ui.Card.OpenAsync();
 
-		var saved = ui.Card.Save();
+		var saved = await ui.Card.SaveAsync();
 
 		saved.Should().BeFalse();
 		ui.Card.FormError.Should().Be("Enter the dates the card is valid from and until.");
-		ui.Settings.DidNotReceiveWithAnyArgs().SaveCard(default!);
+		_ = ui.Settings.DidNotReceiveWithAnyArgs().SaveCardAsync(default!);
 		ui.Card.IsOpen.Should().BeTrue();
 	}
 	#endregion
@@ -157,7 +157,7 @@ public sealed class CardViewModelTests
 	public async Task RefreshListIfStale_Changed_ShouldWarnAndNotAskAgainWhileFresh()
 	{
 		using var ui = new UiFixture();
-		ui.Settings.GetCard().Returns(new ParkingCard("bruxelles", "louise", new CardPeriod(null, null), [], [], []));
+		ui.Settings.GetCardAsync().Returns(new ParkingCard("bruxelles", "louise", new CardPeriod(null, null), [], [], []));
 		var ok = OfficialListStatus.Unchanged(UiFixture.Start);
 		ui.Sender.Send(Arg.Any<GetOfficialListStatusQuery>(), Arg.Any<CancellationToken>()).Returns(Result.Success(new GetOfficialListStatusResponse(ok)));
 
@@ -177,7 +177,7 @@ public sealed class CardViewModelTests
 	public async Task RefreshListIfStale_DocumentChanged_ShouldTurnTheLineIntoAWarning()
 	{
 		using var ui = new UiFixture();
-		ui.Settings.GetCard().Returns(new ParkingCard("bruxelles", "louise", new CardPeriod(null, null), [], [], []));
+		ui.Settings.GetCardAsync().Returns(new ParkingCard("bruxelles", "louise", new CardPeriod(null, null), [], [], []));
 		var changed = OfficialListStatus.ChangedDocument("https://example.org/list.pdf", null, UiFixture.Start);
 		ui.Sender.Send(Arg.Any<GetOfficialListStatusQuery>(), Arg.Any<CancellationToken>()).Returns(Result.Success(new GetOfficialListStatusResponse(changed)));
 

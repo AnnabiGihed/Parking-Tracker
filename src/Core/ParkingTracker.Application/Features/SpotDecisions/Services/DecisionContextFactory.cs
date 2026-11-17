@@ -76,7 +76,7 @@ public sealed class DecisionContextFactory : IDecisionContextFactory
 			return Result.Failure<DecisionContext>(data.Error);
 		}
 
-		var card = settings.GetCard();
+		var card = await settings.GetCardAsync().ConfigureAwait(false);
 		var municipalities = data.Value.Municipalities;
 		var municipality = municipalities.FirstOrDefault(m => string.Equals(m.Id, card?.Municipality ?? CityId, StringComparison.Ordinal)) ?? municipalities.FirstOrDefault(m => string.Equals(m.Id, CityId, StringComparison.Ordinal));
 		if (municipality is null)

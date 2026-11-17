@@ -63,21 +63,6 @@ public sealed partial class PlatformRelay : ComponentBase, IDisposable
 		Resume.Resumed += OnResumed;
 		Spot.CoverageChanged += OnCoverageChanged;
 	}
-
-	/// <inheritdoc />
-	protected override async Task OnAfterRenderAsync(bool firstRender)
-	{
-		if (!firstRender)
-		{
-			return;
-		}
-
-#if TEST_HOOKS
-		await RegisterTestHooksAsync().ConfigureAwait(true);
-#else
-		await Task.CompletedTask.ConfigureAwait(true);
-#endif
-	}
 	#endregion
 
 	#region IDisposable Implementation
@@ -107,7 +92,7 @@ public sealed partial class PlatformRelay : ComponentBase, IDisposable
 		}
 		catch (Exception exception)
 		{
-			Logger.LogError(exception, "Handling the change of the connection failed");
+			LogConnectionChangeFailed(Logger, exception);
 		}
 	}
 
@@ -124,7 +109,7 @@ public sealed partial class PlatformRelay : ComponentBase, IDisposable
 		}
 		catch (Exception exception)
 		{
-			Logger.LogError(exception, "Reading the location permission after resume failed");
+			LogResumeFailed(Logger, exception);
 		}
 	}
 
@@ -133,9 +118,42 @@ public sealed partial class PlatformRelay : ComponentBase, IDisposable
 	/// </summary>
 	/// <param name="sender">The spot check.</param>
 	/// <param name="e">Whether the position is covered now.</param>
-	private void OnCoverageChanged(object? sender, ValueEventArgs<bool> e)
+	private async void OnCoverageChanged(object? sender, ValueEventArgs<bool> e)
 	{
-		_ = Vibrator.VibrateAsync(CoverageVibration.PatternFor(e.Value));
+		try
+		{
+			await Vibrator.VibrateAsync(e.Value ? CoverageVibration.CoveredPattern : CoverageVibration.NotCoveredPattern).ConfigureAwait(false);
+		}
+		catch (Exception exception)
+		{
+			LogVibrationFailed(Logger, exception);
+		}
 	}
+	#endregion
+
+	#region Logging
+	/// <summary>
+	/// Logs that handling a change of the connection failed.
+	/// </summary>
+	/// <param name="logger">The log.</param>
+	/// <param name="exception">What went wrong.</param>
+	[LoggerMessage(Level = LogLevel.Error, Message = "Handling the change of the connection failed")]
+	private static partial void LogConnectionChangeFailed(ILogger logger, Exception exception);
+
+	/// <summary>
+	/// Logs that reading the location permission after the resume failed.
+	/// </summary>
+	/// <param name="logger">The log.</param>
+	/// <param name="exception">What went wrong.</param>
+	[LoggerMessage(Level = LogLevel.Error, Message = "Reading the location permission after resume failed")]
+	private static partial void LogResumeFailed(ILogger logger, Exception exception);
+
+	/// <summary>
+	/// Logs that playing the vibration failed.
+	/// </summary>
+	/// <param name="logger">The log.</param>
+	/// <param name="exception">What went wrong.</param>
+	[LoggerMessage(Level = LogLevel.Error, Message = "Playing the vibration after a change of coverage failed")]
+	private static partial void LogVibrationFailed(ILogger logger, Exception exception);
 	#endregion
 }

@@ -20,21 +20,23 @@ public sealed class PreferencesValueStorage : IKeyValueStorage
 
 	#region IKeyValueStorage Implementation
 	/// <inheritdoc />
-	public string? Read(string key)
+	public Task<string?> ReadAsync(string key)
 	{
-		return Preferences.Default.ContainsKey(key, SharedName) ? Preferences.Default.Get(key, string.Empty, SharedName) : null;
+		return Task.FromResult<string?>(Preferences.Default.ContainsKey(key, SharedName) ? Preferences.Default.Get(key, string.Empty, SharedName) : null);
 	}
 
 	/// <inheritdoc />
-	public void Write(string key, string value)
+	public Task WriteAsync(string key, string value)
 	{
 		Preferences.Default.Set(key, value, SharedName);
+		return Task.CompletedTask;
 	}
 
 	/// <inheritdoc />
-	public void Delete(string key)
+	public Task DeleteAsync(string key)
 	{
 		Preferences.Default.Remove(key, SharedName);
+		return Task.CompletedTask;
 	}
 	#endregion
 }

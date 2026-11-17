@@ -15,19 +15,21 @@ public interface IKeyValueStorage
 	/// </summary>
 	/// <param name="key">The key, for example <c>pt.card</c>.</param>
 	/// <returns>The value, or <see langword="null"/> when none is saved or the storage cannot read it.</returns>
-	string? Read(string key);
+	Task<string?> ReadAsync(string key);
 
 	/// <summary>
 	/// Saves a value, replacing the saved one.
 	/// </summary>
 	/// <param name="key">The key.</param>
 	/// <param name="value">The text to keep.</param>
-	void Write(string key, string value);
+	/// <returns>A task that completes when the value is saved.</returns>
+	Task WriteAsync(string key, string value);
 
 	/// <summary>
 	/// Removes a value; nothing happens when none is saved.
 	/// </summary>
 	/// <param name="key">The key.</param>
-	void Delete(string key);
+	/// <returns>A task that completes when the value is removed.</returns>
+	Task DeleteAsync(string key);
 	#endregion
 }

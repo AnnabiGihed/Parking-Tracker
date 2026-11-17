@@ -47,7 +47,7 @@ public abstract class UiTestContext : BunitContext
 		JSInterop.Mode = JSRuntimeMode.Strict;
 		Network.IsOnline.Returns(true);
 		Permissions.GetStatusAsync(Arg.Any<CancellationToken>()).Returns(new LocationPermissionStatus(PermissionState.Unknown, PermissionState.Unknown));
-		Settings.GetLayers().Returns(new LayerSettings());
+		Settings.GetLayersAsync().Returns(new LayerSettings());
 		ReferenceData.GetReferenceData().Returns(Result.Success(Data()));
 		Services.AddSingleton<TimeProvider>(Clock);
 		Services.AddSingleton(Sender);

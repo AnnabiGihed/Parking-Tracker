@@ -297,9 +297,10 @@ workflow actor and token, `dotnet format --verify-no-changes`, a Release build a
 
 The host `src/Containers/UI/Hosting/ParkingTracker.App` builds only where the `maui-android` workload is installed, which
 is the CI workflow `.github/workflows/maui-android.yml` (on pushes to `chore/maui-migration` and on demand, never a
-release). It is therefore not in `ParkingTracker.slnx`, so `verify.py` and `dotnet.yml` stay free of Android tooling;
-On a machine that has the workload, build the host csproj directly (`dotnet publish <csproj> -f net10.0-android -c Release`); a second solution file at the root would be picked up by `verify.py`. The workflow restores with the package token,
-installs the Android SDK packages (`InstallAndroidDependencies`), publishes the Release APK twice, plain and with
+release). It is therefore not in `ParkingTracker.slnx`, so `verify.py` and `dotnet.yml` stay free of Android tooling; on a
+machine that has the workload, build the host csproj directly (`dotnet publish <csproj> -f net10.0-android -c Release`),
+because a second solution file at the root would be picked up by `verify.py`. The workflow restores with the package
+token, installs the Android SDK packages (`InstallAndroidDependencies`), publishes the Release APK twice, plain and with
 `-p:EnableTestHooks=true`, both signed with the debug key and with `ApplicationVersion` = the run number (no release
 reads it at this stage), and runs `test/ParkingTracker.E2E.Tests/emulator-test.mjs` on an API 34 emulator. The host
 supports Android 7.0 (API 24) and later, because .NET MAUI 10 does; the Capacitor app supported API 23.
@@ -327,7 +328,9 @@ APIs; the view models and the tests only see the interfaces.
 
 `ISettingsStore` keeps the values of the first version of the app (`pt.card`, `pt.car`, `pt.layers`, `pt.permSnooze`), so
 that stage 6 can copy them unchanged; the welcome flag `pt.welcomeSeen` is new and is not migrated. `ParkingCard` carries
-the card number and plate next to the validity data, and `ParkedCar` the position, moment, headline and place.
+the card number and plate next to the validity data, and `ParkedCar` the position, moment, headline and place. Every call
+is asynchronous, because `SecureStorage` is; the store keeps the card in memory after the first read, so a spot check does
+not decrypt it again.
 
 The host implements the ports in `Features/<Feature>/` with thin MAUI classes: `GeolocationTracker` (continuous
 foreground listening at best accuracy, one fix per second, no minimum distance), `MauiLocationPermissions`,

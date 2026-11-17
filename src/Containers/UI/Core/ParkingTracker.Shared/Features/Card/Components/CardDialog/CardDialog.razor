@@ -2,7 +2,7 @@
 @inherits ViewModelComponent<CardViewModel>
 @using ParkingTracker.Domain.Features.Sectors.ValueObjects
 <DialogShell IsOpen="ViewModel.IsOpen" Label="My parking card">
-    <form id="cardForm" @onsubmit="OnSave" @onsubmit:preventDefault>
+    <form id="cardForm" @onsubmit="OnSaveAsync" @onsubmit:preventDefault>
         <div class="dialog-head">
             <h2>My parking card</h2>
             <button type="button" class="icon-btn" aria-label="Close" @onclick="OnClose"><Icon Name="close" /></button>

@@ -132,7 +132,7 @@ public sealed class GetMapLayersQueryHandler : IQueryHandler<GetMapLayersQuery, 
 	/// <returns>The outlines; empty when the card has no areas; a failure when the source cannot be read.</returns>
 	private async Task<Result<IReadOnlyList<SectorMaille>>> LoadAreasAsync(GeoBox box, CancellationToken cancellationToken)
 	{
-		var card = settings.GetCard();
+		var card = await settings.GetCardAsync().ConfigureAwait(false);
 		var data = referenceData.GetReferenceData();
 		if (card is null || data.IsFailure || card.Mailles.Count == 0)
 		{

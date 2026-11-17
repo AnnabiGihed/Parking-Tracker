@@ -36,7 +36,7 @@ public sealed class MapLayersViewModelTests
 	private static UiFixture FixtureWithCard(Dictionary<string, string>? failures = null)
 	{
 		var ui = new UiFixture();
-		ui.Settings.GetCard().Returns(new ParkingCard("etterbeek", null, new CardPeriod(null, null), [], [], []));
+		ui.Settings.GetCardAsync().Returns(new ParkingCard("etterbeek", null, new CardPeriod(null, null), [], [], []));
 		ui.Sender.Send(Arg.Any<GetAreaStatusesQuery>(), Arg.Any<CancellationToken>()).Returns(Result.Success<IReadOnlyList<SurfaceStatus>>([]));
 		ui.Sender.Send(Arg.Any<GetMapLayersQuery>(), Arg.Any<CancellationToken>()).Returns(Result.Success(new GetMapLayersResponse([], [], [], [], [], failures ?? [])));
 		return ui;
@@ -221,7 +221,7 @@ public sealed class MapLayersViewModelTests
 
 		await ui.Layers.SetLayerAsync("carparks", true);
 
-		ui.Settings.Received(1).SaveLayers(new LayerSettings(true, true, true, true, false));
+		_ = ui.Settings.Received(1).SaveLayersAsync(new LayerSettings(true, true, true, true, false));
 		ui.Layers.Switches.CarParks.Should().BeTrue();
 		await ui.Sender.Received(1).Send(Arg.Is<GetMapLayersQuery>(q => q.Layers.CarParks), Arg.Any<CancellationToken>());
 	}

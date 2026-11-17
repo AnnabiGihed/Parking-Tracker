@@ -1,2 +1,3 @@
 *.cs text eol=lf
 *.razor text eol=lf
+*.sh text eol=lf

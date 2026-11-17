@@ -97,7 +97,7 @@ public sealed class StatusBlockTests : UiTestContext
 
 		await cut.Find(".actions .btn-primary").ClickAsync();
 
-		Settings.Received(1).SaveCar(Arg.Any<ParkingTracker.Domain.Features.Cars.ValueObjects.ParkedCar>());
+		_ = Settings.Received(1).SaveCarAsync(Arg.Any<ParkingTracker.Domain.Features.Cars.ValueObjects.ParkedCar>());
 		Resolve<ParkingTracker.ViewModels.Features.Car.CarViewModel>().IsOpen.Should().BeTrue();
 	}
 	#endregion

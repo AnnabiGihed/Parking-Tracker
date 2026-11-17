@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Maui.Devices;
 using ParkingTracker.App.Features.Shared;
 using ParkingTracker.App.Features.SpotDecisions;
 using ParkingTracker.Application.Features.Shared.Abstractions;
@@ -33,7 +35,7 @@ public sealed class AppServiceInstaller : IServiceInstaller
 		services.TryAddSingleton(TimeProvider.System);
 
 		// The card goes to the encrypted storage, everything else to the preferences (ADR-0004).
-		services.AddSingleton<ISettingsStore>(_ => new SettingsStore(new SecureValueStorage(), new PreferencesValueStorage()));
+		services.AddSingleton<ISettingsStore>(provider => new SettingsStore(new SecureValueStorage(provider.GetRequiredService<ILogger<SecureValueStorage>>()), new PreferencesValueStorage()));
 		services.AddSingleton<ILocationTracker, GeolocationTracker>();
 		services.AddSingleton<ILocationPermissions, MauiLocationPermissions>();
 		services.AddSingleton<ILinkLauncher, MauiLinkLauncher>();
@@ -42,6 +44,7 @@ public sealed class AppServiceInstaller : IServiceInstaller
 		services.AddSingleton<ConnectivityNetworkStatus>();
 		services.AddSingleton<INetworkStatus>(provider => provider.GetRequiredService<ConnectivityNetworkStatus>());
 		services.AddSingleton<AppResumeNotifier>();
+		services.TryAddSingleton<IVibration>(Vibration.Default);
 		services.AddSingleton<CoverageVibrator>();
 
 #if TEST_HOOKS

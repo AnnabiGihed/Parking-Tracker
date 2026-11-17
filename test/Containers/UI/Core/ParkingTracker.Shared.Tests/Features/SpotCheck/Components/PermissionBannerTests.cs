@@ -42,7 +42,7 @@ public sealed class PermissionBannerTests : UiTestContext
 	public async Task Render_AllowedWhileUsing_ShouldOfferAllowAndLater()
 	{
 		Permissions.GetStatusAsync(Arg.Any<CancellationToken>()).Returns(new LocationPermissionStatus(PermissionState.Granted, PermissionState.Denied));
-		Settings.When(settings => settings.SavePermissionSnoozeUntil(Arg.Any<DateTimeOffset>())).Do(call => Settings.GetPermissionSnoozeUntil().Returns(call.Arg<DateTimeOffset>()));
+		Settings.When(settings => settings.SavePermissionSnoozeUntilAsync(Arg.Any<DateTimeOffset>())).Do(call => Settings.GetPermissionSnoozeUntilAsync().Returns(call.Arg<DateTimeOffset>()));
 		var cut = Render<PermissionBanner>();
 		await cut.InvokeAsync(() => Resolve<LocationPermissionViewModel>().RefreshAsync());
 

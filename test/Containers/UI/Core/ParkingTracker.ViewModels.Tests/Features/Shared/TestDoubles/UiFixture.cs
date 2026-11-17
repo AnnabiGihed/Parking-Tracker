@@ -51,7 +51,7 @@ internal sealed class UiFixture : IDisposable
 		Clock = new FakeTimeProvider(Start);
 		Network.IsOnline.Returns(true);
 		Permissions.GetStatusAsync(Arg.Any<CancellationToken>()).Returns(new LocationPermissionStatus(PermissionState.Unknown, PermissionState.Unknown));
-		Settings.GetLayers().Returns(new LayerSettings());
+		Settings.GetLayersAsync().Returns(new LayerSettings());
 		configureSettings?.Invoke(Settings);
 		ReferenceData.GetReferenceData().Returns(Result.Success(Data()));
 		Toast = new ToastViewModel(Clock);

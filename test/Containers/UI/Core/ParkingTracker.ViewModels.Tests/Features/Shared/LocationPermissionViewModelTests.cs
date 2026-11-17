@@ -78,11 +78,11 @@ public sealed class LocationPermissionViewModelTests
 	{
 		using var ui = new UiFixture();
 		Allow(ui, PermissionState.Granted, PermissionState.Denied);
-		ui.Settings.When(settings => settings.SavePermissionSnoozeUntil(Arg.Any<DateTimeOffset>())).Do(call => ui.Settings.GetPermissionSnoozeUntil().Returns(call.Arg<DateTimeOffset>()));
+		ui.Settings.When(settings => settings.SavePermissionSnoozeUntilAsync(Arg.Any<DateTimeOffset>())).Do(call => ui.Settings.GetPermissionSnoozeUntilAsync().Returns(call.Arg<DateTimeOffset>()));
 
 		await ui.Permission.PostponeAsync();
 
-		ui.Settings.Received(1).SavePermissionSnoozeUntil(UiFixture.Start.AddDays(7));
+		_ = ui.Settings.Received(1).SavePermissionSnoozeUntilAsync(UiFixture.Start.AddDays(7));
 		ui.Permission.Banner.Should().Be(PermissionBannerKind.None);
 		ui.Clock.Advance(TimeSpan.FromDays(7));
 		await ui.Permission.RefreshAsync();

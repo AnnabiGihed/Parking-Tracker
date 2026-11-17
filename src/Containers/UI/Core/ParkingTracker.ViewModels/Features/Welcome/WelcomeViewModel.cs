@@ -58,7 +58,7 @@ public sealed class WelcomeViewModel : ViewModelBase
 	/// <returns>A task that completes when the permission state was read.</returns>
 	public async Task StartAsync(CancellationToken cancellationToken = default)
 	{
-		if (settings.GetCard() is not null || settings.GetWelcomeSeen())
+		if (await settings.GetCardAsync().ConfigureAwait(false) is not null || await settings.GetWelcomeSeenAsync().ConfigureAwait(false))
 		{
 			return;
 		}
@@ -81,18 +81,20 @@ public sealed class WelcomeViewModel : ViewModelBase
 	/// <summary>
 	/// Handles "Add my parking card": closes the dialog for good and asks for the card form.
 	/// </summary>
-	public void AddCard()
+	/// <returns>A task that completes when the dialog was closed.</returns>
+	public async Task AddCardAsync()
 	{
-		Close();
+		await CloseAsync().ConfigureAwait(false);
 		AddCardRequested?.Invoke(this, EventArgs.Empty);
 	}
 
 	/// <summary>
 	/// Closes the dialog and remembers that it was seen.
 	/// </summary>
-	public void Close()
+	/// <returns>A task that completes when it was remembered.</returns>
+	public async Task CloseAsync()
 	{
-		settings.SaveWelcomeSeen();
+		await settings.SaveWelcomeSeenAsync().ConfigureAwait(false);
 		IsOpen = false;
 		NotifyChanged();
 	}

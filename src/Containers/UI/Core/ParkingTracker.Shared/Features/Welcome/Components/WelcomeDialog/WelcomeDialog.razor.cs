@@ -32,7 +32,8 @@ public sealed partial class WelcomeDialog : ViewModelComponent<WelcomeViewModel>
 	/// <summary>
 	/// Handles "Add my parking card".
 	/// </summary>
-	private void OnAddCard() => ViewModel.AddCard();
+	/// <returns>A task that completes when the dialog was closed.</returns>
+	private Task OnAddCardAsync() => ViewModel.AddCardAsync();
 	#endregion
 
 	#region Private Helpers

@@ -96,7 +96,7 @@ public sealed class LocationPermissionViewModel : ViewModelBase
 	public async Task RefreshAsync(CancellationToken cancellationToken = default)
 	{
 		Status = await permissions.GetStatusAsync(cancellationToken).ConfigureAwait(false);
-		Banner = BannerFor(Status, settings.GetPermissionSnoozeUntil(), clock.GetUtcNow());
+		Banner = BannerFor(Status, await settings.GetPermissionSnoozeUntilAsync().ConfigureAwait(false), clock.GetUtcNow());
 		WelcomeMessage = WelcomeMessageFor(Status);
 		NotifyChanged();
 	}
@@ -141,10 +141,10 @@ public sealed class LocationPermissionViewModel : ViewModelBase
 	/// </summary>
 	/// <param name="cancellationToken">Cancels the request.</param>
 	/// <returns>A task that completes when the banner was updated.</returns>
-	public Task PostponeAsync(CancellationToken cancellationToken = default)
+	public async Task PostponeAsync(CancellationToken cancellationToken = default)
 	{
-		settings.SavePermissionSnoozeUntil(clock.GetUtcNow() + SnoozeDuration);
-		return RefreshAsync(cancellationToken);
+		await settings.SavePermissionSnoozeUntilAsync(clock.GetUtcNow() + SnoozeDuration).ConfigureAwait(false);
+		await RefreshAsync(cancellationToken).ConfigureAwait(false);
 	}
 	#endregion
 

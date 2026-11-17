@@ -26,45 +26,48 @@ public sealed class TestHookServiceTests
 	/// <summary>
 	/// Verifies that a card in the old JSON is saved through the settings store.
 	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
-	public void SetCard_OldJson_ShouldSaveTheParsedCard()
+	public async Task SetCard_OldJson_ShouldSaveTheParsedCard()
 	{
 		using var ui = new UiFixture();
 		var hooks = Create(ui);
 
-		hooks.SetCard("""{"number":"TEST","plate":"1TST000","sector":"louise","from":"2026-01-01","to":"2099-12-31","tolerances":[]}""");
+		await hooks.SetCardAsync("""{"number":"TEST","plate":"1TST000","sector":"louise","from":"2026-01-01","to":"2099-12-31","tolerances":[]}""");
 
-		ui.Settings.Received(1).SaveCard(Arg.Is<ParkingCard>(c => c.Municipality == "bruxelles" && c.Sector == "louise" && c.Number == "TEST"));
+		_ = ui.Settings.Received(1).SaveCardAsync(Arg.Is<ParkingCard>(c => c.Municipality == "bruxelles" && c.Sector == "louise" && c.Number == "TEST"));
 	}
 
 	/// <summary>
 	/// Verifies that text that is not a card is rejected, and that nothing is saved.
 	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
-	public void SetCard_NotACard_ShouldThrowAndSaveNothing()
+	public async Task SetCard_NotACard_ShouldThrowAndSaveNothing()
 	{
 		using var ui = new UiFixture();
 		var hooks = Create(ui);
 
-		var act = () => hooks.SetCard("nonsense");
+		var act = () => hooks.SetCardAsync("nonsense");
 
-		act.Should().Throw<ArgumentException>();
-		ui.Settings.DidNotReceive().SaveCard(Arg.Any<ParkingCard>());
+		await act.Should().ThrowAsync<ArgumentException>();
+		_ = ui.Settings.DidNotReceive().SaveCardAsync(Arg.Any<ParkingCard>());
 	}
 
 	/// <summary>
 	/// Verifies that the saved card is read back in the JSON of the first version, and that no card gives <see langword="null"/>.
 	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
-	public void GetCard_SavedCardOrNone_ShouldGiveJsonOrNull()
+	public async Task GetCard_SavedCardOrNone_ShouldGiveJsonOrNull()
 	{
 		using var ui = new UiFixture();
 		var hooks = Create(ui);
-		hooks.GetCard().Should().BeNull();
+		(await hooks.GetCardAsync()).Should().BeNull();
 
-		ui.Settings.GetCard().Returns(new ParkingCard("bruxelles", "louise", new CardPeriod(null, null), [], [], []));
+		ui.Settings.GetCardAsync().Returns(new ParkingCard("bruxelles", "louise", new CardPeriod(null, null), [], [], []));
 
-		hooks.GetCard().Should().Contain("\"municipality\":\"bruxelles\"").And.Contain("\"sector\":\"louise\"");
+		(await hooks.GetCardAsync()).Should().Contain("\"municipality\":\"bruxelles\"").And.Contain("\"sector\":\"louise\"");
 	}
 	#endregion
 
@@ -121,6 +124,22 @@ public sealed class TestHookServiceTests
 	}
 
 	/// <summary>
+	/// Verifies that a failed free-spot search is thrown with its message.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task FreeSpotsAsync_FailedQuery_ShouldThrowWithTheMessage()
+	{
+		using var ui = new UiFixture();
+		ui.Sender.Send(Arg.Any<FindFreeSpotsQuery>(), Arg.Any<CancellationToken>()).Returns(Result.Failure<IReadOnlyList<FreeSpot>>(new Error("Spots.Invalid", "no spots source")));
+		var hooks = Create(ui);
+
+		var act = () => hooks.FreeSpotsAsync(50.8, 4.3, 3);
+
+		await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("no spots source");
+	}
+
+	/// <summary>
 	/// Verifies that the official-list outcome is returned as a lower-case state, and as not checked when no check ran.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>
@@ -134,6 +153,22 @@ public sealed class TestHookServiceTests
 
 		ui.Sender.Send(Arg.Any<GetOfficialListStatusQuery>(), Arg.Any<CancellationToken>()).Returns(Result.Success(new GetOfficialListStatusResponse(null)));
 		(await hooks.OfficialListAsync()).Should().Be(new OfficialListAnswer("notchecked", null));
+	}
+
+	/// <summary>
+	/// Verifies that a failed official-list query is thrown with its message.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task OfficialListAsync_FailedQuery_ShouldThrowWithTheMessage()
+	{
+		using var ui = new UiFixture();
+		ui.Sender.Send(Arg.Any<GetOfficialListStatusQuery>(), Arg.Any<CancellationToken>()).Returns(Result.Failure<GetOfficialListStatusResponse>(new Error("List.Unavailable", "list not readable")));
+		var hooks = Create(ui);
+
+		var act = () => hooks.OfficialListAsync();
+
+		await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("list not readable");
 	}
 	#endregion
 
@@ -152,6 +187,29 @@ public sealed class TestHookServiceTests
 		var status = await hooks.PlatformStatusAsync();
 
 		status.Should().Be(new PlatformAnswer("granted", "denied", true));
+	}
+	#endregion
+
+	#region Guard Tests
+	/// <summary>
+	/// Verifies that a missing dependency is rejected when the hooks are built.
+	/// </summary>
+	[Fact]
+	public void Constructor_NullArguments_ShouldThrowArgumentNullException()
+	{
+		using var ui = new UiFixture();
+
+		var noSender = () => new TestHookService(null!, ui.Settings, ui.Card, ui.Permissions, ui.Network); // null on purpose: proves the guard clause rejects it
+		var noSettings = () => new TestHookService(ui.Sender, null!, ui.Card, ui.Permissions, ui.Network); // null on purpose: proves the guard clause rejects it
+		var noCard = () => new TestHookService(ui.Sender, ui.Settings, null!, ui.Permissions, ui.Network); // null on purpose: proves the guard clause rejects it
+		var noPermissions = () => new TestHookService(ui.Sender, ui.Settings, ui.Card, null!, ui.Network); // null on purpose: proves the guard clause rejects it
+		var noNetwork = () => new TestHookService(ui.Sender, ui.Settings, ui.Card, ui.Permissions, null!); // null on purpose: proves the guard clause rejects it
+
+		noSender.Should().Throw<ArgumentNullException>();
+		noSettings.Should().Throw<ArgumentNullException>();
+		noCard.Should().Throw<ArgumentNullException>();
+		noPermissions.Should().Throw<ArgumentNullException>();
+		noNetwork.Should().Throw<ArgumentNullException>();
 	}
 	#endregion
 

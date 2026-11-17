@@ -9,15 +9,17 @@ namespace ParkingTracker.ViewModels.Features.SpotCheck;
 /// </summary>
 public static class CoverageVibration
 {
-	#region Public Methods
+	#region Static Instances
 	/// <summary>
-	/// Gets the pattern for a change of coverage.
+	/// The pattern for a position that became covered by the card: two short pulses. Milliseconds that alternate between
+	/// vibrating and pausing, starting with vibrating.
 	/// </summary>
-	/// <param name="isCovered"><see langword="true"/> when the position is covered by the card now.</param>
-	/// <returns>Milliseconds that alternate between vibrating and pausing, starting with vibrating.</returns>
-	public static IReadOnlyList<int> PatternFor(bool isCovered)
-	{
-		return isCovered ? [80, 60, 80] : [300];
-	}
+	public static readonly IReadOnlyList<int> CoveredPattern = [80, 60, 80];
+
+	/// <summary>
+	/// The pattern for a position that became not covered: one long pulse. Milliseconds that alternate between vibrating and
+	/// pausing, starting with vibrating.
+	/// </summary>
+	public static readonly IReadOnlyList<int> NotCoveredPattern = [300];
 	#endregion
 }

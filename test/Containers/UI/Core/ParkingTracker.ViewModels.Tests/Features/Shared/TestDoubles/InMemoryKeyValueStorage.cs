@@ -23,16 +23,24 @@ internal sealed class InMemoryKeyValueStorage : IKeyValueStorage
 
 	#region IKeyValueStorage Implementation
 	/// <inheritdoc />
-	public string? Read(string key)
+	public Task<string?> ReadAsync(string key)
 	{
 		Reads++;
-		return Values.TryGetValue(key, out var value) ? value : null;
+		return Task.FromResult<string?>(Values.TryGetValue(key, out var value) ? value : null);
 	}
 
 	/// <inheritdoc />
-	public void Write(string key, string value) => Values[key] = value;
+	public Task WriteAsync(string key, string value)
+	{
+		Values[key] = value;
+		return Task.CompletedTask;
+	}
 
 	/// <inheritdoc />
-	public void Delete(string key) => Values.Remove(key);
+	public Task DeleteAsync(string key)
+	{
+		Values.Remove(key);
+		return Task.CompletedTask;
+	}
 	#endregion
 }

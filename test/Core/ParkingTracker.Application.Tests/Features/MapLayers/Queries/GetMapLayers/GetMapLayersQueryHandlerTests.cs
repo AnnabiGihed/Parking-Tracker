@@ -43,7 +43,7 @@ public sealed class GetMapLayersQueryHandlerTests
 		mobility.GetCarParksAsync(Arg.Any<GeoBox>(), Arg.Any<CancellationToken>()).Returns(Result.Success<IReadOnlyList<CarPark>>([]));
 		mobility.GetChargersAsync(Arg.Any<GeoBox>(), Arg.Any<CancellationToken>()).Returns(Result.Success<IReadOnlyList<ChargingPoint>>([]));
 		var settings = Substitute.For<ISettingsStore>();
-		settings.GetCard().Returns(card);
+		settings.GetCardAsync().Returns(card);
 		var data = Substitute.For<IReferenceData>();
 		data.GetReferenceData().Returns(Result.Success(new ReferenceDataSet([Ixelles], [], [])));
 		return new GetMapLayersQueryHandler(parking, mobility, settings, data, new FixedClock());

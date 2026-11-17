@@ -31,7 +31,11 @@ public sealed partial class CardDialog : ViewModelComponent<CardViewModel>
 	/// <summary>
 	/// Handles "Save card".
 	/// </summary>
-	private void OnSave() => ViewModel.Save();
+	/// <returns>A task that completes when the card was saved or the form was found incomplete.</returns>
+	private async Task OnSaveAsync()
+	{
+		await ViewModel.SaveAsync();
+	}
 
 	/// <summary>
 	/// Handles the close button.

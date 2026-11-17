@@ -44,7 +44,7 @@ public sealed class CarViewModel : ViewModelBase
 
 	#region Constructors
 	/// <summary>
-	/// Initializes a new instance of the <see cref="CarViewModel"/> class and reads the saved car.
+	/// Initializes a new instance of the <see cref="CarViewModel"/> class; the saved car is read by <see cref="LoadAsync"/>.
 	/// </summary>
 	/// <param name="settings">Keeps the car.</param>
 	/// <param name="launcher">Opens the walking directions.</param>
@@ -58,7 +58,6 @@ public sealed class CarViewModel : ViewModelBase
 		this.spot = spot;
 		this.toast = toast;
 		this.clock = clock;
-		Car = settings.GetCar();
 	}
 	#endregion
 
@@ -110,6 +109,16 @@ public sealed class CarViewModel : ViewModelBase
 
 	#region Public Methods
 	/// <summary>
+	/// Reads the saved car. Call it once when the screen starts.
+	/// </summary>
+	/// <returns>A task that completes when the car was read.</returns>
+	public async Task LoadAsync()
+	{
+		Car = await settings.GetCarAsync().ConfigureAwait(false);
+		NotifyChanged();
+	}
+
+	/// <summary>
 	/// Opens the dialog.
 	/// </summary>
 	public void Open()
@@ -130,8 +139,8 @@ public sealed class CarViewModel : ViewModelBase
 	/// <summary>
 	/// Saves the car at the position or pin that is on screen, together with the headline the app showed.
 	/// </summary>
-	/// <returns><see langword="true"/> when the car was saved; <see langword="false"/> when there is no position yet.</returns>
-	public bool SaveHere()
+	/// <returns>A task with <see langword="true"/> when the car was saved; <see langword="false"/> when there is no position yet.</returns>
+	public async Task<bool> SaveHereAsync()
 	{
 		if (spot.CurrentPosition is not { } at)
 		{
@@ -140,7 +149,7 @@ public sealed class CarViewModel : ViewModelBase
 		}
 
 		var car = new ParkedCar(at, clock.GetLocalNow(), spot.LastHeadline, string.Empty);
-		settings.SaveCar(car);
+		await settings.SaveCarAsync(car).ConfigureAwait(false);
 		Car = car;
 		NotifyChanged();
 		toast.Show("Car position saved");
@@ -150,9 +159,10 @@ public sealed class CarViewModel : ViewModelBase
 	/// <summary>
 	/// Handles "I parked here" in the status block: saves the car and opens the dialog.
 	/// </summary>
-	public void ParkHere()
+	/// <returns>A task that completes when the car was saved.</returns>
+	public async Task ParkHereAsync()
 	{
-		if (SaveHere())
+		if (await SaveHereAsync().ConfigureAwait(false))
 		{
 			Open();
 		}
@@ -185,9 +195,10 @@ public sealed class CarViewModel : ViewModelBase
 	/// <summary>
 	/// Forgets the saved car.
 	/// </summary>
-	public void Forget()
+	/// <returns>A task that completes when the car was forgotten.</returns>
+	public async Task ForgetAsync()
 	{
-		settings.ClearCar();
+		await settings.ClearCarAsync().ConfigureAwait(false);
 		Car = null;
 		NotifyChanged();
 	}

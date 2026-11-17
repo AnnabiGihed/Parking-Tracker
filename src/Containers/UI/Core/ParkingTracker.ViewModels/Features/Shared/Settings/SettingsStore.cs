@@ -27,19 +27,14 @@ public sealed class SettingsStore : ISettingsStore
 	private readonly IKeyValueStorage plain;
 
 	/// <summary>
-	/// Guards the cached card; the view models and the tracker read the card from different threads.
+	/// Guards <see cref="cardTask"/>; the view models and the tracker read the card from different threads.
 	/// </summary>
 	private readonly Lock gate = new();
 
 	/// <summary>
-	/// The card as last read or saved; only meaningful when <see cref="cardLoaded"/> is <see langword="true"/>.
+	/// The read or saved card, kept after the first read; <see langword="null"/> while nothing was read yet or after a failed read.
 	/// </summary>
-	private ParkingCard? cachedCard;
-
-	/// <summary>
-	/// Whether <see cref="cachedCard"/> holds what the storage holds.
-	/// </summary>
-	private bool cardLoaded;
+	private Task<ParkingCard?>? cardTask;
 	#endregion
 
 	#region Constructors
@@ -59,79 +54,102 @@ public sealed class SettingsStore : ISettingsStore
 
 	#region ISettingsStore Implementation
 	/// <inheritdoc />
-	public ParkingCard? GetCard()
+	public async Task<ParkingCard?> GetCardAsync()
 	{
+		Task<ParkingCard?> load;
 		lock (gate)
 		{
-			if (!cardLoaded)
+			load = cardTask ??= LoadCardAsync();
+		}
+
+		try
+		{
+			return await load.ConfigureAwait(false);
+		}
+		catch (Exception)
+		{
+			// A failed read must not be remembered: the next check reads again.
+			lock (gate)
 			{
-				cachedCard = SettingsJson.ParseCard(secure.Read(SettingsJson.CardKey));
-				cardLoaded = true;
+				if (ReferenceEquals(cardTask, load))
+				{
+					cardTask = null;
+				}
 			}
 
-			return cachedCard;
+			throw;
 		}
 	}
 
 	/// <inheritdoc />
-	public void SaveCard(ParkingCard card)
+	public async Task SaveCardAsync(ParkingCard card)
 	{
 		ArgumentNullException.ThrowIfNull(card);
 		var json = SettingsJson.SerializeCard(card);
+		await secure.WriteAsync(SettingsJson.CardKey, json).ConfigureAwait(false);
+
+		// Read back through the parser, so that the cache holds exactly what the next start would read.
+		var saved = SettingsJson.ParseCard(json);
 		lock (gate)
 		{
-			secure.Write(SettingsJson.CardKey, json);
-
-			// Read back through the parser, so that the cache holds exactly what the next start would read.
-			cachedCard = SettingsJson.ParseCard(json);
-			cardLoaded = true;
+			cardTask = Task.FromResult(saved);
 		}
 	}
 
 	/// <inheritdoc />
-	public void ClearCard()
+	public async Task ClearCardAsync()
 	{
+		await secure.DeleteAsync(SettingsJson.CardKey).ConfigureAwait(false);
 		lock (gate)
 		{
-			secure.Delete(SettingsJson.CardKey);
-			cachedCard = null;
-			cardLoaded = true;
+			cardTask = Task.FromResult<ParkingCard?>(null);
 		}
 	}
 
 	/// <inheritdoc />
-	public ParkedCar? GetCar() => SettingsJson.ParseCar(plain.Read(SettingsJson.CarKey));
+	public async Task<ParkedCar?> GetCarAsync() => SettingsJson.ParseCar(await plain.ReadAsync(SettingsJson.CarKey).ConfigureAwait(false));
 
 	/// <inheritdoc />
-	public void SaveCar(ParkedCar car)
+	public Task SaveCarAsync(ParkedCar car)
 	{
 		ArgumentNullException.ThrowIfNull(car);
-		plain.Write(SettingsJson.CarKey, SettingsJson.SerializeCar(car));
+		return plain.WriteAsync(SettingsJson.CarKey, SettingsJson.SerializeCar(car));
 	}
 
 	/// <inheritdoc />
-	public void ClearCar() => plain.Delete(SettingsJson.CarKey);
+	public Task ClearCarAsync() => plain.DeleteAsync(SettingsJson.CarKey);
 
 	/// <inheritdoc />
-	public LayerSettings GetLayers() => SettingsJson.ParseLayers(plain.Read(SettingsJson.LayersKey));
+	public async Task<LayerSettings> GetLayersAsync() => SettingsJson.ParseLayers(await plain.ReadAsync(SettingsJson.LayersKey).ConfigureAwait(false));
 
 	/// <inheritdoc />
-	public void SaveLayers(LayerSettings layers)
+	public Task SaveLayersAsync(LayerSettings layers)
 	{
 		ArgumentNullException.ThrowIfNull(layers);
-		plain.Write(SettingsJson.LayersKey, SettingsJson.SerializeLayers(layers));
+		return plain.WriteAsync(SettingsJson.LayersKey, SettingsJson.SerializeLayers(layers));
 	}
 
 	/// <inheritdoc />
-	public bool GetWelcomeSeen() => string.Equals(plain.Read(SettingsJson.WelcomeSeenKey), "true", StringComparison.Ordinal);
+	public async Task<bool> GetWelcomeSeenAsync() => string.Equals(await plain.ReadAsync(SettingsJson.WelcomeSeenKey).ConfigureAwait(false), "true", StringComparison.Ordinal);
 
 	/// <inheritdoc />
-	public void SaveWelcomeSeen() => plain.Write(SettingsJson.WelcomeSeenKey, "true");
+	public Task SaveWelcomeSeenAsync() => plain.WriteAsync(SettingsJson.WelcomeSeenKey, "true");
 
 	/// <inheritdoc />
-	public DateTimeOffset? GetPermissionSnoozeUntil() => SettingsJson.ParsePermissionSnooze(plain.Read(SettingsJson.PermissionSnoozeKey));
+	public async Task<DateTimeOffset?> GetPermissionSnoozeUntilAsync() => SettingsJson.ParsePermissionSnooze(await plain.ReadAsync(SettingsJson.PermissionSnoozeKey).ConfigureAwait(false));
 
 	/// <inheritdoc />
-	public void SavePermissionSnoozeUntil(DateTimeOffset until) => plain.Write(SettingsJson.PermissionSnoozeKey, SettingsJson.SerializePermissionSnooze(until));
+	public Task SavePermissionSnoozeUntilAsync(DateTimeOffset until) => plain.WriteAsync(SettingsJson.PermissionSnoozeKey, SettingsJson.SerializePermissionSnooze(until));
+	#endregion
+
+	#region Private Helpers
+	/// <summary>
+	/// Reads the card from the encrypted storage.
+	/// </summary>
+	/// <returns>A task with the card, or <see langword="null"/> when none is saved.</returns>
+	private async Task<ParkingCard?> LoadCardAsync()
+	{
+		return SettingsJson.ParseCard(await secure.ReadAsync(SettingsJson.CardKey).ConfigureAwait(false));
+	}
 	#endregion
 }

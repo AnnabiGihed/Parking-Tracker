@@ -47,7 +47,7 @@ public sealed class CardDialogTests : UiTestContext
 		await cut.Find("input[name=tol]").ChangeAsync(true);
 		await cut.Find("#cardForm").SubmitAsync();
 
-		Settings.Received(1).SaveCard(Arg.Is<ParkingCard>(card => string.Equals(card.Municipality, "bruxelles", StringComparison.Ordinal)
+		_ = Settings.Received(1).SaveCardAsync(Arg.Is<ParkingCard>(card => string.Equals(card.Municipality, "bruxelles", StringComparison.Ordinal)
 			&& string.Equals(card.Sector, "louise", StringComparison.Ordinal)
 			&& string.Equals(card.Plate, "1ABC234", StringComparison.Ordinal)
 			&& string.Equals(card.Number, "B000-000-001", StringComparison.Ordinal)
@@ -69,7 +69,7 @@ public sealed class CardDialogTests : UiTestContext
 		await cut.Find("#cardForm").SubmitAsync();
 
 		cut.Find("[role=alert]").TextContent.Should().Be("Enter the dates the card is valid from and until.");
-		Settings.DidNotReceiveWithAnyArgs().SaveCard(default!);
+		_ = Settings.DidNotReceiveWithAnyArgs().SaveCardAsync(default!);
 	}
 
 	/// <summary>
@@ -92,7 +92,7 @@ public sealed class CardDialogTests : UiTestContext
 		await cut.Find("#cardTo").ChangeAsync("2027-01-01");
 		await cut.Find("#cardForm").SubmitAsync();
 
-		Settings.Received(1).SaveCard(Arg.Is<ParkingCard>(card => string.Equals(card.Municipality, "ixelles", StringComparison.Ordinal)
+		_ = Settings.Received(1).SaveCardAsync(Arg.Is<ParkingCard>(card => string.Equals(card.Municipality, "ixelles", StringComparison.Ordinal)
 			&& card.Sector == null
 			&& card.Mailles.Count == 1 && string.Equals(card.Mailles[0], "IXLR_2", StringComparison.Ordinal)
 			&& card.Lims.Count == 1 && string.Equals(card.Lims[0], "LIM_X", StringComparison.Ordinal)));
@@ -137,9 +137,9 @@ public sealed class CardDialogTests : UiTestContext
 	[Fact]
 	public async Task CardLine_ExpiresSoon_ShouldWarnAndOpenTheRenewalEmail()
 	{
-		Settings.GetCard().Returns(new ParkingCard("bruxelles", "louise", new CardPeriod(new DateOnly(2026, 1, 1), new DateOnly(2026, 11, 27)), [], [], [], "B000-000-001", "1ABC234"));
+		Settings.GetCardAsync().Returns(new ParkingCard("bruxelles", "louise", new CardPeriod(new DateOnly(2026, 1, 1), new DateOnly(2026, 11, 27)), [], [], [], "B000-000-001", "1ABC234"));
 		var cut = Render<CardLine>();
-		await cut.InvokeAsync(() => Resolve<CardViewModel>().RefreshLine());
+		await cut.InvokeAsync(() => Resolve<CardViewModel>().RefreshLineAsync());
 
 		cut.Find(".warn").TextContent.Should().Contain("Expires in 10 day(s)");
 		await cut.Find(".warn a").ClickAsync();
@@ -157,8 +157,8 @@ public sealed class CardDialogTests : UiTestContext
 		var cut = Render<CardButton>();
 		cut.Find("#cardDot").ClassList.Should().Contain("none");
 
-		Settings.GetCard().Returns(new ParkingCard("bruxelles", "louise", new CardPeriod(null, new DateOnly(2027, 1, 1)), [], [], []));
-		await cut.InvokeAsync(() => Resolve<CardViewModel>().RefreshLine());
+		Settings.GetCardAsync().Returns(new ParkingCard("bruxelles", "louise", new CardPeriod(null, new DateOnly(2027, 1, 1)), [], [], []));
+		await cut.InvokeAsync(() => Resolve<CardViewModel>().RefreshLineAsync());
 
 		cut.Find("#cardDot").ClassList.Should().NotContain("none").And.NotContain("bad");
 	}

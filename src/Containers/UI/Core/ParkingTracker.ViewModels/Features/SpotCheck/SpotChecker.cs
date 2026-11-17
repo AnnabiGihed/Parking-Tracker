@@ -280,7 +280,7 @@ public sealed class SpotChecker : IDisposable
 			CoverageChanged?.Invoke(this, new ValueEventArgs<bool>(decision.Status == SpotStatus.Free));
 		}
 
-		card.RefreshLine();
+		await card.RefreshLineAsync().ConfigureAwait(false);
 		FollowUp(decision, point, source);
 	}
 

@@ -8,7 +8,7 @@ namespace ParkingTracker.App;
 /// Purpose     : The MAUI application: opens the one window with the page that hosts the Blazor screens and tells the rest of the app
 ///              when the user comes back to it, so that the location permission is read again after a visit to the settings.
 /// </summary>
-public sealed class App : Microsoft.Maui.Controls.Application
+public sealed class HostApplication : Microsoft.Maui.Controls.Application
 {
 	#region Fields
 	/// <summary>
@@ -19,10 +19,10 @@ public sealed class App : Microsoft.Maui.Controls.Application
 
 	#region Constructors
 	/// <summary>
-	/// Initializes a new instance of the <see cref="App"/> class.
+	/// Initializes a new instance of the <see cref="HostApplication"/> class.
 	/// </summary>
 	/// <param name="resumeNotifier">Passes the "app resumed" moment on to the screens.</param>
-	public App(AppResumeNotifier resumeNotifier)
+	public HostApplication(AppResumeNotifier resumeNotifier)
 	{
 		this.resumeNotifier = resumeNotifier;
 	}

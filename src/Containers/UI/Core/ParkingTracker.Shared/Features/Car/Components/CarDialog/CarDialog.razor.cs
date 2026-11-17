@@ -20,7 +20,11 @@ public sealed partial class CarDialog : ViewModelComponent<CarViewModel>
 	/// <summary>
 	/// Handles "My car is parked here" and "Car is here now".
 	/// </summary>
-	private void OnSaveHere() => ViewModel.SaveHere();
+	/// <returns>A task that completes when the car was saved or the missing position was reported.</returns>
+	private async Task OnSaveHereAsync()
+	{
+		await ViewModel.SaveHereAsync();
+	}
 
 	/// <summary>
 	/// Handles "Show on map".
@@ -30,7 +34,8 @@ public sealed partial class CarDialog : ViewModelComponent<CarViewModel>
 	/// <summary>
 	/// Handles "forget this spot".
 	/// </summary>
-	private void OnForget() => ViewModel.Forget();
+	/// <returns>A task that completes when the car was forgotten.</returns>
+	private Task OnForgetAsync() => ViewModel.ForgetAsync();
 
 	/// <summary>
 	/// Handles "Walk to my car".

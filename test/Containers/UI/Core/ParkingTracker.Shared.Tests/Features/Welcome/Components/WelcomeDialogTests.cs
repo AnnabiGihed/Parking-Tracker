@@ -72,7 +72,7 @@ public sealed class WelcomeDialogTests : UiTestContext
 
 		await cut.Find("#welcomeStart").ClickAsync();
 
-		Settings.Received(1).SaveWelcomeSeen();
+		_ = Settings.Received(1).SaveWelcomeSeenAsync();
 		cut.FindAll("#welcomeStart").Should().BeEmpty();
 		cardRequests.Should().Be(1);
 	}
@@ -84,7 +84,7 @@ public sealed class WelcomeDialogTests : UiTestContext
 	[Fact]
 	public async Task Render_AlreadySeen_ShouldStayClosed()
 	{
-		Settings.GetWelcomeSeen().Returns(true);
+		Settings.GetWelcomeSeenAsync().Returns(true);
 		var cut = Render<WelcomeDialog>();
 
 		await cut.InvokeAsync(() => Resolve<WelcomeViewModel>().StartAsync());

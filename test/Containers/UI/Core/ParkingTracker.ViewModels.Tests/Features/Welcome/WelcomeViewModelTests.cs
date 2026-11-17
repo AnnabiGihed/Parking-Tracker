@@ -38,9 +38,9 @@ public sealed class WelcomeViewModelTests
 	public async Task Start_CardOrSeen_ShouldStayClosed()
 	{
 		using var withCard = new UiFixture();
-		withCard.Settings.GetCard().Returns(new ParkingCard("bruxelles", "louise", new CardPeriod(null, null), [], [], []));
+		withCard.Settings.GetCardAsync().Returns(new ParkingCard("bruxelles", "louise", new CardPeriod(null, null), [], [], []));
 		using var seen = new UiFixture();
-		seen.Settings.GetWelcomeSeen().Returns(true);
+		seen.Settings.GetWelcomeSeenAsync().Returns(true);
 
 		await withCard.Welcome.StartAsync();
 		await seen.Welcome.StartAsync();
@@ -63,10 +63,10 @@ public sealed class WelcomeViewModelTests
 		var asked = false;
 		ui.Welcome.AddCardRequested += (_, _) => asked = true;
 
-		ui.Welcome.AddCard();
+		await ui.Welcome.AddCardAsync();
 
 		ui.Welcome.IsOpen.Should().BeFalse();
-		ui.Settings.Received(1).SaveWelcomeSeen();
+		_ = ui.Settings.Received(1).SaveWelcomeSeenAsync();
 		asked.Should().BeTrue();
 	}
 

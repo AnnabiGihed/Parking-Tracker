@@ -69,14 +69,7 @@ jobs:
           -o "$RUNNER_TEMP/publish-plain"
 
       - name: Keep the Release APK
-        run: |
-          mkdir -p "$RUNNER_TEMP/apk"
-          apk="$(find "$RUNNER_TEMP/publish-plain" -name '*-Signed.apk' | head -n 1)"
-          if [ -z "$apk" ]; then
-            echo "::error::No signed APK found after the Release publish."
-            exit 1
-          fi
-          cp "$apk" "$RUNNER_TEMP/apk/ParkingTracker.apk"
+        run: bash test/ParkingTracker.E2E.Tests/collect-apk.sh "$RUNNER_TEMP/publish-plain" "$RUNNER_TEMP/apk/ParkingTracker.apk"
 
       # The test-hooks build changes a compile constant, so start from clean intermediate output of the host.
       - name: Publish the test-hooks APK (same Release code plus window.ptTest)
@@ -85,12 +78,7 @@ jobs:
           dotnet publish "$APP_PROJECT" -f net10.0-android -c Release --no-restore \
             -p:EnableTestHooks=true -p:ApplicationVersion="$VERSION_CODE" -p:ApplicationDisplayVersion="1.0.$VERSION_CODE" \
             -o "$RUNNER_TEMP/publish-hooks"
-          apk="$(find "$RUNNER_TEMP/publish-hooks" -name '*-Signed.apk' | head -n 1)"
-          if [ -z "$apk" ]; then
-            echo "::error::No signed APK found after the test-hooks publish."
-            exit 1
-          fi
-          cp "$apk" "$RUNNER_TEMP/apk/ParkingTracker-test.apk"
+          bash test/ParkingTracker.E2E.Tests/collect-apk.sh "$RUNNER_TEMP/publish-hooks" "$RUNNER_TEMP/apk/ParkingTracker-test.apk"
 
       - name: Upload the APKs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -105,6 +93,8 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    permissions:
+      contents: read
     steps:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -34,7 +34,8 @@ public sealed partial class StatusBlock : ViewModelComponent<SpotCheckViewModel>
 	/// <summary>
 	/// Handles "I parked here": saves the car and opens its dialog.
 	/// </summary>
-	private void OnParkedHere() => Car.ParkHere();
+	/// <returns>A task that completes when the car was saved.</returns>
+	private Task OnParkedHereAsync() => Car.ParkHereAsync();
 
 	/// <summary>
 	/// Handles a payment application button.

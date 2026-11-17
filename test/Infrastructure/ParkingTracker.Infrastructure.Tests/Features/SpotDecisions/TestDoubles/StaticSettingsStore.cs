@@ -32,39 +32,39 @@ public sealed class StaticSettingsStore : ISettingsStore
 
 	#region ISettingsStore Implementation
 	/// <inheritdoc />
-	public ParkingCard? GetCard() => card;
+	public Task<ParkingCard?> GetCardAsync() => Task.FromResult(card);
 
 	/// <inheritdoc />
-	public void SaveCard(ParkingCard card) => throw new NotSupportedException("This store is read-only.");
+	public Task SaveCardAsync(ParkingCard card) => throw new NotSupportedException("This store is read-only.");
 
 	/// <inheritdoc />
-	public void ClearCard() => throw new NotSupportedException("This store is read-only.");
+	public Task ClearCardAsync() => throw new NotSupportedException("This store is read-only.");
 
 	/// <inheritdoc />
-	public ParkedCar? GetCar() => null;
+	public Task<ParkedCar?> GetCarAsync() => Task.FromResult<ParkedCar?>(null);
 
 	/// <inheritdoc />
-	public void SaveCar(ParkedCar car) => throw new NotSupportedException("This store is read-only.");
+	public Task SaveCarAsync(ParkedCar car) => throw new NotSupportedException("This store is read-only.");
 
 	/// <inheritdoc />
-	public void ClearCar() => throw new NotSupportedException("This store is read-only.");
+	public Task ClearCarAsync() => throw new NotSupportedException("This store is read-only.");
 
 	/// <inheritdoc />
-	public LayerSettings GetLayers() => new();
+	public Task<LayerSettings> GetLayersAsync() => Task.FromResult(new LayerSettings());
 
 	/// <inheritdoc />
-	public void SaveLayers(LayerSettings layers) => throw new NotSupportedException("This store is read-only.");
+	public Task SaveLayersAsync(LayerSettings layers) => throw new NotSupportedException("This store is read-only.");
 
 	/// <inheritdoc />
-	public bool GetWelcomeSeen() => true;
+	public Task<bool> GetWelcomeSeenAsync() => Task.FromResult(true);
 
 	/// <inheritdoc />
-	public void SaveWelcomeSeen() => throw new NotSupportedException("This store is read-only.");
+	public Task SaveWelcomeSeenAsync() => throw new NotSupportedException("This store is read-only.");
 
 	/// <inheritdoc />
-	public DateTimeOffset? GetPermissionSnoozeUntil() => null;
+	public Task<DateTimeOffset?> GetPermissionSnoozeUntilAsync() => Task.FromResult<DateTimeOffset?>(null);
 
 	/// <inheritdoc />
-	public void SavePermissionSnoozeUntil(DateTimeOffset until) => throw new NotSupportedException("This store is read-only.");
+	public Task SavePermissionSnoozeUntilAsync(DateTimeOffset until) => throw new NotSupportedException("This store is read-only.");
 	#endregion
 }

@@ -36,7 +36,7 @@
         <div class="actions">
             @if (status.ShowParkedHere)
             {
-                <button type="button" class="btn btn-primary btn-sm" @onclick="OnParkedHere"><Icon Name="car" />I parked here</button>
+                <button type="button" class="btn btn-primary btn-sm" @onclick="OnParkedHereAsync"><Icon Name="car" />I parked here</button>
             }
             @if (status.ShowPayApps)
             {

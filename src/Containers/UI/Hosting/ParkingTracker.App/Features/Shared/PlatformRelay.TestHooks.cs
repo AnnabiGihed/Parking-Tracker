@@ -36,6 +36,14 @@ public sealed partial class PlatformRelay
 	public TestHookService Hooks { get; set; } = null!;
 	#endregion
 
+	#region Lifecycle Methods
+	/// <inheritdoc />
+	protected override Task OnAfterRenderAsync(bool firstRender)
+	{
+		return firstRender ? RegisterTestHooksAsync() : Task.CompletedTask;
+	}
+	#endregion
+
 	#region Private Helpers
 	/// <summary>
 	/// Defines <c>window.ptTest</c> and hands it the bridge.

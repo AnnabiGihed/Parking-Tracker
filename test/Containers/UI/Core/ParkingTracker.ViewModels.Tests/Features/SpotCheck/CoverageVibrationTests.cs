@@ -14,18 +14,18 @@ public sealed class CoverageVibrationTests
 	/// Verifies that a position that became covered gives two short pulses.
 	/// </summary>
 	[Fact]
-	public void PatternFor_Covered_ShouldBeTwoShortPulses()
+	public void CoveredPattern_ShouldBeTwoShortPulses()
 	{
-		CoverageVibration.PatternFor(true).Should().Equal(80, 60, 80);
+		CoverageVibration.CoveredPattern.Should().Equal(80, 60, 80);
 	}
 
 	/// <summary>
 	/// Verifies that a position that became not covered gives one long pulse.
 	/// </summary>
 	[Fact]
-	public void PatternFor_NotCovered_ShouldBeOneLongPulse()
+	public void NotCoveredPattern_ShouldBeOneLongPulse()
 	{
-		CoverageVibration.PatternFor(false).Should().Equal(300);
+		CoverageVibration.NotCoveredPattern.Should().Equal(300);
 	}
 	#endregion
 }

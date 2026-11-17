@@ -56,8 +56,14 @@ public sealed class TestHookService
 	/// <param name="card">The card view model, whose line is shown again after the card changed.</param>
 	/// <param name="permissions">The location permissions of the device.</param>
 	/// <param name="network">The connection status of the device.</param>
+	/// <exception cref="ArgumentNullException">Thrown when an argument is <see langword="null"/>.</exception>
 	public TestHookService(ISender sender, ISettingsStore settings, CardViewModel card, ILocationPermissions permissions, INetworkStatus network)
 	{
+		ArgumentNullException.ThrowIfNull(sender);
+		ArgumentNullException.ThrowIfNull(settings);
+		ArgumentNullException.ThrowIfNull(card);
+		ArgumentNullException.ThrowIfNull(permissions);
+		ArgumentNullException.ThrowIfNull(network);
 		this.sender = sender;
 		this.settings = settings;
 		this.card = card;
@@ -71,21 +77,22 @@ public sealed class TestHookService
 	/// Saves a card given in the JSON of <c>pt.card</c> and refreshes the card line of the screen.
 	/// </summary>
 	/// <param name="json">The card as the first version of the app wrote it.</param>
+	/// <returns>A task that completes when the card is saved and the line is shown again.</returns>
 	/// <exception cref="ArgumentException">Thrown when <paramref name="json"/> is not a card.</exception>
-	public void SetCard(string json)
+	public async Task SetCardAsync(string json)
 	{
 		var parsed = SettingsJson.ParseCard(json) ?? throw new ArgumentException("The text is not a card.", nameof(json));
-		settings.SaveCard(parsed);
-		card.RefreshLine();
+		await settings.SaveCardAsync(parsed).ConfigureAwait(false);
+		await card.RefreshLineAsync().ConfigureAwait(false);
 	}
 
 	/// <summary>
 	/// Reads the saved card back in the JSON of <c>pt.card</c>.
 	/// </summary>
-	/// <returns>The JSON, or <see langword="null"/> when no card is saved.</returns>
-	public string? GetCard()
+	/// <returns>A task with the JSON, or <see langword="null"/> when no card is saved.</returns>
+	public async Task<string?> GetCardAsync()
 	{
-		return settings.GetCard() is { } saved ? SettingsJson.SerializeCard(saved) : null;
+		return await settings.GetCardAsync().ConfigureAwait(false) is { } saved ? SettingsJson.SerializeCard(saved) : null;
 	}
 
 	/// <summary>

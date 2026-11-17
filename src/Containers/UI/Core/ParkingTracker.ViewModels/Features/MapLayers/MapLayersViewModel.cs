@@ -93,7 +93,7 @@ public sealed class MapLayersViewModel : ViewModelBase, IDisposable
 
 	#region Constructors
 	/// <summary>
-	/// Initializes a new instance of the <see cref="MapLayersViewModel"/> class and reads the saved switches.
+	/// Initializes a new instance of the <see cref="MapLayersViewModel"/> class; the saved switches are read by <see cref="LoadSwitchesAsync"/>.
 	/// </summary>
 	/// <param name="sender">Sends queries to the Application.</param>
 	/// <param name="settings">Keeps the switches.</param>
@@ -107,7 +107,6 @@ public sealed class MapLayersViewModel : ViewModelBase, IDisposable
 		this.network = network;
 		this.launcher = launcher;
 		this.clock = clock;
-		Switches = settings.GetLayers();
 	}
 	#endregion
 
@@ -115,7 +114,7 @@ public sealed class MapLayersViewModel : ViewModelBase, IDisposable
 	/// <summary>
 	/// Gets the switches of the layers popover.
 	/// </summary>
-	public LayerSettings Switches { get; private set; }
+	public LayerSettings Switches { get; private set; } = new();
 
 	/// <summary>
 	/// Gets a value indicating whether the official zone colours are shown as one image under the other layers.
@@ -136,6 +135,16 @@ public sealed class MapLayersViewModel : ViewModelBase, IDisposable
 	#endregion
 
 	#region Public Methods
+	/// <summary>
+	/// Reads the saved switches. Call it once when the screen starts.
+	/// </summary>
+	/// <returns>A task that completes when the switches were read.</returns>
+	public async Task LoadSwitchesAsync()
+	{
+		Switches = await settings.GetLayersAsync().ConfigureAwait(false);
+		NotifyChanged();
+	}
+
 	/// <summary>
 	/// Starts the timer that keeps the layers fresh. Call it once when the screen is ready.
 	/// </summary>
@@ -162,7 +171,7 @@ public sealed class MapLayersViewModel : ViewModelBase, IDisposable
 	/// <param name="layer">The name of the layer: <c>streets</c>, <c>spaces</c>, <c>works</c>, <c>carparks</c> or <c>chargers</c>.</param>
 	/// <param name="isOn">Whether the switch is on.</param>
 	/// <returns>A task that completes when the layers were loaded.</returns>
-	public Task SetLayerAsync(string layer, bool isOn)
+	public async Task SetLayerAsync(string layer, bool isOn)
 	{
 		Switches = layer switch
 		{
@@ -173,9 +182,9 @@ public sealed class MapLayersViewModel : ViewModelBase, IDisposable
 			"chargers" => Switches with { Chargers = isOn },
 			_ => Switches,
 		};
-		settings.SaveLayers(Switches);
+		await settings.SaveLayersAsync(Switches).ConfigureAwait(false);
 		NotifyChanged();
-		return RefreshAsync();
+		await RefreshAsync().ConfigureAwait(false);
 	}
 
 	/// <summary>
@@ -184,7 +193,7 @@ public sealed class MapLayersViewModel : ViewModelBase, IDisposable
 	/// <returns>A task that completes when the layers were handed to the screen.</returns>
 	public async Task RefreshAsync()
 	{
-		if (settings.GetCard() is null || view is not var (bounds, zoom))
+		if (await settings.GetCardAsync().ConfigureAwait(false) is null || view is not var (bounds, zoom))
 		{
 			return;
 		}

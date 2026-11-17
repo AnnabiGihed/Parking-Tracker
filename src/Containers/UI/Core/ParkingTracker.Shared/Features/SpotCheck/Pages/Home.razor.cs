@@ -112,6 +112,14 @@ public sealed partial class Home : ComponentBase, IDisposable
 
 	#region Lifecycle Methods
 	/// <inheritdoc />
+	protected override async Task OnInitializedAsync()
+	{
+		await Card.RefreshLineAsync();
+		await Car.LoadAsync();
+		await Layers.LoadSwitchesAsync();
+	}
+
+	/// <inheritdoc />
 	protected override void OnInitialized()
 	{
 		Spot.Changed += OnStateChanged;

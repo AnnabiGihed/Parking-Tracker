@@ -19,13 +19,13 @@
                 <button type="button" class="btn btn-primary btn-block" @onclick="OnWalkAsync"><Icon Name="walk" />Walk to my car</button>
                 <div class="grid2">
                     <button type="button" class="btn" id="carShow" @onclick="OnShow"><Icon Name="pin" />Show on map</button>
-                    <button type="button" class="btn" id="carHere" @onclick="OnSaveHere"><Icon Name="locate" />Car is here now</button>
+                    <button type="button" class="btn" id="carHere" @onclick="OnSaveHereAsync"><Icon Name="locate" />Car is here now</button>
                 </div>
-                <button type="button" class="btn btn-ghost btn-block" id="carClear" @onclick="OnForget">I left — forget this spot</button>
+                <button type="button" class="btn btn-ghost btn-block" id="carClear" @onclick="OnForgetAsync">I left — forget this spot</button>
             }
             else
             {
-                <button type="button" id="carHere" class="btn btn-primary btn-block" @onclick="OnSaveHere"><Icon Name="car" />My car is parked here</button>
+                <button type="button" id="carHere" class="btn btn-primary btn-block" @onclick="OnSaveHereAsync"><Icon Name="car" />My car is parked here</button>
             }
         </div>
     </div>

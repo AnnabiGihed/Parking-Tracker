@@ -7,7 +7,7 @@
 // The test APK is the Release build made with -p:EnableTestHooks=true: its web view can be inspected through the Chrome
 // DevTools Protocol, and window.ptTest (setCard, getCard, decide, freeSpots, officialList, platformStatus) calls the
 // app's own C# code. See docs/architecture.md section 6.3.
-import { execSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -28,9 +28,10 @@ if (!APK) {
 
 mkdirSync(OUT, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const adb = (args, opts = {}) => execSync(`adb ${args}`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim();
+// Arguments go to adb as an array, never through a shell, so that nothing taken from argv is interpreted as shell syntax.
+const adb = (args, opts = {}) => execFileSync('adb', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim();
 const tryAdb = (args) => { try { return adb(args); } catch (e) { return `ERR ${e.message.split('\n')[0]}`; } };
-const geo = (p) => tryAdb(`emu geo fix ${p.lon} ${p.lat}`); // longitude first
+const geo = (p) => tryAdb(['emu', 'geo', 'fix', String(p.lon), String(p.lat)]); // longitude first
 const screenshot = (name) => {
   const r = spawnSync('adb', ['exec-out', 'screencap', '-p'], { maxBuffer: 50 * 1024 * 1024 });
   if (r.status === 0) writeFileSync(join(OUT, `screenshot-${name}.png`), r.stdout);
@@ -44,12 +45,12 @@ const check = (name, ok, detail) => { checks.push({ name, ok: !!ok, detail }); c
 // ---------- Chrome DevTools Protocol client (Node 22 has a global WebSocket) ----------
 async function connectWebView() {
   for (let i = 0; i < 60; i++) {
-    const pid = tryAdb(`shell pidof ${PKG}`);
-    const sockets = tryAdb('shell cat /proc/net/unix');
+    const pid = tryAdb(['shell', 'pidof', PKG]);
+    const sockets = tryAdb(['shell', 'cat', '/proc/net/unix']);
     const m = sockets.match(new RegExp(`@?(webview_devtools_remote_${pid.split(/\s+/)[0]})`));
     if (m) {
-      tryAdb('forward --remove-all');
-      adb(`forward tcp:9222 localabstract:${m[1]}`);
+      tryAdb(['forward', '--remove-all']);
+      adb(['forward', 'tcp:9222', `localabstract:${m[1]}`]);
       try {
         const pages = await (await fetch('http://127.0.0.1:9222/json')).json();
         const page = pages.find((p) => p.type === 'page' && p.webSocketDebuggerUrl);
@@ -98,21 +99,21 @@ const blazorErrorUiHidden = `(() => { const e = document.querySelector('#blazor-
 // ---------- the test ----------
 async function main() {
   const report = { device: {}, checks, scenarios: {}, logs };
-  report.device.android = tryAdb('shell getprop ro.build.version.release');
-  report.device.webview = tryAdb('shell dumpsys package com.google.android.webview').match(/versionName=(\S+)/)?.[1] || 'unknown';
+  report.device.android = tryAdb(['shell', 'getprop', 'ro.build.version.release']);
+  report.device.webview = tryAdb(['shell', 'dumpsys', 'package', 'com.google.android.webview']).match(/versionName=(\S+)/)?.[1] || 'unknown';
 
   stepTo('install');
   // Install and grant what a user grants on first launch ("Allow all the time").
-  console.log(adb(`install -r -g "${APK}"`));
-  for (const p of ['ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION', 'ACCESS_BACKGROUND_LOCATION']) tryAdb(`shell pm grant ${PKG} android.permission.${p}`);
-  tryAdb('shell settings put secure location_mode 3');
+  console.log(adb(['install', '-r', '-g', APK]));
+  for (const p of ['ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION', 'ACCESS_BACKGROUND_LOCATION']) tryAdb(['shell', 'pm', 'grant', PKG, `android.permission.${p}`]);
+  tryAdb(['shell', 'settings', 'put', 'secure', 'location_mode', '3']);
   geo(HOME);
-  tryAdb('logcat -c');
+  tryAdb(['logcat', '-c']);
 
   stepTo('launch');
-  tryAdb(`shell am start -n ${ACTIVITY}`);
+  tryAdb(['shell', 'am', 'start', '-n', ACTIVITY]);
   await sleep(8000);
-  report.aliveAfterLaunch = tryAdb(`shell pidof ${PKG}`);
+  report.aliveAfterLaunch = tryAdb(['shell', 'pidof', PKG]);
   stepTo('connect to WebView');
   await cdp();
   stepTo('wait for the app');
@@ -171,15 +172,15 @@ async function main() {
 
 let report, fatal = null;
 try { report = await main(); } catch (e) {
-  fatal = e; report = { checks, logs, fatal: e.message, failedStep: step, appRunning: tryAdb(`shell pidof ${PKG}`) || 'NOT RUNNING' };
+  fatal = e; report = { checks, logs, fatal: e.message, failedStep: step, appRunning: tryAdb(['shell', 'pidof', PKG]) || 'NOT RUNNING' };
   check(`Test ran to the end (failed at: ${step}; app process: ${report.appRunning})`, false, e.message); screenshot('failure');
 }
 // Always keep Android's log: app output, crashes (AndroidRuntime) and .NET messages.
-const logcat = tryAdb('logcat -d -v time');
+const logcat = tryAdb(['logcat', '-d', '-v', 'time']);
 writeFileSync(join(OUT, 'logcat.txt'), logcat);
 const dotnetFailures = logcat.split(/\r?\n/).filter((l) => DOTNET_FAILURE.test(l));
 check('No unhandled .NET exception in logcat', dotnetFailures.length === 0, dotnetFailures.slice(0, 2).join(' | '));
-const crash = tryAdb('logcat -d -b crash -v time');
+const crash = tryAdb(['logcat', '-d', '-b', 'crash', '-v', 'time']);
 writeFileSync(join(OUT, 'crash.txt'), crash);
 if (/FATAL EXCEPTION/.test(crash)) {
   const lines = crash.split(/\r?\n/);
