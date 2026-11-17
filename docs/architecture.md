@@ -758,12 +758,14 @@ separate pull requests into `chore/maui-migration` (or separate reviewed commits
    the branch. Done when the emulator test's answer and screen checks pass on the new app.
 6. **Platform services, OCR, migration.** ADR-0002, ADR-0003, ADR-0004, ADR-0008. Stage 6a (parking alerts,
    notifications and timer; done, proven by CI): the foreground service, `INotifier`,
-   `IAlarmScheduler`, the boot receiver, the car dialog switch and timer, and the emulator checks above. Stage 6b (card photo scan; done; proven by CI and on the owner's phone): `ICardTextReader`, `CardTextParser`,
-   `MlKitCardTextReader` and the scan button of the card dialog. Stage 6c (migration of saved data; written, to be
-   proven by the first CI run of the upgrade job): `LegacyDataMigration`, the LevelDB parser and the hidden web view
+   `IAlarmScheduler`, the boot receiver, the car dialog switch and timer, and the emulator checks above. Stage 6b
+   (card photo scan; done, the parser proven by CI): `ICardTextReader`, `CardTextParser`, `MlKitCardTextReader` and
+   the scan button of the card dialog. Stage 6c (migration of saved data; done, proven by the upgrade job and the
+   owner's phone): `LegacyDataMigration`, the LevelDB parser and the hidden web view
    fallback (ADR-0008), the start-up gate and the upgrade job and script of section 6.3. Done when the emulator test's
    background parking alert and timer checks pass and the upgrade test shows the card kept.
-7. **CI and cut-over** (done: the branch run is green and on 2026-11-17 the owner installed the APK over v1.0.11 on the phone with the card kept). Final `android.yml` (version and
+7. **CI and cut-over** (done: the branch run is green, and on 2026-11-17 the owner installed the APK over v1.0.11
+   on the phone with the card kept). Final `android.yml` (version and
    certificate guards, test-hooks build, release on `main` only) replaces `maui-android.yml`; deleted: `android/`,
    `capacitor.config.json`, `package.json`, `package-lock.json`, `sw.js`, `manifest.webmanifest`, `index.html`,
    `style.css`, the root JavaScript and icon files, `tools/dev-server.mjs`, `tools/build-web.mjs`,
