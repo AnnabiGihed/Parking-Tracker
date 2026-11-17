@@ -41,14 +41,14 @@ public sealed partial class BootReceiver : BroadcastReceiver
 	{
 		var action = intent?.Action;
 		var services = IPlatformApplication.Current?.Services;
-		if (services is null || (action != Intent.ActionBootCompleted && action != ExactAlarmPermissionChangedAction))
+		if (services is null || (!IsBoot(action) && !string.Equals(action, ExactAlarmPermissionChangedAction, StringComparison.Ordinal)))
 		{
 			return;
 		}
 
 		// The work is asynchronous, so the system is asked to keep the process until it has finished.
 		var pending = GoAsync();
-		_ = RestoreAsync(services, action == Intent.ActionBootCompleted, pending);
+		_ = RestoreAsync(services, action, pending);
 	}
 	#endregion
 
@@ -58,15 +58,15 @@ public sealed partial class BootReceiver : BroadcastReceiver
 	/// logged; the broadcast is always finished.
 	/// </summary>
 	/// <param name="services">The root provider of the app.</param>
-	/// <param name="afterBoot">Whether the phone has just started, in which case the alert service is started too.</param>
+	/// <param name="action">The broadcast received; after a boot the alert service is started too.</param>
 	/// <param name="pending">The handle that keeps the process alive; finished at the end.</param>
 	/// <returns>A task that completes when the work ended.</returns>
-	private static async Task RestoreAsync(IServiceProvider services, bool afterBoot, PendingResult? pending)
+	private static async Task RestoreAsync(IServiceProvider services, string? action, PendingResult? pending)
 	{
 		try
 		{
 			await services.GetRequiredService<TimerRestorer>().RestoreAsync().ConfigureAwait(false);
-			if (afterBoot)
+			if (IsBoot(action))
 			{
 				await services.GetRequiredService<IParkingAlertCoordinator>().ApplyAsync().ConfigureAwait(false);
 			}
@@ -80,6 +80,13 @@ public sealed partial class BootReceiver : BroadcastReceiver
 			pending?.Finish();
 		}
 	}
+
+	/// <summary>
+	/// Tells whether a broadcast is the end of the phone's start-up.
+	/// </summary>
+	/// <param name="action">The action of the broadcast.</param>
+	/// <returns><see langword="true"/> for <see cref="Intent.ActionBootCompleted"/>.</returns>
+	private static bool IsBoot(string? action) => string.Equals(action, Intent.ActionBootCompleted, StringComparison.Ordinal);
 	#endregion
 
 	#region Logging
