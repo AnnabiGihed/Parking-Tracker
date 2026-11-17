@@ -38,6 +38,9 @@
 
   <ItemGroup Label="Runtime (IHttpClientFactory for the live source clients)">
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Debug" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.Maui.Controls" Version="10.0.130" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="10.0.130" />
   </ItemGroup>
 
 </Project>

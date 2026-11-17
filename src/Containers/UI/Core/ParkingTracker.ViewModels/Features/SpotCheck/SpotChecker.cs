@@ -205,6 +205,14 @@ public sealed class SpotChecker : IDisposable
 	}
 	#endregion
 
+	#region Events
+	/// <summary>
+	/// Occurs, after the toast, when the answer about the user's own position changed from not covered to covered or back; the flag is
+	/// <see langword="true"/> when the position is covered now. The host vibrates on it, as the first version of the app did.
+	/// </summary>
+	public event EventHandler<ValueEventArgs<bool>>? CoverageChanged;
+	#endregion
+
 	#region Public Methods
 	/// <summary>
 	/// Forgets the last check and the last announced status, which starts a fresh follow of the user.
@@ -269,6 +277,7 @@ public sealed class SpotChecker : IDisposable
 		if (announcement is not null)
 		{
 			toast.Show(announcement);
+			CoverageChanged?.Invoke(this, new ValueEventArgs<bool>(decision.Status == SpotStatus.Free));
 		}
 
 		card.RefreshLine();

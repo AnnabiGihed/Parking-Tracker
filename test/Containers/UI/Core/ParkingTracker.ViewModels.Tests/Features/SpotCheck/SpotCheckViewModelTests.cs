@@ -506,6 +506,29 @@ public sealed class SpotCheckViewModelTests
 	}
 
 	/// <summary>
+	/// Verifies that the change from covered to not covered raises <c>CoverageChanged</c> with <see langword="false"/>, and that the first
+	/// answer raises nothing, so that the host vibrates only on a real change.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Check_StatusChangesWhileFollowing_ShouldRaiseCoverageChanged()
+	{
+		using var ui = new UiFixture();
+		ui.AnswerSearches();
+		ui.AnswerChecks(UiFixture.InZone(Verdict.Free));
+		var changes = new List<bool>();
+		ui.Spot.CoverageChanged += (_, e) => changes.Add(e.Value);
+		await ui.Spot.StartTrackingAsync();
+		ui.RaiseFix(ui.FixNow());
+		changes.Should().BeEmpty();
+
+		ui.AnswerChecks(UiFixture.InZone(Verdict.Pay));
+		ui.RaiseFix(ui.FixNow(new GeoPoint(UiFixture.Here.Latitude + 0.0003, UiFixture.Here.Longitude)));
+
+		changes.Should().Equal(false);
+	}
+
+	/// <summary>
 	/// Verifies that "Find free parking" without any position asks the user to tap the map and starts following.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>

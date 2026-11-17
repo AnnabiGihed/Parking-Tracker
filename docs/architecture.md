@@ -237,7 +237,7 @@ Solution layout (the Pivot.Framework canonical layout, adapted to a mobile clien
 with `Features/Shared/` for what several features use); the test tree mirrors `src/`:
 
 ```text
-ParkingTracker.slnx
+ParkingTracker.slnx                everything that builds on any PC (the host is not in it)
 global.json                 SDK 10.0.4xx, rollForward latestFeature
 Directory.Build.props       net10.0, nullable, implicit usings, analyzers, StyleCop settings, XML docs
 stylecop.json               documentation and using placement rules
@@ -262,7 +262,8 @@ src/
                                    wwwroot/{css,js,lib/leaflet}
         ParkingTracker.ViewModels  Features/{SpotCheck,Card,Car,MapLayers,Welcome,Shared}: view models and the pure UI rules
       Hosting/
-        ParkingTracker.App         planned: thin .NET MAUI Blazor Hybrid host (net10.0-android)
+        ParkingTracker.App         thin .NET MAUI Blazor Hybrid host (net10.0-android only): MauiProgram, AppServiceInstaller,
+                                   Features/{Shared,SpotDecisions} (device ports), Platforms/Android, wwwroot/index.html
 test/
   Containers/
     UI/
@@ -274,7 +275,7 @@ test/
     ParkingTracker.Application.Tests
   Infrastructure/
     ParkingTracker.Infrastructure.Tests   Features/SpotDecisions/Parity holds the parity tests
-  ParkingTracker.E2E.Tests         planned: the Android emulator test
+  ParkingTracker.E2E.Tests         Node project: the Android emulator test (emulator-test.mjs)
   fixtures/                        recorded live responses and expected answers
 tools/                      Python data tools, emulator test, parity recorder
 ```
@@ -293,6 +294,15 @@ with the `read:packages` scope, for example the output of `gh auth token`). `nug
 and never stores them. Then build and test everything with `python .agent-kit/verify.py`.
 The workflow `.github/workflows/dotnet.yml` does the same in CI: restore with the two variables filled from the
 workflow actor and token, `dotnet format --verify-no-changes`, a Release build and the tests.
+
+The host `src/Containers/UI/Hosting/ParkingTracker.App` builds only where the `maui-android` workload is installed, which
+is the CI workflow `.github/workflows/maui-android.yml` (on pushes to `chore/maui-migration` and on demand, never a
+release). It is therefore not in `ParkingTracker.slnx`, so `verify.py` and `dotnet.yml` stay free of Android tooling;
+On a machine that has the workload, build the host csproj directly (`dotnet publish <csproj> -f net10.0-android -c Release`); a second solution file at the root would be picked up by `verify.py`. The workflow restores with the package token,
+installs the Android SDK packages (`InstallAndroidDependencies`), publishes the Release APK twice, plain and with
+`-p:EnableTestHooks=true`, both signed with the debug key and with `ApplicationVersion` = the run number (no release
+reads it at this stage), and runs `test/ParkingTracker.E2E.Tests/emulator-test.mjs` on an API 34 emulator. The host
+supports Android 7.0 (API 24) and later, because .NET MAUI 10 does; the Capacitor app supported API 23.
 
 The live smoke tests (`LiveSourcesSmokeTests`) call each real service once around Avenue Louise 216. They are skipped by
 default, so `verify.py` needs no network beyond the feed. Switch them on with the environment variable
@@ -318,6 +328,17 @@ APIs; the view models and the tests only see the interfaces.
 `ISettingsStore` keeps the values of the first version of the app (`pt.card`, `pt.car`, `pt.layers`, `pt.permSnooze`), so
 that stage 6 can copy them unchanged; the welcome flag `pt.welcomeSeen` is new and is not migrated. `ParkingCard` carries
 the card number and plate next to the validity data, and `ParkedCar` the position, moment, headline and place.
+
+The host implements the ports in `Features/<Feature>/` with thin MAUI classes: `GeolocationTracker` (continuous
+foreground listening at best accuracy, one fix per second, no minimum distance), `MauiLocationPermissions`,
+`MauiLinkLauncher`, `ConnectivityNetworkStatus` and `SecureValueStorage` / `PreferencesValueStorage`. Everything that can
+be tested without a phone sits in `ParkingTracker.ViewModels`: `SettingsStore` and `SettingsJson` (the JSON of
+`pt.card`, `pt.car`, `pt.layers`, `pt.permSnooze` exactly as `app.js` wrote it; a card without a municipality reads as
+`bruxelles`), the vibration pattern and the test hooks. `PlatformRelay`, a component without markup in the second root
+of the web view, joins phone events to the view models, which live in the scope of the web view: a change of connection
+goes to `SpotCheckViewModel.HandleConnectivityChangeAsync`, a return to the app to `LocationPermissionViewModel.RefreshAsync`,
+a change between covered and not covered to a vibration. Preferences use their own file (`parkingtracker`), so that the
+backup rules can exclude the encrypted card file alone.
 
 The screens are split in two projects. `ParkingTracker.ViewModels` holds everything that is not markup and needs no
 browser: the tracking rules (a fix older than 15 s is ignored; a new check after 8 m, 30 s or the first accurate fix; the
@@ -460,7 +481,7 @@ UI count as test failures. Resilience is honesty, not retries: any failed source
 | Parity | For 17 recorded places (Avenue Louise 216, Place du Châtelain with a City card and with two mailles cards, Etterbeek, Uccle, Saint-Josse, a tunnel, a red zone, a reserved space, a `check:` street, a limit between house numbers, outside paid hours, a holiday, City list changed, a failed source, poor GPS) plus a free-spot search and two map areas: the C# answer equals the `live.js` answer, and the C# code asks for exactly the requests `live.js` made | `test/fixtures/parity`, `test/Infrastructure/ParkingTracker.Infrastructure.Tests/Features/SpotDecisions/Parity` (they need the parsers and the handlers together) | locally and CI |
 | Integration | Clients against recorded responses through a stub `HttpMessageHandler`: URLs, parsing, filters, timeouts, error mapping; reference data loading | `test/Infrastructure/ParkingTracker.Infrastructure.Tests` | locally and CI |
 | Live smoke | Clients against the real services, trait `Live` | Infrastructure tests | on demand, not a gate |
-| Device | Emulator test: Release APK with test hooks | `tools/emulator-test.mjs` in CI | every main build |
+| Device | Emulator test: Release APK with test hooks | `test/ParkingTracker.E2E.Tests/emulator-test.mjs` in CI (`tools/emulator-test.mjs` stays for the Capacitor workflow until cut-over) | every branch push (`maui-android.yml`), every main build from stage 7 |
 | Upgrade | Capacitor build, then MAUI build over it | CI job | until cut-over, then on demand |
 
 Stack: xUnit, FluentAssertions, NSubstitute (owner's choice; FluentAssertions 8 has a commercial licence for commercial
@@ -482,12 +503,17 @@ Emulator test changes:
 - The test APK is the Release configuration published with `-p:EnableTestHooks=true`. That constant enables WebView
   debugging and registers `window.ptTest`, which calls `[JSInvokable]` C# hooks. The release APK is built without it.
   Trimming and AOT are the same as in the published build.
-- Steps kept: install with `-g`, grant permissions, launch, find the `webview_devtools_remote_<pid>` socket, CDP.
+- Steps kept: install with `-g`, grant permissions, launch, find the `webview_devtools_remote_<pid>` socket, CDP. The test
+  lives in `test/ParkingTracker.E2E.Tests` (Node 22 built-ins only, see its README).
+- The hook logic is plain C# in `ParkingTracker.ViewModels` (`TestHookService`, `TestHookScript`) with unit tests; only the
+  `[JSInvokable]` bridge and the registration in `PlatformRelay` are conditional on the `TEST_HOOKS` constant, and the host
+  project leaves those files out of a build without `EnableTestHooks`.
 - `localStorage` seeding becomes `ptTest.setCard(json)`; `window.PT.decide` becomes `ptTest.decide(lat, lon, acc)`;
   `liveFreeSpots` becomes `ptTest.freeSpots(...)`; the plugin check becomes `ptTest.platformStatus()` (service,
   notification permission, foreground and background location).
 - The on-screen check reads `.hero-title` and `.hero-sub`, which the Razor markup keeps.
-- New checks: no .NET unhandled exception in logcat, Blazor error UI hidden, and a background parking alert: drive the
+- New checks (done in stage 5b): no .NET unhandled exception in logcat and the Blazor error UI hidden. Still to come in
+  stage 6: a background parking alert: drive the
   emulator GPS above 20 km/h, stop, press Home, wait about 2.5 minutes, read `dumpsys notification` for the alert.
 - Upgrade job: build the Capacitor app from the last Capacitor commit with `webContentsDebuggingEnabled` and a
   throwaway key, build the MAUI test APK with the same key, install the first, store a card through CDP in
@@ -518,7 +544,7 @@ AndroidSigningKeyStore=$ANDROID_KEYSTORE_PATH
 AndroidSigningKeyAlias=$ANDROID_KEY_ALIAS     # parkingtracker
 AndroidSigningKeyPass=env:ANDROID_KEY_PASSWORD
 AndroidSigningStorePass=env:ANDROID_KEYSTORE_PASSWORD
-SupportedOSPlatformVersion=23                 # today's minSdk
+SupportedOSPlatformVersion=24                 # .NET MAUI 10 minimum; the Capacitor app had 23
 ```
 
 Guards added to the build job:
@@ -561,10 +587,11 @@ separate pull requests into `chore/maui-migration` (or separate reviewed commits
 4. **Infrastructure.** HTTP clients and the official-list check. Done when fixture tests cover every source's URL,
    parsing, filters, timeout and error mapping, and the opt-in live smoke tests pass once by hand.
 5. **App shell and UI.** Stage 5a (done): the device ports, the missing sources, `ParkingTracker.ViewModels`,
-   `ParkingTracker.Shared` with `map.js` and the Leaflet files, and their tests. Stage 5b: MAUI project,
-   `MainActivity` name, the Android implementations of the device ports and of the settings store, the composition
-   root. CI builds the APK on the branch (`workflow_dispatch`, no release). Done when the emulator test's answer and
-   screen checks pass on the new app.
+   `ParkingTracker.Shared` with `map.js` and the Leaflet files, and their tests. Stage 5b (written, to be proven by
+   its first CI run): MAUI project, `MainActivity` name, the Android implementations of the device ports and of the
+   settings store, the composition root, the test hooks, the E2E project and `maui-android.yml`. CI builds the APKs on
+   the branch (push and `workflow_dispatch`, no release). Done when the emulator test's answer and screen checks pass
+   on the new app.
 6. **Platform services, OCR, migration.** ADR-0002, ADR-0003, ADR-0004. Done when the emulator test's background
    parking alert and timer checks pass and the upgrade test shows the card kept.
 7. **CI and cut-over.** Final `android.yml` (version and certificate guards, test-hooks build, release on `main`

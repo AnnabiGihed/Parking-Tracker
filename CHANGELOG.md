@@ -23,6 +23,10 @@ The .NET migration is in progress and is not part of any release yet: the publis
   and the map script builds marker labels as text and handles popup buttons with one delegated listener.
 - Organised the .NET solution in the Pivot.Framework canonical layout: feature folders in every project, a test tree
   that mirrors `src/`, and the layout adapted to a mobile client in ADR-0006.
+- Added the .NET MAUI Android host (position, permissions, links, connection, saved settings in the JSON of the first
+  version, vibration on a change of coverage), the opt-in test hooks, the Node emulator test in
+  `test/ParkingTracker.E2E.Tests` and the workflow `maui-android.yml`, which builds the APKs on the migration branch.
+  The host supports Android 7.0 (API 24) and later. Nothing is released yet.
 - Added the Meziantou analyzers, the StyleCop documentation settings (`stylecop.json`) and the target framework in
   `Directory.Build.props`, and fixed the findings they raised.
 - Added the `.NET quality gate` GitHub workflow: restore, format check, Release build and unit tests on every push and

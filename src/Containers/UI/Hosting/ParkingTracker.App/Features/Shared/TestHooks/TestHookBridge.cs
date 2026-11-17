@@ -1,0 +1,84 @@
+#if TEST_HOOKS
+using Microsoft.JSInterop;
+using ParkingTracker.ViewModels.Features.Shared.TestHooks;
+
+namespace ParkingTracker.App.Features.Shared.TestHooks;
+
+/// <summary>
+/// Author      : Gihed Annabi
+/// Date        : 11-2026
+/// Purpose     : The <c>[JSInvokable]</c> face of <see cref="TestHookService"/>, called through <c>window.ptTest</c> (see
+///              <see cref="TestHookScript"/>, which lists the same names). It only forwards; the logic is in the tested service. The
+///              csproj leaves this file out of a build made without <c>-p:EnableTestHooks=true</c>.
+/// </summary>
+public sealed class TestHookBridge
+{
+	#region Fields
+	/// <summary>
+	/// The service that does the work.
+	/// </summary>
+	private readonly TestHookService hooks;
+	#endregion
+
+	#region Constructors
+	/// <summary>
+	/// Initializes a new instance of the <see cref="TestHookBridge"/> class.
+	/// </summary>
+	/// <param name="hooks">The service that does the work.</param>
+	public TestHookBridge(TestHookService hooks)
+	{
+		this.hooks = hooks;
+	}
+	#endregion
+
+	#region Hooks
+	/// <summary>
+	/// Saves a card given as the JSON of <c>pt.card</c>.
+	/// </summary>
+	/// <param name="json">The card JSON.</param>
+	[JSInvokable("SetCard")]
+	public void SetCard(string json) => hooks.SetCard(json);
+
+	/// <summary>
+	/// Reads the saved card as the JSON of <c>pt.card</c>.
+	/// </summary>
+	/// <returns>The JSON, or <see langword="null"/> when none is saved.</returns>
+	[JSInvokable("GetCard")]
+	public string? GetCard() => hooks.GetCard();
+
+	/// <summary>
+	/// Decides a place.
+	/// </summary>
+	/// <param name="latitude">Degrees north.</param>
+	/// <param name="longitude">Degrees east.</param>
+	/// <param name="accuracyMetres">The accuracy in metres, or <see langword="null"/>.</param>
+	/// <returns>The answer.</returns>
+	[JSInvokable("Decide")]
+	public Task<DecisionAnswer> Decide(double latitude, double longitude, double? accuracyMetres) => hooks.DecideAsync(latitude, longitude, accuracyMetres);
+
+	/// <summary>
+	/// Searches the nearest spots where the card works.
+	/// </summary>
+	/// <param name="latitude">Degrees north.</param>
+	/// <param name="longitude">Degrees east.</param>
+	/// <param name="count">How many spots at most.</param>
+	/// <returns>The spots, nearest first.</returns>
+	[JSInvokable("FreeSpots")]
+	public Task<IReadOnlyList<FreeSpotAnswer>> FreeSpots(double latitude, double longitude, int count) => hooks.FreeSpotsAsync(latitude, longitude, count);
+
+	/// <summary>
+	/// Reads the outcome of the official-list check.
+	/// </summary>
+	/// <returns>The state and problem.</returns>
+	[JSInvokable("OfficialList")]
+	public Task<OfficialListAnswer> OfficialList() => hooks.OfficialListAsync();
+
+	/// <summary>
+	/// Reads the permissions and the connection.
+	/// </summary>
+	/// <returns>The platform state.</returns>
+	[JSInvokable("PlatformStatus")]
+	public Task<PlatformAnswer> PlatformStatus() => hooks.PlatformStatusAsync();
+	#endregion
+}
+#endif

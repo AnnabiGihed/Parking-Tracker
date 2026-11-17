@@ -101,6 +101,7 @@ public sealed class SpotCheckViewModel : ViewModelBase, IDisposable
 		Nearest = nearest;
 		checker = new SpotChecker(sender, clock, toast, nearest, card, NotifyChanged);
 		watchdog = new FixWatchdog(clock, OnTick);
+		checker.CoverageChanged += (_, e) => CoverageChanged?.Invoke(this, e);
 		tracker.FixReceived += OnFixReceived;
 		tracker.ErrorOccurred += OnLocationError;
 	}
@@ -204,6 +205,12 @@ public sealed class SpotCheckViewModel : ViewModelBase, IDisposable
 	/// Occurs when the position could not be read, so that the permission banner can be refreshed.
 	/// </summary>
 	public event EventHandler? LocationFailed;
+
+	/// <summary>
+	/// Occurs when the answer about the user's own position changed from not covered to covered or back; the flag is
+	/// <see langword="true"/> when the position is covered now.
+	/// </summary>
+	public event EventHandler<ValueEventArgs<bool>>? CoverageChanged;
 	#endregion
 
 	#region Public Methods
