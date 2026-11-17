@@ -47,6 +47,12 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" />
     <PackageReference Include="Microsoft.Extensions.Logging.Debug" />
     <PackageReference Include="Xamarin.GooglePlayServices.Location" />
+    <!-- Aligned with the AndroidX versions Play services Location brings, see Directory.Packages.props. -->
+    <PackageReference Include="Xamarin.AndroidX.Collection.Ktx" />
+    <PackageReference Include="Xamarin.AndroidX.Fragment.Ktx" />
+    <PackageReference Include="Xamarin.AndroidX.Lifecycle.LiveData" />
+    <PackageReference Include="Xamarin.AndroidX.Lifecycle.LiveData.Core.Ktx" />
+    <PackageReference Include="Xamarin.AndroidX.Lifecycle.Process" />
   </ItemGroup>
 
 
