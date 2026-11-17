@@ -182,7 +182,7 @@ public sealed partial class MlKitCardTextReader : ICardTextReader
 	/// <exception cref="TimeoutException">Thrown when the recognition took longer than <see cref="RecognitionTimeout"/>.</exception>
 	private static async Task<string> RecognizeAsync(string path, CancellationToken cancellationToken)
 	{
-		TextRecognizer? recognizer = null;
+		ITextRecognizer? recognizer = null;
 		InputImage? image = null;
 		RecognitionListener? listener = null;
 		try
@@ -228,7 +228,7 @@ public sealed partial class MlKitCardTextReader : ICardTextReader
 	/// <param name="image">The input image, or <see langword="null"/> when it was not created.</param>
 	/// <param name="listener">The listener, or <see langword="null"/> when it was not created.</param>
 	/// <param name="path">The photo file.</param>
-	private static void Release(TextRecognizer? recognizer, InputImage? image, RecognitionListener? listener, string path)
+	private static void Release(ITextRecognizer? recognizer, InputImage? image, RecognitionListener? listener, string path)
 	{
 		listener?.Dispose();
 		image?.Dispose();
