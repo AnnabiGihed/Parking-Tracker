@@ -13,7 +13,7 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
 The first build of `main` after this change is merged publishes it as the next release, above v1.0.11, and installs
 over the earlier version.
 
-No issue tracker entry exists for this work; add the pull request number here once it exists (PR #TBD).
+No issue tracker entry exists for this work; it ships in pull request #1.
 
 ### Breaking changes
 
