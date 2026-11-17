@@ -4,6 +4,10 @@ Status: implemented on branch `chore/maui-migration` (2026-11-16 to 2026-11-17),
 request. The decisions are in [the ADRs](adr/README.md); this page describes the resulting design and how it was
 built.
 
+A proposed next version (a parking data service, Google sign-in, an admin web app and a local database) is described
+in [architecture-v2.md](architecture-v2.md). Until its ADRs are accepted and built, this page stays the description of
+the running app.
+
 ## 1. Scope and inputs
 
 The work moves the existing Android app to .NET 10 and .NET MAUI without changing what it does. There is no separate

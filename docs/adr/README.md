@@ -10,3 +10,20 @@
 | 6 | [Map the Pivot.Framework canonical layout onto an on-device mobile client](0006-mobile-client-layout.md) | Accepted |
 | 7 | [Exclude namespaces from CA1716 so the mandatory Features/Shared folder builds](0007-narrow-ca1716-to-exclude-namespaces.md) | Accepted |
 | 8 | [Read the Capacitor data from the LevelDB files first, with a hidden web view as the fallback](0008-read-capacitor-data-from-leveldb-with-a-web-view-fallback.md) | Accepted |
+| 9 | [Add a parking data service on a VPS and keep the spot decision on the phone](0009-add-a-parking-data-service-and-keep-the-decision-on-the-phone.md) | Proposed |
+| 10 | [Use PostgreSQL with PostGIS through Pivot's PostgreSQL persistence package](0010-use-postgresql-with-postgis-through-pivot-persistence.md) | Proposed |
+| 11 | [Store upstream data as versioned snapshots per area with a publication guard and fail-closed freshness](0011-store-upstream-data-as-versioned-snapshots-with-fail-closed-freshness.md) | Proposed |
+| 12 | [Drain the outbox in process in the Jobs host only, without a message broker](0012-drain-the-outbox-in-the-jobs-host-without-a-message-broker.md) | Proposed |
+| 13 | [Run refresh jobs with Hangfire on PostgreSQL storage, outside Pivot's scheduling package](0013-run-refresh-jobs-with-hangfire-on-postgresql-outside-pivot-scheduling.md) | Proposed |
+| 14 | [Sign in with Google directly and issue the API's own tokens, without Keycloak](0014-sign-in-with-google-directly-and-issue-api-tokens-without-keycloak.md) | Proposed |
+| 15 | [Require sign-in in the mobile app and keep the driver's data on the phone](0015-require-sign-in-and-keep-the-drivers-data-on-the-phone.md) | Proposed |
+| 16 | [Expose a REST API versioned by URL segment, documented with Swashbuckle, with Scalar in Development only](0016-expose-a-rest-api-versioned-by-url-segment-with-scalar-in-development.md) | Proposed |
+| 17 | [Build a public admin web app on Blazor Server and Radzen, protected by Google sign-in and an allow-list](0017-build-a-public-admin-web-app-with-google-sign-in-and-an-allow-list.md) | Proposed |
+| 18 | [Keep the driver's data in an encrypted on-device SQLite database through Pivot's SQLite package](0018-keep-the-drivers-data-in-an-encrypted-on-device-sqlite-database.md) | Proposed |
+| 19 | [Model aggregates per bounded context and keep the decision engine as value objects and pure services](0019-model-aggregates-per-bounded-context-and-keep-the-decision-engine-pure.md) | Proposed |
+| 20 | [Use Radzen.Blazor for the phone screens and keep Leaflet for the map](0020-use-radzen-for-the-phone-screens-and-keep-leaflet-for-the-map.md) | Proposed |
+| 21 | [Map the canonical layout to two bounded contexts with one Domain and two Application projects](0021-map-the-canonical-layout-to-two-bounded-contexts.md) | Proposed |
+| 22 | [Host on one OVH VPS with Docker Compose, Caddy and PostgreSQL, with off-site backups to Backblaze B2](0022-host-on-one-ovh-vps-with-docker-compose-and-off-site-backups.md) | Proposed |
+| 23 | [Deploy from GitHub Actions with private GHCR images and an SSH forced command, with migration bundles](0023-deploy-from-github-actions-through-an-ssh-forced-command.md) | Proposed |
+| 24 | [Fall back to the upstream services when the API cannot answer, switchable remotely](0024-fall-back-to-upstream-services-when-the-api-cannot-answer.md) | Proposed |
+| 25 | [Test the API path with API-mode parity and Testcontainers PostgreSQL, without in-memory providers](0025-test-the-api-path-with-api-mode-parity-and-testcontainers.md) | Proposed |
