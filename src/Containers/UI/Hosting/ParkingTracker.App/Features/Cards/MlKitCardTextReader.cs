@@ -215,9 +215,9 @@ public sealed partial class MlKitCardTextReader : ICardTextReader
 		{
 			return await completion.WaitAsync(timeout.Token).ConfigureAwait(false);
 		}
-		catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+		catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
 		{
-			throw new TimeoutException("The text recognition did not answer in time.");
+			throw new TimeoutException("The text recognition did not answer in time.", exception);
 		}
 	}
 
