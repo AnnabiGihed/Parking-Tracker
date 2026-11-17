@@ -311,9 +311,20 @@ public sealed class CardViewModel : ViewModelBase
 			NormalisePlate(Plate))).ConfigureAwait(false);
 		FormError = string.Empty;
 		IsOpen = false;
+		await AnnounceSavedCardAsync(first).ConfigureAwait(false);
+		return true;
+	}
+
+	/// <summary>
+	/// Shows the card line again and tells the screen that a card was saved, so it checks the spot and the layers again. The
+	/// card form calls it after saving; so does any other path that saves a card, such as the emulator test's hooks.
+	/// </summary>
+	/// <param name="first">Whether no card was saved before this one; the screen then starts following the user.</param>
+	/// <returns>A task that completes when the line was rebuilt and the screen was told.</returns>
+	public async Task AnnounceSavedCardAsync(bool first)
+	{
 		await RefreshLineAsync().ConfigureAwait(false);
 		CardSaved?.Invoke(this, new ValueEventArgs<bool>(first));
-		return true;
 	}
 
 	/// <summary>

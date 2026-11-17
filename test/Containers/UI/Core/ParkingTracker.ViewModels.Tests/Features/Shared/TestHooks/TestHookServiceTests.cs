@@ -39,6 +39,24 @@ public sealed class TestHookServiceTests
 	}
 
 	/// <summary>
+	/// Verifies that a card saved through the hooks is announced like a card saved in the form, so the screen checks the spot again
+	/// with it, and that it counts as the first card when none was saved before.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task SetCard_NoCardBefore_ShouldAnnounceTheFirstCard()
+	{
+		using var ui = new UiFixture();
+		var hooks = Create(ui);
+		bool? announcedFirst = null;
+		ui.Card.CardSaved += (_, e) => announcedFirst = e.Value;
+
+		await hooks.SetCardAsync("""{"number":"TEST","plate":"1TST000","sector":"louise","from":"2026-01-01","to":"2099-12-31","tolerances":[]}""");
+
+		announcedFirst.Should().BeTrue();
+	}
+
+	/// <summary>
 	/// Verifies that text that is not a card is rejected, and that nothing is saved.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>

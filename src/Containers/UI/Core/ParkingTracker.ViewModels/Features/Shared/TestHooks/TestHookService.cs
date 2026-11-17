@@ -74,16 +74,18 @@ public sealed class TestHookService
 
 	#region Public Methods
 	/// <summary>
-	/// Saves a card given in the JSON of <c>pt.card</c> and refreshes the card line of the screen.
+	/// Saves a card given in the JSON of <c>pt.card</c> and announces it like the card form does, so the screen checks the spot
+	/// again with the new card.
 	/// </summary>
 	/// <param name="json">The card as the first version of the app wrote it.</param>
-	/// <returns>A task that completes when the card is saved and the line is shown again.</returns>
+	/// <returns>A task that completes when the card is saved and announced.</returns>
 	/// <exception cref="ArgumentException">Thrown when <paramref name="json"/> is not a card.</exception>
 	public async Task SetCardAsync(string json)
 	{
 		var parsed = SettingsJson.ParseCard(json) ?? throw new ArgumentException("The text is not a card.", nameof(json));
+		var first = await settings.GetCardAsync().ConfigureAwait(false) is null;
 		await settings.SaveCardAsync(parsed).ConfigureAwait(false);
-		await card.RefreshLineAsync().ConfigureAwait(false);
+		await card.AnnounceSavedCardAsync(first).ConfigureAwait(false);
 	}
 
 	/// <summary>
