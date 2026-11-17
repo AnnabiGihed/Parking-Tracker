@@ -2,6 +2,9 @@
 // upgrade-test.mjs uses it twice in one run, once for the Capacitor build and once for the MAUI build, which is why the state lives in an
 // object that is created per connection. All adb calls take argument arrays, never a shell string.
 import { execFileSync } from 'node:child_process';
+import { adbPath } from './adb-tool.mjs';
+
+const ADB = adbPath();
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const CALL_TIMEOUT_MS = 45000;
@@ -10,7 +13,7 @@ const FORWARD_PORT = 9222;
 // Runs adb with an argument array; returns the trimmed output or 'ERR <first line>' when adb failed.
 export function tryAdb(args, options = {}) {
   try {
-    return execFileSync('adb', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...options }).trim();
+    return execFileSync(ADB, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...options }).trim();
   } catch (error) {
     return `ERR ${error.message.split('\n')[0]}`;
   }

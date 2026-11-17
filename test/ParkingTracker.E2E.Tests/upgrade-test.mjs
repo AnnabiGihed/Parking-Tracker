@@ -16,6 +16,7 @@ import { mkdirSync, writeFileSync, appendFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { connectWebView, tryAdb } from './webview-cdp.mjs';
+import { adbPath, apkArgument } from './adb-tool.mjs';
 
 const [CAPACITOR_APK, MAUI_APK] = process.argv.slice(2);
 const PKG = 'be.parkingtracker.app';
@@ -56,7 +57,7 @@ let step = 'start';
 const stepTo = (name) => { step = name; console.log(`--- ${name}`); };
 const check = (name, ok, detail) => { checks.push({ name, ok: !!ok, detail }); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ' — ' + detail : ''}`); };
 const screenshot = (name) => {
-  const result = spawnSync('adb', ['exec-out', 'screencap', '-p'], { maxBuffer: 50 * 1024 * 1024 });
+  const result = spawnSync(adbPath(), ['exec-out', 'screencap', '-p'], { maxBuffer: 50 * 1024 * 1024 });
   if (result.status === 0) writeFileSync(join(OUT, `screenshot-${name}.png`), result.stdout);
 };
 // The versionCode of the installed package, from dumpsys.
@@ -96,7 +97,7 @@ async function relaunchOldApp(report) {
 // Installs the old build, stores the data the old app would have saved and stops the app.
 async function prepareOldInstall(report) {
   stepTo('install the Capacitor build');
-  console.log(tryAdb(['install', '-r', '-g', CAPACITOR_APK]));
+  console.log(tryAdb(['install', '-r', '-g', apkArgument(CAPACITOR_APK, 'The Capacitor APK')]));
   report.capacitorVersionCode = installedVersionCode();
   check('Capacitor build installed', report.capacitorVersionCode > 0, `versionCode ${report.capacitorVersionCode}`);
   tryAdb(['logcat', '-c']);
@@ -123,7 +124,7 @@ async function prepareOldInstall(report) {
 // Installs the MAUI build over the old one, launches it and returns its web view.
 async function startNewVersion(report) {
   stepTo('install the MAUI build over the Capacitor build');
-  const installed = tryAdb(['install', '-r', MAUI_APK]);
+  const installed = tryAdb(['install', '-r', apkArgument(MAUI_APK, 'The MAUI APK')]);
   console.log(installed);
   report.mauiVersionCode = installedVersionCode();
   check('MAUI build installed over the Capacitor build with install -r', /Success/.test(installed), installed.slice(0, 200));
@@ -197,7 +198,7 @@ const md = [`## Upgrade test (Capacitor to .NET MAUI) — ${failed.length ? '❌
   '', `Android ${report.device?.android || '?'} · versionCode ${report.capacitorVersionCode ?? '?'} → ${report.mauiVersionCode ?? '?'} · migration reader ${report.reader ?? '?'}`,
   '', 'LevelDB files of the old app before the update:', '', '```', String(report.leveldbFiles ?? 'not listed'), '```', '',
   '| Check | Result | Detail |', '|---|---|---|',
-  ...checks.map((c) => `| ${c.name} | ${c.ok ? '✅' : '❌'} | ${String(c.detail || '').replace(/\|/g, '/').slice(0, 300)} |`)].join('\n');
+  ...checks.map((c) => `| ${c.name} | ${c.ok ? '✅' : '❌'} | ${String(c.detail || '').replaceAll('|', '/').slice(0, 300)} |`)].join('\n');
 writeFileSync(join(OUT, 'summary.md'), md + '\n');
 if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, md + '\n');
 console.log('\n' + md);

@@ -13,12 +13,12 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=tools/ci/common.sh
 . "$here/common.sh"
 
-[ "$#" -eq 1 ] || fail "Usage: $0 <new-apk>" 2
-[ -f "$1" ] || fail "APK '$1' does not exist."
+[[ "$#" -eq 1 ]] || fail "Usage: $0 <new-apk>" 2
+[[ -f "$1" ]] || fail "APK '$1' does not exist."
 
 new="$(bash "$here/../../test/ParkingTracker.E2E.Tests/version-code.sh" "$1")"
 tag="$(latest_release_tag)"
-if [ -z "$tag" ]; then
+if [[ -z "$tag" ]]; then
   echo "No release exists yet; versionCode $new needs no comparison."
   exit 0
 fi
@@ -29,7 +29,7 @@ fi
 old="${BASH_REMATCH[1]}"
 
 echo "Latest release $tag (versionCode $old); new versionCode $new."
-if [ "$new" -le "$old" ]; then
+if [[ "$new" -le "$old" ]]; then
   fail "The new versionCode ($new) must be higher than the versionCode of the latest release $tag ($old)."
 fi
 echo "The new versionCode is higher."

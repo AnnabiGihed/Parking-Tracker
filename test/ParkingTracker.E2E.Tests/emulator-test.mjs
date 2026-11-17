@@ -11,6 +11,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { adbPath, apkArgument } from './adb-tool.mjs';
 
 const APK = process.argv[2];
 const PKG = 'be.parkingtracker.app';
@@ -34,7 +35,8 @@ if (!APK) {
 mkdirSync(OUT, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // Arguments go to adb as an array, never through a shell, so that nothing taken from argv is interpreted as shell syntax.
-const adb = (args, opts = {}) => execFileSync('adb', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim();
+const ADB = adbPath();
+const adb = (args, opts = {}) => execFileSync(ADB, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim();
 const tryAdb = (args, opts = {}) => { try { return adb(args, opts); } catch (e) { return `ERR ${e.message.split('\n')[0]}`; } };
 const geo = (p) => tryAdb(['emu', 'geo', 'fix', String(p.lon), String(p.lat)]); // longitude first
 // A fix with a speed: emu geo fix <lon> <lat> <altitude> <satellites> <velocity in knots>. Without a speed the emulator may report zero.
@@ -53,7 +55,7 @@ const waitForNotification = async (pattern, ms, each = null) => {
   return null;
 };
 const screenshot = (name) => {
-  const r = spawnSync('adb', ['exec-out', 'screencap', '-p'], { maxBuffer: 50 * 1024 * 1024 });
+  const r = spawnSync(ADB, ['exec-out', 'screencap', '-p'], { maxBuffer: 50 * 1024 * 1024 });
   if (r.status === 0) writeFileSync(join(OUT, `screenshot-${name}.png`), r.stdout);
 };
 
@@ -132,7 +134,7 @@ async function main() {
 
   stepTo('install');
   // Install and grant what a user grants on first launch ("Allow all the time").
-  console.log(adb(['install', '-r', '-g', APK]));
+  console.log(adb(['install', '-r', '-g', apkArgument(APK, 'The test APK')]));
   for (const p of ['ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION', 'ACCESS_BACKGROUND_LOCATION']) tryAdb(['shell', 'pm', 'grant', PKG, `android.permission.${p}`]);
   // Notifications (Android 13+) and exact alarms, which a user allows on the first timer.
   tryAdb(['shell', 'pm', 'grant', PKG, 'android.permission.POST_NOTIFICATIONS']);
