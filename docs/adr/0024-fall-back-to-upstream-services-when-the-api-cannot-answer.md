@@ -1,6 +1,6 @@
 # ADR-0024: Fall back to the upstream services when the API cannot answer, switchable remotely
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: Gihed Annabi
 

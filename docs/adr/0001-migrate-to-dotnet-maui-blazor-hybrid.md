@@ -1,6 +1,6 @@
 # ADR-0001: Migrate the Android app to .NET 10 MAUI Blazor Hybrid on Pivot.Framework
 
-- Status: Accepted
+- Status: Superseded by ADR-0009
 - Date: 2026-11-16
 - Deciders: Gihed Annabi
 

@@ -1,8 +1,8 @@
 # Parking Tracker architecture v2: parking data service, sign-in, admin app and local database
 
-Status: Proposed (2026-11-17). Nothing on this page is built yet. Each decision is recorded in an ADR with the status
-`Proposed` ([ADR-0009](adr/0009-add-a-parking-data-service-and-keep-the-decision-on-the-phone.md) to
-[ADR-0025](adr/0025-test-the-api-path-with-api-mode-parity-and-testcontainers.md)); the owner accepts them. The
+Status: Accepted (2026-11-17). Nothing on this page is built yet. Each decision is recorded in an Accepted ADR
+([ADR-0009](adr/0009-add-a-parking-data-service-and-keep-the-decision-on-the-phone.md) to
+[ADR-0025](adr/0025-test-the-api-path-with-api-mode-parity-and-testcontainers.md)). The
 implemented design of the Android app is described in [architecture.md](architecture.md); this page describes what
 changes on top of it. The two pages are kept apart because one describes a built system and the other a proposal;
 they are merged when stage S10 of section 9 ships.
@@ -1403,7 +1403,7 @@ test first.
 
 ## 8. Decision index
 
-All ADRs below have the status `Proposed`; the decider is Gihed Annabi; the date is 2026-11-17.
+All ADRs below have the status `Accepted`; the decider is Gihed Annabi; the date is 2026-11-17.
 
 | ADR | Decision | Rationale |
 | --- | --- | --- |

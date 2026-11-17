@@ -1,6 +1,6 @@
 # ADR-0017: Build a public admin web app on Blazor Server and Radzen, protected by Google sign-in and an allow-list
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: Gihed Annabi
 

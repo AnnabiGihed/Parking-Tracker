@@ -1,6 +1,6 @@
 # ADR-0011: Store upstream data as versioned snapshots per area with a publication guard and fail-closed freshness
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: Gihed Annabi
 

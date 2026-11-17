@@ -1,6 +1,6 @@
 # ADR-0020: Use Radzen.Blazor for the phone screens and keep Leaflet for the map
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: Gihed Annabi
 

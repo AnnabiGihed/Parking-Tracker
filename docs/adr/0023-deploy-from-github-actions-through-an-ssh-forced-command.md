@@ -1,6 +1,6 @@
 # ADR-0023: Deploy from GitHub Actions with private GHCR images and an SSH forced command, with migration bundles
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: Gihed Annabi
 

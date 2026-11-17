@@ -1,6 +1,6 @@
 # ADR-0016: Expose a REST API versioned by URL segment, documented with Swashbuckle, with Scalar in Development only
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: Gihed Annabi
 

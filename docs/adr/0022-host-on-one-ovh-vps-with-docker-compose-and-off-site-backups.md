@@ -1,6 +1,6 @@
 # ADR-0022: Host on one OVH VPS with Docker Compose, Caddy and PostgreSQL, with off-site backups to Backblaze B2
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: Gihed Annabi
 

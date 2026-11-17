@@ -1,6 +1,6 @@
 # ADR-0025: Test the API path with API-mode parity and Testcontainers PostgreSQL, without in-memory providers
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: Gihed Annabi
 

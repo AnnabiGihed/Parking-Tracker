@@ -1,6 +1,6 @@
 # ADR-0014: Sign in with Google directly and issue the API's own tokens, without Keycloak
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: Gihed Annabi
 

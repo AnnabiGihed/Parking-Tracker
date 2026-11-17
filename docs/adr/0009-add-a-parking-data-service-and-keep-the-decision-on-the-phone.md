@@ -1,6 +1,6 @@
 # ADR-0009: Add a parking data service on a VPS and keep the spot decision on the phone
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: Gihed Annabi
 - Supersedes: ADR-0001

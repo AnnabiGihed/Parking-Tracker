@@ -1,6 +1,6 @@
 # ADR-0021: Map the canonical layout to two bounded contexts with one Domain and two Application projects
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: Gihed Annabi
 - Supersedes: ADR-0006

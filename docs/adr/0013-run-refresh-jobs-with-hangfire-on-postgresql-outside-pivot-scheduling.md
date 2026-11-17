@@ -1,6 +1,6 @@
 # ADR-0013: Run refresh jobs with Hangfire on PostgreSQL storage, outside Pivot's scheduling package
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: Gihed Annabi
 

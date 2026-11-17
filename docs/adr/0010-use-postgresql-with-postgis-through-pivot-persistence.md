@@ -1,6 +1,6 @@
 # ADR-0010: Use PostgreSQL with PostGIS through Pivot's PostgreSQL persistence package
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: Gihed Annabi
 

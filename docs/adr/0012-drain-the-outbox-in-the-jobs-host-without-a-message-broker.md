@@ -1,6 +1,6 @@
 # ADR-0012: Drain the outbox in process in the Jobs host only, without a message broker
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: Gihed Annabi
 

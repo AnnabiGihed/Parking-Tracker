@@ -1,6 +1,6 @@
 # ADR-0015: Require sign-in in the mobile app and keep the driver's data on the phone
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: Gihed Annabi
 

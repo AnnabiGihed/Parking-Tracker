@@ -1,6 +1,6 @@
 # ADR-0019: Model aggregates per bounded context and keep the decision engine as value objects and pure services
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: Gihed Annabi
 
