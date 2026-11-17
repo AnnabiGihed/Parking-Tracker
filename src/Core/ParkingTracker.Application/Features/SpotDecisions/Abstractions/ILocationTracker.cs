@@ -43,7 +43,9 @@ public interface ILocationTracker
 	event EventHandler<LocationFixEventArgs>? FixReceived;
 
 	/// <summary>
-	/// Occurs when the position cannot be read, possibly on any thread. The tracker has stopped when this occurs.
+	/// Occurs when the position cannot be read, possibly on any thread. With <see cref="LocationErrorKind.Stopped"/> the tracker has
+	/// stopped (not allowed, turned off, could not start); with <see cref="LocationErrorKind.Interrupted"/> there is no position
+	/// for now, the tracker keeps listening and fixes may follow.
 	/// </summary>
 	event EventHandler<LocationErrorEventArgs>? ErrorOccurred;
 	#endregion

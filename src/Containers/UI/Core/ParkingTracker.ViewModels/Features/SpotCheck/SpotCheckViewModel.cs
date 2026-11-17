@@ -467,12 +467,19 @@ public sealed class SpotCheckViewModel : ViewModelBase, IDisposable
 	}
 
 	/// <summary>
-	/// Handles a failure of the tracker: says so, unless a pin is shown, and stops following.
+	/// Handles a failure of the tracker: says so, unless a pin is shown. A stop also ends the following; an interruption keeps it,
+	/// because fixes may follow.
 	/// </summary>
 	/// <param name="sender">The tracker.</param>
 	/// <param name="e">The failure.</param>
 	private void OnLocationError(object? sender, LocationErrorEventArgs e)
 	{
+		if (e.Kind == LocationErrorKind.Interrupted)
+		{
+			ShowInterruption();
+			return;
+		}
+
 		bool hasPin;
 		lock (gate)
 		{
@@ -491,6 +498,23 @@ public sealed class SpotCheckViewModel : ViewModelBase, IDisposable
 
 		NotifyChanged();
 		LocationFailed?.Invoke(this, EventArgs.Empty);
+	}
+
+	/// <summary>
+	/// Says that there is no position for now while the following goes on; nothing is said when a pin is shown.
+	/// </summary>
+	private void ShowInterruption()
+	{
+		bool hasPin;
+		lock (gate)
+		{
+			hasPin = pin is not null;
+		}
+
+		if (!hasPin)
+		{
+			checker.ShowCantVerify("No GPS position right now: waiting for a fix.", CheckSource.Me);
+		}
 	}
 
 	/// <summary>

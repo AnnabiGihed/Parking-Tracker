@@ -185,9 +185,10 @@ internal sealed class UiFixture : IDisposable
 	/// Raises a location failure on the tracker substitute.
 	/// </summary>
 	/// <param name="message">What went wrong.</param>
-	public void RaiseLocationError(string message)
+	/// <param name="kind">Whether the tracker stopped or only has no position for now.</param>
+	public void RaiseLocationError(string message, LocationErrorKind kind = LocationErrorKind.Stopped)
 	{
-		Tracker.ErrorOccurred += Raise.EventWith(Tracker, new LocationErrorEventArgs(message));
+		Tracker.ErrorOccurred += Raise.EventWith(Tracker, new LocationErrorEventArgs(message, kind));
 	}
 
 	/// <summary>

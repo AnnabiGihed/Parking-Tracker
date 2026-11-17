@@ -1,5 +1,6 @@
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
+using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Queries.DecideSpot;
 using ParkingTracker.Application.Features.SpotDecisions.Queries.FindFreeSpots;
 using ParkingTracker.Domain.Features.ParkingDetection.ValueObjects;
@@ -194,6 +195,47 @@ public sealed class SpotCheckViewModelTests
 		ui.Spot.Status.Detail.Should().Be("No GPS position: location not allowed. Allow location for this app, or tap the map.");
 		ui.Spot.IsTracking.Should().BeFalse();
 		failed.Should().BeTrue();
+	}
+
+	/// <summary>
+	/// Verifies that an interrupted location keeps the following, says it waits for a fix and lets the next fix answer.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task LocationError_Interrupted_ShouldKeepFollowingAndAnswerOnTheNextFix()
+	{
+		using var ui = new UiFixture();
+		var failed = false;
+		ui.Spot.LocationFailed += (_, _) => failed = true;
+		await ui.Spot.StartTrackingAsync();
+
+		ui.RaiseLocationError("no position available", LocationErrorKind.Interrupted);
+
+		ui.Spot.IsTracking.Should().BeTrue();
+		failed.Should().BeFalse();
+		ui.Spot.Status.Detail.Should().Be("No GPS position right now: waiting for a fix.");
+
+		ui.AnswerChecks(SpotDecision.Create(Verdict.Pay, "Paid here."));
+		ui.RaiseFix(ui.FixNow());
+
+		ui.Spot.Status.Title.Should().Be("Paid parking");
+	}
+
+	/// <summary>
+	/// Verifies that an interrupted location shows nothing new while a pin is shown.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task LocationError_InterruptedWithPin_ShouldShowNothing()
+	{
+		using var ui = new UiFixture();
+		ui.AnswerChecks(SpotDecision.Create(Verdict.Pay, "Paid."));
+		await ui.Spot.HandleMapClickAsync(UiFixture.Here);
+
+		ui.RaiseLocationError("no position available", LocationErrorKind.Interrupted);
+
+		ui.Spot.Status.Title.Should().Be("Paid parking");
+		ui.Toast.Message.Should().BeEmpty();
 	}
 
 	/// <summary>

@@ -14,7 +14,8 @@ namespace ParkingTracker.App.Features.SpotDecisions;
 ///              the best accuracy, a fix about every second and no minimum distance, so that fixes keep coming while the phone stands
 ///              still (the screen reports a lost signal after 15 seconds without one). Events are raised on the thread of the platform.
 ///              Background tracking with the app off screen is a later stage (ADR-0002). When the request is refused or listening
-///              fails, the tracker stops and says why through <see cref="ErrorOccurred"/>.
+///              fails, the tracker stops and says why through <see cref="ErrorOccurred"/>; a momentary lack of position is reported as an
+///              interruption and the listening goes on.
 /// </summary>
 public sealed partial class GeolocationTracker : ILocationTracker
 {
@@ -221,7 +222,15 @@ public sealed partial class GeolocationTracker : ILocationTracker
 	/// <param name="e">What went wrong.</param>
 	private void OnListeningFailed(object? sender, GeolocationListeningFailedEventArgs e)
 	{
-		Fail(e.Error == GeolocationError.Unauthorized ? "location not allowed" : "no position available");
+		if (e.Error == GeolocationError.Unauthorized)
+		{
+			Fail("location not allowed");
+			return;
+		}
+
+		// A gap (before the first fix, a provider that toggles) is not the end: the platform keeps listening.
+		LogInterrupted(logger, e.Error);
+		ErrorOccurred?.Invoke(this, new LocationErrorEventArgs("no position available", LocationErrorKind.Interrupted));
 	}
 
 	/// <summary>
@@ -245,7 +254,7 @@ public sealed partial class GeolocationTracker : ILocationTracker
 
 		LogFailed(logger, message);
 		Unsubscribe();
-		ErrorOccurred?.Invoke(this, new LocationErrorEventArgs(message));
+		ErrorOccurred?.Invoke(this, new LocationErrorEventArgs(message, LocationErrorKind.Stopped));
 	}
 
 	/// <summary>
@@ -336,6 +345,14 @@ public sealed partial class GeolocationTracker : ILocationTracker
 	/// <param name="message">What went wrong.</param>
 	[LoggerMessage(Level = LogLevel.Information, Message = "Location listening failed: {Message}")]
 	private static partial void LogFailed(ILogger logger, string message);
+
+	/// <summary>
+	/// Logs that the platform has no position for now while the listening goes on.
+	/// </summary>
+	/// <param name="logger">The log.</param>
+	/// <param name="error">The error the platform reported.</param>
+	[LoggerMessage(Level = LogLevel.Information, Message = "Location listening interrupted, still listening: {Error}")]
+	private static partial void LogInterrupted(ILogger logger, GeolocationError error);
 
 	/// <summary>
 	/// Logs the first fix after a start, with its age by the clock of the device: a large age explains why the screen drops it as stale.
