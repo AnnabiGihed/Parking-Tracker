@@ -1,0 +1,32 @@
+@page "/"
+@namespace ParkingTracker.Shared.Features.SpotCheck.Pages
+<MapView OnReady="OnMapReadyAsync" OnMapClick="OnMapClickAsync" OnPinMoved="OnPinMovedAsync" OnViewChanged="OnViewChanged" OnPopupAction="OnPopupActionAsync" @ref="map" />
+
+<header class="top">
+    <SearchBar />
+    <CarChip />
+</header>
+
+<div class="controls">
+    <button id="layersBtn" class="ctrl" title="Map layers" aria-label="Map layers" @onclick="OnToggleLayers"><Icon Name="layers" /></button>
+    <button id="carBtn" class="ctrl @(Car.Car is not null ? "has-car" : string.Empty)" title="My car" aria-label="My car" @onclick="OnOpenCar"><Icon Name="car" /></button>
+    <button id="trackBtn" class="ctrl ctrl-locate @(Spot.IsTracking ? "active" : string.Empty)" title="Follow my position" aria-label="Follow my position" @onclick="OnToggleTrackingAsync"><Icon Name="@(Spot.IsTracking ? "navigation" : "locate")" /></button>
+</div>
+
+<button id="findBtn" class="cta" type="button" @onclick="OnFindAsync"><Icon Name="parking" /><span>Find free parking</span></button>
+
+<LayersPopover IsOpen="layersOpen" OnClose="OnCloseLayers" />
+
+<section id="sheet" class="sheet @(sheetCompact ? "compact" : string.Empty)" aria-live="polite" @ref="sheet">
+    <button id="sheetHandle" class="handle" type="button" aria-label="Expand or collapse" @onclick="OnToggleSheet"></button>
+    <PermissionBanner />
+    <CardLine />
+    <TimerLine />
+    <StatusBlock />
+    <LiveChips />
+    <NearestSpot />
+</section>
+
+<WelcomeDialog />
+<CardDialog />
+<CarDialog />

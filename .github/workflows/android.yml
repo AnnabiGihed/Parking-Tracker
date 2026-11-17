@@ -1,88 +1,176 @@
 name: Android APK
 
-# On every push to main:
-#   1. build  — the signed APK to publish, plus a debug build of the same code for testing
-#   2. test   — install the debug build on an Android emulator, put the GPS at Avenue Louise 216
-#               and check what the app really does (native HTTP, permissions, GPS, answers)
-#   3. release — publish the signed APK on the Releases page, only if the emulator test passed
+# Builds, tests and releases the .NET MAUI app (docs/architecture.md sections 4.1, 6.3, 7). The host project needs the
+# maui-android workload, which developer PCs may not have, so only this workflow builds it. The file name stays
+# android.yml so that github.run_number keeps counting from the runs of the earlier Capacitor workflow; the versionCode
+# is the run number and must stay above the one of the latest release (v1.0.11 had 11).
+#   1. build        - the Release APK signed with the release key, the same code with the test hooks (-p:EnableTestHooks=true,
+#                     signed with the debug key), and the guards: the versionCode is higher than the latest release's and the
+#                     signing certificate is the same, so that the phones accept the update
+#   2. test         - install the test-hooks APK on an Android 14 emulator and check the answers, the screen, the parking alert
+#                     service and the timer
+#   3. upgrade-test - build the last Capacitor app (tag v1.0.11), sign it and the test-hooks APK with one throwaway key, install
+#                     the first, store a card, install the second over it and check that the card came over (ADR-0004, ADR-0008)
+#   4. release      - publish the signed APK on the Releases page; only on a push to main, only after build and test passed
+# Pull requests never use the release key: they are signed with the debug key and the certificate guard is skipped (the
+# version guard still runs).
 on:
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  packages: read
 
+# A run on main may publish a release, so it is never cancelled; superseded runs of other refs are.
 concurrency:
-  group: android-${{ github.ref }}
-  cancel-in-progress: true
+  group: android-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+  APP_PROJECT: src/Containers/UI/Hosting/ParkingTracker.App/ParkingTracker.App.csproj
 
 jobs:
   build:
+    name: Build the APKs
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     env:
       VERSION_CODE: ${{ github.run_number }}
+      # The release key signs only runs of main (pushes and manual runs). Every pull request, also from this repository,
+      # and every other branch gets the debug key: such a run can execute changed workflow or build code, so it must not
+      # touch the release key.
+      SIGN_RELEASE: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: 22
-          cache: npm
+          persist-credentials: false
 
-      - uses: actions/setup-java@v4
+      - name: Install the .NET SDK from global.json
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+
+      - name: Install Java 21
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: temurin
           java-version: 21
-          cache: gradle
 
-      - name: Install and copy the web app into the Android project
-        run: |
-          npm ci
-          npm run build
-          npx cap sync android
+      - name: Install the MAUI Android workload
+        run: dotnet workload install maui-android
 
-      - name: Restore the signing key
+      # Only the restore needs the package token; nuget.config reads it from these variables.
+      - name: Restore
         env:
-          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: |
-          if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "::error::Secret ANDROID_KEYSTORE_BASE64 is missing (see README, 'Android app')."
-            exit 1
-          fi
-          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
-          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          GITHUB_PACKAGES_USER: ${{ github.actor }}
+          GITHUB_PACKAGES_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: dotnet restore "$APP_PROJECT"
 
-      - name: Build the signed APK and the test build
-        working-directory: android
+      - name: Install the Android SDK packages the build needs
+        run: >
+          dotnet build "$APP_PROJECT" -f net10.0-android -t:InstallAndroidDependencies --no-restore
+          -p:AndroidSdkDirectory="$ANDROID_HOME" -p:AcceptAndroidSDKLicenses=True
+
+      - name: Restore the release signing key
+        if: env.SIGN_RELEASE == 'true'
         env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease assembleDebug --no-daemon
-          mkdir -p "$RUNNER_TEMP/apk"
-          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/apk/ParkingTracker.apk"
-          cp app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/apk/ParkingTracker-test.apk"
+          set -euo pipefail
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Secret $name is missing (see README, 'Signing key')."
+              exit 1
+            fi
+          done
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
 
-      - uses: actions/upload-artifact@v4
+      # MSBuild reads environment variables as properties, so the passwords never appear on a command line or in the log.
+      - name: Publish the Release APK (signed with the release key)
+        if: env.SIGN_RELEASE == 'true'
+        env:
+          AndroidKeyStore: "true"
+          AndroidSigningKeyStore: ${{ env.ANDROID_KEYSTORE_PATH }}
+          AndroidSigningStorePass: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          AndroidSigningKeyAlias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          AndroidSigningKeyPass: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: >
+          dotnet publish "$APP_PROJECT" -f net10.0-android -c Release --no-restore
+          -p:ApplicationVersion="$VERSION_CODE" -p:ApplicationDisplayVersion="1.0.$VERSION_CODE"
+          -o "$RUNNER_TEMP/publish-plain"
+
+      - name: Publish the Release APK (debug key, no release key for this run)
+        if: env.SIGN_RELEASE != 'true'
+        run: >
+          dotnet publish "$APP_PROJECT" -f net10.0-android -c Release --no-restore
+          -p:ApplicationVersion="$VERSION_CODE" -p:ApplicationDisplayVersion="1.0.$VERSION_CODE"
+          -o "$RUNNER_TEMP/publish-plain"
+
+      - name: Keep the Release APK
+        run: bash test/ParkingTracker.E2E.Tests/collect-apk.sh "$RUNNER_TEMP/publish-plain" "$RUNNER_TEMP/apk/ParkingTracker.apk"
+
+      # The test-hooks build changes a compile constant, so start from clean intermediate output of the host. It gets no
+      # release key: it is only installed on emulators.
+      - name: Publish the test-hooks APK (same Release code plus window.ptTest)
+        run: |
+          rm -rf "$(dirname "$APP_PROJECT")/bin" "$(dirname "$APP_PROJECT")/obj/Release"
+          dotnet publish "$APP_PROJECT" -f net10.0-android -c Release --no-restore \
+            -p:EnableTestHooks=true -p:ApplicationVersion="$VERSION_CODE" -p:ApplicationDisplayVersion="1.0.$VERSION_CODE" \
+            -o "$RUNNER_TEMP/publish-hooks"
+          bash test/ParkingTracker.E2E.Tests/collect-apk.sh "$RUNNER_TEMP/publish-hooks" "$RUNNER_TEMP/apk/ParkingTracker-test.apk"
+
+      - name: Guard the version (higher than the latest release)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: bash tools/ci/version-guard.sh "$RUNNER_TEMP/apk/ParkingTracker.apk"
+
+      - name: Guard the signing certificate (same as the latest release)
+        if: env.SIGN_RELEASE == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: bash tools/ci/certificate-guard.sh "$RUNNER_TEMP/apk/ParkingTracker.apk"
+
+      - name: Upload the APKs
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: apks
           path: ${{ runner.temp }}/apk/
+          if-no-files-found: error
+          retention-days: 7
 
   test:
+    name: Emulator test
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - name: Install Node.js 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
 
-      - uses: actions/download-artifact@v4
+      - name: Download the APKs
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: apks
           path: apk
@@ -94,7 +182,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Run the app on an Android 14 emulator
-        uses: reactivecircus/android-emulator-runner@v2
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 34
           target: google_apis
@@ -102,25 +190,145 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: node tools/emulator-test.mjs apk/ParkingTracker-test.apk
+          script: node test/ParkingTracker.E2E.Tests/emulator-test.mjs
 
       - name: Keep the test report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: emulator-report
           path: emulator-report/
+          if-no-files-found: ignore
+          retention-days: 7
 
-  release:
-    needs: [build, test]
+  # ADR-0004, ADR-0008: the saved card must survive the update. The Capacitor build (the code of the last Capacitor release,
+  # tag v1.0.11, since the Capacitor code is no longer on the branch) and the MAUI test-hooks build both get the same
+  # throwaway key, so that `adb install -r` accepts the update and keeps the app data.
+  # It is skipped on pushes to main: the migration is proven on the branch and the pull request, and a release must not wait
+  # for it again; the release job needs only build and test.
+  upgrade-test:
+    name: Upgrade test
+    if: github.ref != 'refs/heads/main'
+    needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    env:
+      CAPACITOR_TAG: v1.0.11
+      # The Capacitor build gets the lowest versionCode, so any MAUI build (the run number) is the update.
+      CAPACITOR_VERSION_CODE: "1"
+      # The key is throwaway: it lives in the runner's temp directory, is valid for two days and signs nothing that is published, so
+      # a fixed password is fine and no secret is needed.
+      UPGRADE_KEY_PASSWORD: upgrade-test-only
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check out the last Capacitor release
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.CAPACITOR_TAG }}
+          path: capacitor
+          persist-credentials: false
+
+      - name: Install Node.js 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - name: Install Java 21
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Download the MAUI APKs
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: apks
           path: apk
 
-      - uses: actions/download-artifact@v4
+      - name: Create a throwaway signing key
+        run: |
+          keytool -genkeypair -keystore "$RUNNER_TEMP/upgrade.p12" -storetype PKCS12 \
+            -storepass "$UPGRADE_KEY_PASSWORD" -keypass "$UPGRADE_KEY_PASSWORD" \
+            -alias upgrade -keyalg RSA -keysize 2048 -validity 2 -dname "CN=Parking Tracker upgrade test"
+
+      # A debug build has web view debugging on (Capacitor's webContentsDebuggingEnabled defaults to the debuggable flag).
+      - name: Build the Capacitor debug APK
+        working-directory: capacitor
+        env:
+          VERSION_CODE: ${{ env.CAPACITOR_VERSION_CODE }}
+        run: |
+          npm ci
+          npm run build
+          npx cap sync android
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Sign both APKs with the throwaway key
+        run: |
+          bash test/ParkingTracker.E2E.Tests/resign-apk.sh capacitor/android/app/build/outputs/apk/debug/app-debug.apk upgrade/capacitor.apk "$RUNNER_TEMP/upgrade.p12" upgrade
+          bash test/ParkingTracker.E2E.Tests/resign-apk.sh apk/ParkingTracker-test.apk upgrade/maui-test.apk "$RUNNER_TEMP/upgrade.p12" upgrade
+
+      - name: Check that the MAUI versionCode is higher
+        run: |
+          old="$(bash test/ParkingTracker.E2E.Tests/version-code.sh upgrade/capacitor.apk)"
+          new="$(bash test/ParkingTracker.E2E.Tests/version-code.sh upgrade/maui-test.apk)"
+          echo "Capacitor versionCode $old, MAUI versionCode $new"
+          if [ -z "$old" ] || [ -z "$new" ] || [ "$new" -le "$old" ]; then
+            echo "::error::The MAUI versionCode ($new) must be higher than the Capacitor versionCode ($old)."
+            exit 1
+          fi
+
+      - name: Enable hardware acceleration for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install the Capacitor build, store a card, update to the MAUI build
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: node test/ParkingTracker.E2E.Tests/upgrade-test.mjs upgrade/capacitor.apk upgrade/maui-test.apk
+
+      - name: Keep the test report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: upgrade-report
+          path: upgrade-report/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # Only a push to main publishes; the migration branch and pull requests never do.
+  release:
+    name: Publish the release
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [build, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download the APKs
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: apks
+          path: apk
+
+      - name: Download the test report
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: emulator-report
           path: emulator-report
@@ -129,14 +337,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          RUN_NUMBER: ${{ github.run_number }}
+          COMMIT: ${{ github.sha }}
         run: |
-          TAG="v1.0.${{ github.run_number }}"
+          set -euo pipefail
+          TAG="v1.0.${RUN_NUMBER}"
           {
             echo "Open this page on your Android phone, tap **ParkingTracker.apk** and install it."
+            echo "Installed over the earlier version, it keeps your parking card."
             echo
             cat emulator-report/summary.md
             echo
-            echo "Commit: ${{ github.sha }}"
+            echo "Commit: ${COMMIT}"
           } > notes.md
           gh release create "$TAG" apk/ParkingTracker.apk emulator-report/screenshot-avenue-louise-216.png \
-            --title "Parking Tracker $TAG" --notes-file notes.md --latest
+            --target "$COMMIT" --title "Parking Tracker $TAG" --notes-file notes.md --latest

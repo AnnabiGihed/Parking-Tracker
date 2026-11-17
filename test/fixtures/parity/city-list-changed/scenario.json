@@ -1,0 +1,68 @@
+{
+  "name": "city-list-changed",
+  "kind": "decide",
+  "clock": "2026-11-17T10:00:00Z",
+  "point": {
+    "lat": 50.826647,
+    "lon": 4.364997
+  },
+  "accuracy": 5,
+  "card": {
+    "number": "B000-000-000",
+    "plate": "1ABC234",
+    "municipality": "bruxelles",
+    "sector": "louise",
+    "from": "2026-01-01",
+    "to": "2027-12-31",
+    "tolerances": [],
+    "mailles": [],
+    "lims": []
+  },
+  "officialList": {
+    "status": "changed",
+    "document": "https://www.bruxelles.be/sites/default/files/bxl/LOUISE.pdf",
+    "date": "Mon, 02 Nov 2026 09:00:00 GMT",
+    "why": null
+  },
+  "requests": [
+    {
+      "method": "HEAD",
+      "url": "https://www.bruxelles.be/sites/default/files/bxl/LOUISE.pdf"
+    },
+    {
+      "method": "GET",
+      "url": "https://www.bruxelles.be/sites/default/files/bxl/LOUISE.pdf"
+    },
+    {
+      "method": "GET",
+      "url": "https://ows.parking.brussels/ws/ParkingBrussels/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=ParkingBrussels:regulation_zones&srsName=EPSG:3857&count=3000&bbox=50.825547,4.363237,50.827747,4.366757,urn:ogc:def:crs:EPSG::4326"
+    },
+    {
+      "method": "GET",
+      "url": "https://api.mobility.brussels/datasets/v1/parking/collections/regulations_rules/items/?f=json&limit=500&code=BRU4"
+    },
+    {
+      "method": "GET",
+      "url": "https://ows.parking.brussels/ws/ParkingBrussels/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=ParkingBrussels:on_street&srsName=EPSG:3857&count=5000&bbox=50.826247,4.364357,50.827047,4.365637,urn:ogc:def:crs:EPSG::4326"
+    },
+    {
+      "method": "GET",
+      "url": "https://data.mobility.brussels/geoserver/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=bm_osiris:chantiers_actu&srsName=EPSG:3857&count=5000&bbox=50.826247,4.364357,50.827047,4.365637,urn:ogc:def:crs:EPSG::4326"
+    },
+    {
+      "method": "GET",
+      "url": "https://data.mobility.brussels/geoserver/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=bm_traffic:events&srsName=EPSG:3857&count=5000&bbox=50.826247,4.364357,50.827047,4.365637,urn:ogc:def:crs:EPSG::4326"
+    }
+  ],
+  "expected": {
+    "status": "unknown",
+    "title": "CAN'T VERIFY",
+    "detail": "The City of Brussels changed its official sector document on Mon, 02 Nov 2026 09:00:00 GMT. This app's street list may be outdated: update the app before relying on it.",
+    "notes": [
+      "⚠️ ♿ Disabled (PMR) space 3 m away — don't park on it."
+    ],
+    "tariff": "€3,60/h · first 20 min free · max 4 h 30 · Mon–Sat 09:00–21:00 · fine €47,00",
+    "zoneId": 11036928,
+    "zoneStreet": "Avenue Louise"
+  }
+}

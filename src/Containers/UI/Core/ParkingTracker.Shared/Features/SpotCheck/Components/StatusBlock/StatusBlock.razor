@@ -1,0 +1,53 @@
+@namespace ParkingTracker.Shared.Features.SpotCheck.Components
+@inherits ViewModelComponent<SpotCheckViewModel>
+@{
+    var status = ViewModel.Status;
+}
+<div id="status" class="result @status.ColourKey @(ViewModel.IsChecking ? "checking" : string.Empty)">
+    <div class="hero">
+        <div class="hero-icon"><Icon Name="@status.IconName" /></div>
+        <div class="hero-text">
+            <div class="hero-title">@status.Title</div>
+            @if (status.IsIdle)
+            {
+                <div class="hero-sub">Tap the map, search a street, or press <b>my location</b>. I'll tell you if your residents' card covers it.</div>
+            }
+            else
+            {
+                <div class="hero-sub">@status.Detail</div>
+            }
+        </div>
+    </div>
+    @if (status.Tariff is not null)
+    {
+        <div class="tariff"><Icon Name="euro" /><span>@status.Tariff</span></div>
+    }
+    @if (status.Notes.Count > 0)
+    {
+        <ul class="notes">
+            @foreach (var note in status.Notes)
+            {
+                <li><span>@note</span></li>
+            }
+        </ul>
+    }
+    @if (status.ShowParkedHere || status.ShowPayApps)
+    {
+        <div class="actions">
+            @if (status.ShowParkedHere)
+            {
+                <button type="button" class="btn btn-primary btn-sm" @onclick="OnParkedHereAsync"><Icon Name="car" />I parked here</button>
+            }
+            @if (status.ShowPayApps)
+            {
+                <span class="paylinks">
+                    Pay with
+                    @foreach (var app in NavigationLinks.PayApps)
+                    {
+                        <button type="button" class="btn btn-sm" @onclick="() => OnPayAppAsync(app)">@app.Name</button>
+                    }
+                </span>
+            }
+        </div>
+    }
+</div>

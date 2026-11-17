@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <!--
+    Cleartext HTTP stays off: every source is HTTPS. The card lives in SecureStorage and is excluded from backup (ADR-0004);
+    the rules are in Resources/xml.
+  -->
+  <application
+      android:allowBackup="true"
+      android:fullBackupContent="@xml/backup_rules"
+      android:dataExtractionRules="@xml/data_extraction_rules"
+      android:usesCleartextTraffic="false"
+      android:icon="@mipmap/ic_launcher"
+      android:roundIcon="@mipmap/ic_launcher_round"
+      android:supportsRtl="true" />
+
+  <!-- The network, for the live sources and the connection status. -->
+  <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+  <!-- GPS position: is my current spot covered by my card? -->
+  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+  <!-- "Allow all the time": the user chooses it in the location settings of the app. -->
+  <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+  <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+  <!--
+    Parking alerts (ADR-0002): a foreground service of type location follows the position while the app is off screen, with a
+    small permanent notification; notifications need their runtime permission on Android 13+; the timer reminders are exact
+    alarms. The service and the receivers are declared by attributes on their classes (not exported). The boot permission lets
+    the app schedule the alarms of a running timer again, and start the alert service, after the phone restarts.
+  -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+  <!--
+    Card photo scan (ADR-0003): the camera permission is asked when the user taps "Scan my card"; without a camera the photo picker
+    is used. The photo is read on the device and deleted. MAUI declares its own file provider for the camera's output.
+  -->
+  <uses-permission android:name="android.permission.CAMERA" />
+  <uses-feature android:name="android.hardware.camera" android:required="false" />
+  <!-- Short pulses when the position becomes covered or not covered. -->
+  <uses-permission android:name="android.permission.VIBRATE" />
+
+  <!-- Android 11+: allow opening Waze, Google Maps, payment pages and e-mail links, and see the camera and photo picker apps. -->
+  <queries>
+    <intent>
+      <action android:name="android.media.action.IMAGE_CAPTURE" />
+    </intent>
+    <intent>
+      <action android:name="android.intent.action.GET_CONTENT" />
+      <data android:mimeType="image/*" />
+    </intent>
+    <intent>
+      <action android:name="android.intent.action.VIEW" />
+      <data android:scheme="https" />
+    </intent>
+    <intent>
+      <action android:name="android.intent.action.SENDTO" />
+      <data android:scheme="mailto" />
+    </intent>
+  </queries>
+</manifest>

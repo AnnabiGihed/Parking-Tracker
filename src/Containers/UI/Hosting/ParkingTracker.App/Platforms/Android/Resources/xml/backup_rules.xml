@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 11 and earlier: keep the encrypted card out of backups (ADR-0004). MAUI SecureStorage keeps its values in this
+  shared-preferences file; its key lives in the Android keystore, which is not backed up, so a restored copy could not be read.
+-->
+<full-backup-content>
+  <exclude domain="sharedpref" path="be.parkingtracker.app.microsoft.maui.essentials.preferences.xml" />
+</full-backup-content>

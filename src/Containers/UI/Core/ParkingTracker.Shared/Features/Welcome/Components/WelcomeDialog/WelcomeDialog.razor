@@ -1,0 +1,29 @@
+@namespace ParkingTracker.Shared.Features.Welcome.Components
+@inherits ViewModelComponent<WelcomeViewModel>
+<DialogShell IsOpen="ViewModel.IsOpen" Label="Welcome">
+    <div class="welcome" id="welcomeDialog">
+        <div class="welcome-logo"><Icon Name="parking" /></div>
+        <h1>Park free with your residents' card</h1>
+        <p class="muted">Parking Tracker checks, live, whether your Brussels <em>carte riverain</em> covers the spot where you are.</p>
+        <ul class="benefits">
+            <li><span><Icon Name="check" /></span><span><b>Free or pay?</b> A clear answer for the spot you're on, in a second.</span></li>
+            <li><span><Icon Name="directions" /></span><span><b>Nearest free spot</b>, with Waze or Google Maps.</span></li>
+            <li><span><Icon Name="block" /></span><span><b>No bad surprises:</b> delivery bays, disabled spaces and roadworks.</span></li>
+            <li><span><Icon Name="timer" /></span><span><b>Find your car</b> and get a reminder before paid time ends.</span></li>
+        </ul>
+        <div class="perm-box">
+            <div class="perm-title"><Icon Name="locate" /><b>Location: choose “Allow all the time”</b></div>
+            <p class="muted small">
+                The app needs your position to check the spot where you park. For it to work best, allow location
+                <b>all the time</b>: Android first asks “While using the app”, then lets you pick “Allow all the time” in the app's location settings.
+            </p>
+            @if (ViewModel.Permission.ShowAllowAlwaysButton)
+            {
+                <button id="welcomeAlways" type="button" class="btn btn-block" @onclick="OnAllowAlwaysAsync">Allow location all the time</button>
+            }
+            <p id="welcomePermState" class="muted small">@ViewModel.Permission.WelcomeMessage</p>
+        </div>
+        <button id="welcomeStart" type="button" class="btn btn-primary btn-block" @onclick="OnAddCardAsync">Add my parking card</button>
+        <p class="muted small">Uses official live data from parking.brussels, Brussels Mobility and the City of Brussels. Your card stays on this phone.</p>
+    </div>
+</DialogShell>

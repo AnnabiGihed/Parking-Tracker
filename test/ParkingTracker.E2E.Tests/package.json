@@ -1,0 +1,14 @@
+{
+  "name": "parking-tracker-e2e-tests",
+  "private": true,
+  "type": "module",
+  "description": "Android emulator test of the .NET MAUI app (Node 22 built-ins only)",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "check": "node --check emulator-test.mjs && node --check upgrade-test.mjs && node --check webview-cdp.mjs",
+    "test": "node emulator-test.mjs",
+    "test:upgrade": "node upgrade-test.mjs"
+  }
+}

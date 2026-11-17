@@ -1,0 +1,17 @@
+@namespace ParkingTracker.Shared.Features.MapLayers.Components
+@inherits ViewModelComponent<MapLayersViewModel>
+<div id="layersPanel" class="popover @(IsOpen ? string.Empty : "hidden")" role="dialog" aria-label="Map layers">
+    <div class="popover-head"><b>Map layers</b><button type="button" class="icon-btn" aria-label="Close" @onclick="OnClose"><Icon Name="close" /></button></div>
+    <label class="switch"><input type="checkbox" data-layer="streets" checked="@ViewModel.Switches.Streets" @onchange='e => OnToggleAsync("streets", e)' /><span class="sw"></span><span><b>Where my card works</b><small>Zoomed out: official zone colours. Closer: green = free with your card, red = pay</small></span></label>
+    <label class="switch"><input type="checkbox" data-layer="spaces" checked="@ViewModel.Switches.Spaces" @onchange='e => OnToggleAsync("spaces", e)' /><span class="sw"></span><span><b>Parking spaces</b><small>Delivery, disabled, taxi, EV… (street level)</small></span></label>
+    <label class="switch"><input type="checkbox" data-layer="works" checked="@ViewModel.Switches.Works" @onchange='e => OnToggleAsync("works", e)' /><span class="sw"></span><span><b>Roadworks &amp; events</b><small>May block parking</small></span></label>
+    <label class="switch"><input type="checkbox" data-layer="carparks" checked="@ViewModel.Switches.CarParks" @onchange='e => OnToggleAsync("carparks", e)' /><span class="sw"></span><span><b>Car parks</b><small>Public underground parkings</small></span></label>
+    <label class="switch"><input type="checkbox" data-layer="chargers" checked="@ViewModel.Switches.Chargers" @onchange='e => OnToggleAsync("chargers", e)' /><span class="sw"></span><span><b>EV charging</b><small>Charging points</small></span></label>
+    <div class="legend-row">
+        <span><i style="background:#16a34a"></i>Free for you</span><span><i style="background:#f59e0b"></i>Check number</span>
+        <span><i style="background:#dc2626"></i>Pay</span><span><i style="background:#7f1d1d"></i>Red zone</span>
+        <span><i style="background:#2563eb"></i>Disc</span><span><i style="background:#0d9488"></i>Free for all</span>
+        <span><i style="background:#2dd4bf"></i>Free right now</span>
+    </div>
+    <p id="layerState" class="muted small">@ViewModel.StatusText</p>
+</div>

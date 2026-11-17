@@ -1,16 +1,35 @@
 # Parking Tracker 🅿️
 
-A small web app for Brussels residential parking cards (*carte riverain / bewonerskaart*).
+An Android app (.NET MAUI, Blazor Hybrid) for Brussels residential parking cards (*carte riverain / bewonerskaart*).
 It tells you whether you can park **for free with your card** where you are now, or where you drop a pin,
 and sends you to the nearest covered street in **Waze** or **Google Maps**.
 
+**Status: Production.** Owned by Gihed Annabi ([AnnabiGihed](https://github.com/AnnabiGihed) on GitHub; use the
+issues of this repository).
+
+## Build, test and docs
+
+```bash
+export GITHUB_PACKAGES_USER=<your GitHub user name>
+export GITHUB_PACKAGES_TOKEN="$(gh auth token)"
+python .agent-kit/verify.py
+```
+
+The token must be able to read packages, because the `Pivot.Framework.*` packages come from GitHub Packages. The
+Android app builds only in CI (it needs the `maui-android` workload); the solution on a PC holds everything else,
+with its unit tests. Documentation: [docs/architecture.md](docs/architecture.md) (design, build and CI) and
+[CONTRIBUTING.md](CONTRIBUTING.md) (rules for contributions).
+
 ## Features
 
-- **My card** (🪪): type your card details or **scan a photo** of the card (text recognition fills in the number, plate, sector and validity dates).
-  Data stays in your browser only (localStorage). It warns you 30 days before the card expires, with a link to e-mail the renewal.
-- **Live position** (📍): follows your GPS and shows **FREE ✓** / **PAY** as you drive. Your phone vibrates when the status changes.
+- **My card** (🪪): type your card details or **scan a photo** of the card (text recognition on the phone fills in the
+  number, plate, sector and validity dates). The card stays on your phone, in encrypted storage. It warns you 30 days
+  before the card expires, with a link to e-mail the renewal.
+- **Live position** (📍): follows your GPS and shows **FREE ✓** / **PAY** as you drive. Your phone vibrates when the
+  status changes.
 - **Pin**: tap anywhere on the map (or search an address) to check that spot. You can drag the pin.
-- **Nearest free spot** (🟢): the closest street surface covered by your card, computed from live data, with Waze / Google Maps buttons.
+- **Nearest free spot** (🟢): the closest street surface covered by your card, computed from live data, with Waze /
+  Google Maps buttons.
 - **Live street colours** on the map (zoom in): green = free with your card, amber = partly (check the number),
   red = pay, dark red = red zone (card never valid), blue = parking disc, teal = free for everyone.
 - **Reserved spaces**: every on-street space from parking.brussels. Standing on a delivery bay, disabled (PMR),
@@ -19,12 +38,25 @@ and sends you to the nearest covered street in **Waze** or **Google Maps**.
 - **Roadworks & traffic events** (Brussels Mobility / Osiris): warned at your spot and shown on the map.
 - **Public car parks** (capacity, height, operator, phone) and **EV charging points** as map layers (🗂️ switches).
 - **My car** (🚗): save where you parked, see it on the map, walk back with Google Maps.
-- **Parking alerts** (Android app, on by default, switch in 🚗 My car): when you stop after driving, the app saves
-  where the car is, checks the spot live and notifies you — "Free for you here", "Paid parking" (with the price and
-  the nearest free spot for you), "Reserved space"… — even when the app isn't on screen. It runs as a background
-  location service with a small persistent notification; allow location **all the time** for it to work reliably.
-- **Parking timer**: notification 10 minutes before the end and at the end (works with the app closed on Android).
+- **Parking alerts** (on by default, switch in 🚗 My car): when you stop after driving, the app saves where the car
+  is, checks the spot live and notifies you ("Free for you here", "Paid parking" with the price and the nearest free
+  spot, "Reserved space"…) even when the app isn't on screen. It runs as a foreground location service with a small
+  persistent notification; allow location **all the time** for it to work reliably.
+- **Parking timer**: notification 10 minutes before the end and at the end; it survives a restart of the phone.
 - **Pay** buttons open 4411 / EasyPark / Seety: paying itself happens in those apps.
+
+## Install on the phone
+
+1. On the phone, open [the latest release](https://github.com/AnnabiGihed/Parking-Tracker/releases/latest) and tap
+   **ParkingTracker.apk**.
+2. Open the downloaded file. Android asks to allow installing from your browser ("install unknown apps"): allow it,
+   then **Install**.
+3. Open **Parking Tracker** and allow location, then **Allow all the time** in Android's location settings.
+4. Add your parking card.
+
+Installing over the previous version (the earlier Capacitor app, or any older release) keeps your card, your car, the
+timer and your settings: the first launch brings them over. Every push to `main` builds, tests and publishes a new APK
+(`.github/workflows/android.yml`). Android 7.0 or later is needed.
 
 ## All 19 municipalities
 
@@ -32,7 +64,7 @@ Choose the municipality that issued your card in 🪪. How the app decides depen
 
 | Municipality | Card valid in | Data the app uses |
 |---|---|---|
-| City of Brussels | your sector: street + house-number lists | 10 official sector PDFs → `city-sectors.js` (generated by `tools/build_city_sectors.py`, checked live at start) |
+| City of Brussels | your sector: street + house-number lists | 10 official sector PDFs → `city-sectors.json` (generated by `tools/build_city_sectors.py`, checked live at start) |
 | Anderlecht, Auderghem, Berchem-Sainte-Agathe, Evere, Forest, Ganshoren, Ixelles, Jette, Koekelberg, Molenbeek-Saint-Jean, Saint-Gilles, Schaerbeek, Watermael-Boitsfort, Woluwe-Saint-Pierre | the areas ("mailles") printed on your card — tick them in 🪪 | parking.brussels `permit_secteurs_mailles` (live) |
 | Etterbeek | green zones of the whole municipality | zone rules (live) |
 | Woluwe-Saint-Lambert | blue zones everywhere; green/grey only in your neighbourhood | neighbourhoods not published → **CHECK YOUR CARD** in green/grey zones |
@@ -58,25 +90,26 @@ Tick it in the card dialog if your card has it. Ask the City if you are not sure
 
 | What | Source | When |
 |---|---|---|
-| Street surface under the car, its municipality and zone colour (red = residents' cards never valid, grey/green/orange = card valid in your sector, unregulated, blue = disc…) | **parking.brussels API** (`regulation_zones`) | **live, at every check** |
+| Street surface under the car, its municipality and zone colour | **parking.brussels API** (`regulation_zones`) | **live, at every check** |
 | House numbers and where they are | **Brussels Region UrbIS address points** (`bm_urbis:urbadm_adpt`, data.mobility.brussels) | **live, at every check** |
-| Which streets and numbers your card covers | City of Brussels official sector list (`sectors.js`) — no API publishes City of Brussels sectors | the official documents are **checked live** (ETag / size / date) at start and every 6 h; if the City changes them, the app stops answering until the list is updated |
+| Which streets and numbers your card covers | City of Brussels official sector list (`tolerance-sectors.json`, `city-sectors.json`) — no API publishes City of Brussels sectors | the official documents are **checked live** (ETag / size / date) at start and every 6 h; if the City changes them, the app stops answering until the list is updated |
 | Paid days and hours, price, free minutes, max stay, fine for each zone | **Brussels Mobility API** (`api.mobility.brussels` → `parking/regulations_rules`) + Belgian public holidays | **live, at every check** — outside paid hours the answer is "Free for everyone right now" |
 | Reserved spaces (delivery, PMR, taxi, EV…) | **parking.brussels API** (`on_street`) | **live, at every check** |
 | Roadworks, traffic events, car parks, EV charging | **Brussels Mobility** (`bm_osiris:chantiers_actu`, `bm_traffic:events`, `bm_parking:parkingpublic`, `bm_equipment:evse`) | live, when checking / moving the map |
-| Where you are | phone GPS, high accuracy, no cached fixes | continuously; re-checked every 8 m or 30 s |
+| Address search | **Nominatim** (OpenStreetMap), asked directly by the app | when you search |
+| Where you are | phone GPS (Google Play services fused location), high accuracy, no cached fixes | continuously; re-checked every 8 m or 30 s |
 
-Nothing is stored between checks. No internet, no answer from one of the sources, GPS worse than ±25 m or a fix
-older than 15 s gives **CAN'T VERIFY** instead of FREE/PAY.
-
-Paid hours and prices come live from the Brussels Mobility rules API (public holidays are computed:
-1 Jan, Easter Monday, 1 May, Ascension, Whit Monday, 21 Jul, 15 Aug, 1 Nov, 11 Nov, 25 Dec). If that API does not answer, the app assumes paid hours apply.
+The app calls these services directly from the phone; there is no proxy. Nothing is stored between checks. No
+internet, no answer from one of the sources, GPS worse than ±25 m or a fix older than 15 s gives **CAN'T VERIFY**
+instead of FREE/PAY. Public holidays are computed (1 Jan, Easter Monday, 1 May, Ascension, Whit Monday, 21 Jul,
+15 Aug, 1 Nov, 11 Nov, 25 Dec); if the rules API does not answer, the app assumes paid hours apply.
 
 ## How it decides
 
 1. parking.brussels gives the street surface you are on (street, municipality, zone colour).
    Red zone → pay. Unregulated → free for everyone. Event zone → follow the signs.
-2. The sector list applies on City of Brussels territory, the tolerance list (if your card has the code) on Ixelles territory.
+2. The sector list applies on City of Brussels territory, the tolerance list (if your card has the code) on Ixelles
+   territory.
 3. Each official address point is linked to the street surface it faces. Corner addresses about as close to two
    streets, and numbers that don't fit their neighbours, are left out.
 4. The nearest house number on your street and side gives odd/even and the number, checked against the ranges.
@@ -85,34 +118,11 @@ Paid hours and prices come live from the Brussels Mobility rules API (public hol
 
 Always check the street signs: works, delivery zones, disabled spots and other local rules still apply.
 
-## Run locally
+## CI tests
 
-```bash
-node tools/dev-server.mjs 8766
-```
-
-Then open http://localhost:8766. The dev server forwards `/pbapi/*` to the parking.brussels API and `/bxl/*` to
-bruxelles.be, because those sites don't allow direct calls from web pages (the Android app calls them natively).
-
-## Android app
-
-Every push to `main` builds a signed APK on GitHub Actions (`.github/workflows/android.yml`) and publishes it on the
-repository's **Releases** page.
-
-**Install on the phone**
-1. On the phone, open `https://github.com/AnnabiGihed/Parking-Tracker/releases/latest` and tap **ParkingTracker.apk**.
-2. Open the downloaded file. Android asks to allow installing from Chrome ("install unknown apps"): allow it, then **Install**.
-3. Open **Parking Tracker**: it asks for your location right away. Allow it, then tap **Allow location all the time**
-   (on the welcome screen or the banner) and choose **Allow all the time** in Android's location settings.
-4. Add your parking card.
-
-**Updating:** install the newer APK from the same page; it replaces the old one and keeps your card.
-
-**Signing key:** the key is in `signing/` on the PC that created it (not in git) and in the repository secrets
-`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`.
-Back up `signing/`: without it, a new APK can't update the installed app (you'd have to uninstall it first).
-
-**Local build** (needs Android Studio / Android SDK + JDK 21): `npm ci && npm run sync`, then open `android/` in Android Studio.
+The MAUI host builds only in CI ([docs/architecture.md](docs/architecture.md), section 4.1). CI also runs the
+emulator test and the upgrade test (`test/ParkingTracker.E2E.Tests`). On a PC you need the .NET SDK named in
+`global.json`.
 
 ## Check the street data
 
@@ -121,15 +131,30 @@ python tools/verify_sectors.py
 python tools/build_city_sectors.py --check
 ```
 
-Downloads the official City of Brussels PDFs and compares every street and number range with `sectors.js`
-(needs `pdftotext`, which comes with Git for Windows). It prints `ALL MATCH ✓` when everything is identical, and tells you which document fingerprints to put in
-`sectors.js` when the City publishes a new version.
+They download the official City of Brussels PDFs (needs network and `pdftotext`, which comes with Git for Windows) and
+compare every street and number range with `tolerance-sectors.json` and `city-sectors.json`. `verify_sectors.py` prints
+`ALL MATCH ✓` when everything is identical, and tells you which document fingerprints to put in
+`src/Infrastructure/ParkingTracker.Infrastructure/Data/tolerance-sectors.json` when the City publishes a new version.
+To add another sector, copy the `louise` block in that file, fill in the streets and set `area` to a box that
+contains them all.
 
-## Web version
+## Signing key
 
-The same app also runs in a browser. GPS in the browser needs HTTPS, for example GitHub Pages
-(**Settings → Pages → Deploy from branch → main / root**).
+The key is in `signing/` on the PC that created it (not in git) and in the repository secrets
+`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`. Back up
+`signing/`: without it, a new APK can't update the installed app (you'd have to uninstall it first). The workflow
+refuses to publish when the versionCode is not higher than the latest release's or the signing certificate differs.
 
-## Add another sector
+## Project layout
 
-Copy the `louise` block in `sectors.js`, fill in the streets from your sheet and set `area` to a box that contains them all.
+The .NET solution follows the Pivot.Framework layout adapted to a mobile client; the tree is in
+[docs/architecture.md](docs/architecture.md#4-component-and-deployment-model) (section 4) and the reasons are in
+[ADR-0006](docs/adr/0006-mobile-client-layout.md). Contribution rules are in [CONTRIBUTING.md](CONTRIBUTING.md), the
+changes in [CHANGELOG.md](CHANGELOG.md).
+
+## Tooling deviations
+
+| Rule | Deviation | Reason | Record |
+| --- | --- | --- | --- |
+| StyleCop SA1514 | Switched off in `.editorconfig` | The region convention forbids the blank line it asks for | [ADR-0005](docs/adr/0005-waive-stylecop-sa1514-for-the-region-convention.md) |
+| CA1716 | Namespaces not checked (`analyzed_symbol_kinds`) | The mandatory `Features/Shared` folder names a Visual Basic keyword; the app is C# only | [ADR-0007](docs/adr/0007-narrow-ca1716-to-exclude-namespaces.md) |

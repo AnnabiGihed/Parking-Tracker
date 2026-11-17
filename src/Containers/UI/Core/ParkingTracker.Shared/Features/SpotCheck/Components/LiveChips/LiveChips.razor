@@ -1,0 +1,22 @@
+@namespace ParkingTracker.Shared.Features.SpotCheck.Components
+@inherits ViewModelComponent<SpotCheckViewModel>
+<div id="liveLine" class="chips">
+    @foreach (var chip in ViewModel.Chips)
+    {
+        <span class="chip @ChipClass(chip)">
+            @if (chip.Kind == ChipKind.Busy)
+            {
+                <span class="spinner" style="width:12px;height:12px;border-width:2px"></span>
+            }
+            else if (chip.Kind == ChipKind.Zone)
+            {
+                <i style="background:@chip.ColourHex"></i>
+            }
+            else
+            {
+                <Icon Name="@chip.IconName" />
+            }
+            @chip.Text
+        </span>
+    }
+</div>

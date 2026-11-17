@@ -1,0 +1,19 @@
+@namespace ParkingTracker.Shared.Features.SpotCheck.Components
+@inherits ViewModelComponent<LocationPermissionViewModel>
+<div id="permBanner" class="perm-banner @(ViewModel.Banner == PermissionBannerKind.None ? "hidden" : string.Empty)">
+    @if (ViewModel.Banner == PermissionBannerKind.TurnOn)
+    {
+        <Icon Name="locate" />
+        <div class="grow"><b>Location is off.</b> The app needs your position to check where you park.</div>
+        <div class="btns"><button type="button" class="btn btn-primary" @onclick="OnTurnOnAsync">Turn on</button></div>
+    }
+    else if (ViewModel.Banner == PermissionBannerKind.AllowAlways)
+    {
+        <Icon Name="locate" />
+        <div class="grow">For the best results, allow location <b>all the time</b>.</div>
+        <div class="btns">
+            <button type="button" class="btn btn-primary" @onclick="OnAllowAsync">Allow</button>
+            <button type="button" class="btn btn-ghost" @onclick="OnLaterAsync">Later</button>
+        </div>
+    }
+</div>

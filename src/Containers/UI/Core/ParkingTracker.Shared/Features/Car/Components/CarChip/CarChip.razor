@@ -1,0 +1,3 @@
+@namespace ParkingTracker.Shared.Features.Car.Components
+@inherits ViewModelComponent<CarViewModel>
+<button id="carChip" class="chip-float @(ViewModel.ChipVisible ? string.Empty : "hidden") @(ViewModel.ChipIsLate ? "late" : string.Empty)" type="button" @onclick="OnClick"><Icon Name="@(ViewModel.Timer is null ? "car" : "timer")" />@ViewModel.ChipText</button>

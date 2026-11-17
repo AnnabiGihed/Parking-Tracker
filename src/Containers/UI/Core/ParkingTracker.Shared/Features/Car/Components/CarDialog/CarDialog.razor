@@ -1,0 +1,55 @@
+@namespace ParkingTracker.Shared.Features.Car.Components
+@inherits ViewModelComponent<CarViewModel>
+<DialogShell IsOpen="ViewModel.IsOpen" Label="My car">
+    <div class="dialog-form" id="carForm">
+        <div class="dialog-head">
+            <h2>My car</h2>
+            <button type="button" class="icon-btn" aria-label="Close" @onclick="OnClose"><Icon Name="close" /></button>
+        </div>
+        <div id="carInfo" class="muted">
+            @ViewModel.Info
+            @if (!string.IsNullOrEmpty(ViewModel.AppSaid))
+            {
+                <br /><text>The app said: </text><b>@ViewModel.AppSaid</b>
+            }
+        </div>
+        <div id="carActions" class="stack">
+            @if (ViewModel.Car is not null)
+            {
+                <button type="button" class="btn btn-primary btn-block" @onclick="OnWalkAsync"><Icon Name="walk" />Walk to my car</button>
+                <div class="grid2">
+                    <button type="button" class="btn" id="carShow" @onclick="OnShow"><Icon Name="pin" />Show on map</button>
+                    <button type="button" class="btn" id="carHere" @onclick="OnSaveHereAsync"><Icon Name="locate" />Car is here now</button>
+                </div>
+                <button type="button" class="btn btn-ghost btn-block" id="carClear" @onclick="OnForgetAsync">I left — forget this spot</button>
+            }
+            else
+            {
+                <button type="button" id="carHere" class="btn btn-primary btn-block" @onclick="OnSaveHereAsync"><Icon Name="car" />My car is parked here</button>
+            }
+        </div>
+        <label class="switch card-box">
+            <input type="checkbox" id="alertsToggle" checked="@ViewModel.AlertsEnabled" @onchange="OnAlertsChangedAsync" /><span class="sw"></span>
+            <span><b>Parking alerts</b><small>When you park, the app checks the spot and notifies you if it's free or paid — even when it isn't open. Needs location “all the time”.</small></span>
+        </label>
+        <div class="card-box">
+            <div class="card-box-title"><Icon Name="timer" /><b>Parking timer</b></div>
+            <div class="presets" id="timerPresets">
+                @foreach (var preset in CarViewModel.Presets)
+                {
+                    var minutes = preset;
+                    <button type="button" data-min="@minutes" class="@(ViewModel.Minutes == minutes ? "on" : string.Empty)" @onclick="() => OnPreset(minutes)">@TimerText.Length(minutes)</button>
+                }
+            </div>
+            <div class="grid2">
+                <div class="field"><label for="timerMinutes">Or minutes</label><input id="timerMinutes" name="minutes" type="number" min="5" max="1440" step="5" value="@ViewModel.Minutes" @onchange="OnMinutesChanged" /></div>
+                <div class="field end"><button type="button" id="timerStart" class="btn btn-primary" @onclick="OnStartAsync">Start</button></div>
+            </div>
+            @if (ViewModel.Timer is not null)
+            {
+                <button type="button" id="timerStop" class="btn btn-ghost btn-block" @onclick="OnStopAsync">Stop the timer</button>
+            }
+            <p class="muted small">Reminder 10 minutes before the end, and at the end.</p>
+        </div>
+    </div>
+</DialogShell>

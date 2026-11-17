@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12 and later: the same exclusion as backup_rules.xml, for cloud backup and for a transfer to a new phone (ADR-0004).
+-->
+<data-extraction-rules>
+  <cloud-backup>
+    <exclude domain="sharedpref" path="be.parkingtracker.app.microsoft.maui.essentials.preferences.xml" />
+  </cloud-backup>
+  <device-transfer>
+    <exclude domain="sharedpref" path="be.parkingtracker.app.microsoft.maui.essentials.preferences.xml" />
+  </device-transfer>
+</data-extraction-rules>
