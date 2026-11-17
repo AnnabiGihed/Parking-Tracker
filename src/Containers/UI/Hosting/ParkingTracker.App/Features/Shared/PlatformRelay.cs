@@ -13,7 +13,6 @@ namespace ParkingTracker.App.Features.Shared;
 ///              models live in the scope of the web view, which only components (and not the MAUI app) can reach. It answers a change
 ///              of the connection with <see cref="SpotCheckViewModel.HandleConnectivityChangeAsync"/>, a return to the app with
 ///              <see cref="LocationPermissionViewModel.RefreshAsync"/>, and a change between covered and not covered with a vibration.
-///              In a build made with <c>EnableTestHooks</c> it also registers <c>window.ptTest</c> (see the <c>TestHooks</c> partial file).
 /// </summary>
 public sealed partial class PlatformRelay : ComponentBase, IDisposable
 {
@@ -72,9 +71,6 @@ public sealed partial class PlatformRelay : ComponentBase, IDisposable
 		Network.OnlineChanged -= OnOnlineChanged;
 		Resume.Resumed -= OnResumed;
 		Spot.CoverageChanged -= OnCoverageChanged;
-#if TEST_HOOKS
-		DisposeTestHooks();
-#endif
 	}
 	#endregion
 

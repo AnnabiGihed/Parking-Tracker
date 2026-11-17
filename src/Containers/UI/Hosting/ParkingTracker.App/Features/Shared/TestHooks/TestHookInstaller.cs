@@ -1,19 +1,18 @@
 #if TEST_HOOKS
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
-using ParkingTracker.App.Features.Shared.TestHooks;
 using ParkingTracker.ViewModels.Features.Shared.TestHooks;
 
-namespace ParkingTracker.App.Features.Shared;
+namespace ParkingTracker.App.Features.Shared.TestHooks;
 
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : The part of <see cref="PlatformRelay"/> that exists only in a build made with <c>-p:EnableTestHooks=true</c>: it defines
-///              <c>window.ptTest</c> in the web view and connects it to a <see cref="TestHookBridge"/>. The csproj leaves this file out
-///              of every other build.
+/// Purpose     : A component without markup that exists only in a build made with <c>-p:EnableTestHooks=true</c>: it defines
+///              <c>window.ptTest</c> in the web view and connects it to a <see cref="TestHookBridge"/>, so the emulator test can drive
+///              the app. It is its own root component (<c>#test-hooks</c>) and the csproj leaves this file out of every other build.
 /// </summary>
-public sealed partial class PlatformRelay
+public sealed class TestHookInstaller : ComponentBase, IDisposable
 {
 	#region Fields
 	/// <summary>
@@ -36,6 +35,14 @@ public sealed partial class PlatformRelay
 	public TestHookService Hooks { get; set; } = null!;
 	#endregion
 
+	#region IDisposable Implementation
+	/// <inheritdoc />
+	public void Dispose()
+	{
+		bridgeReference?.Dispose();
+	}
+	#endregion
+
 	#region Lifecycle Methods
 	/// <inheritdoc />
 	protected override Task OnAfterRenderAsync(bool firstRender)
@@ -54,14 +61,6 @@ public sealed partial class PlatformRelay
 		await JS.InvokeVoidAsync("eval", TestHookScript.Build()).ConfigureAwait(true);
 		bridgeReference = DotNetObjectReference.Create(new TestHookBridge(Hooks));
 		await JS.InvokeVoidAsync(TestHookScript.InstallFunction, bridgeReference).ConfigureAwait(true);
-	}
-
-	/// <summary>
-	/// Releases the bridge reference.
-	/// </summary>
-	private void DisposeTestHooks()
-	{
-		bridgeReference?.Dispose();
 	}
 	#endregion
 }
