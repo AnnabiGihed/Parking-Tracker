@@ -125,7 +125,8 @@ public sealed partial class MlKitCardTextReader : ICardTextReader
 			}
 		}
 
-		return await MainThread.InvokeOnMainThreadAsync(() => MediaPicker.Default.PickPhotoAsync(options)).ConfigureAwait(false);
+		var picked = await MainThread.InvokeOnMainThreadAsync(() => MediaPicker.Default.PickPhotosAsync(options)).ConfigureAwait(false);
+		return picked?.FirstOrDefault();
 	}
 
 	/// <summary>
@@ -137,9 +138,15 @@ public sealed partial class MlKitCardTextReader : ICardTextReader
 	/// <returns>A task that completes when the file is written.</returns>
 	private static async Task CopyAsync(FileResult photo, string path, CancellationToken cancellationToken)
 	{
-		await using var source = await photo.OpenReadAsync().ConfigureAwait(false);
-		await using var target = File.Create(path);
-		await source.CopyToAsync(target, cancellationToken).ConfigureAwait(false);
+		var source = await photo.OpenReadAsync().ConfigureAwait(false);
+		await using (source.ConfigureAwait(false))
+		{
+			var target = File.Create(path);
+			await using (target.ConfigureAwait(false))
+			{
+				await source.CopyToAsync(target, cancellationToken).ConfigureAwait(false);
+			}
+		}
 	}
 
 	/// <summary>
@@ -151,7 +158,8 @@ public sealed partial class MlKitCardTextReader : ICardTextReader
 	private static async Task<string> RecognizeAsync(string path, CancellationToken cancellationToken)
 	{
 		using var recognizer = TextRecognition.GetClient(TextRecognizerOptions.DefaultOptions);
-		using var image = InputImage.FromFilePath(Platform.AppContext, AndroidUri.FromFile(new Java.IO.File(path)));
+		var uri = AndroidUri.FromFile(new Java.IO.File(path)) ?? throw new InvalidOperationException("The photo file has no address.");
+		using var image = InputImage.FromFilePath(Platform.AppContext, uri);
 		using var listener = new RecognitionListener();
 		recognizer.Process(image).AddOnSuccessListener(listener).AddOnFailureListener(listener);
 		return await listener.Completion.WaitAsync(cancellationToken).ConfigureAwait(false);
