@@ -165,11 +165,19 @@ async function main() {
     && parsedCard?.municipality === 'bruxelles' && parsedCard?.sector === 'louise' && parsedCard?.tolerances?.[0] === 'BXL_LIM_IXL_LOUISE', JSON.stringify(parsedCard));
 
   stepTo('platform status');
-  const platform = await evaluate('ptTest.platformStatus()');
+  // The grant was seen to be missing once on a slow emulator: apply it again now that the app runs, then poll for up to 10 s.
+  const appopsOutput = tryAdb(['shell', 'appops', 'set', PKG, 'SCHEDULE_EXACT_ALARM', 'allow']);
+  let platform = await evaluate('ptTest.platformStatus()');
+  for (let attempt = 0; attempt < 10 && platform?.exactAlarms !== true; attempt++) {
+    await sleep(1000);
+    platform = await evaluate('ptTest.platformStatus()');
+  }
+  const appopsState = tryAdb(['shell', 'appops', 'get', PKG, 'SCHEDULE_EXACT_ALARM']);
   report.platform = platform;
   check('Location allowed all the time', platform?.locationForeground === 'granted' && platform?.locationBackground === 'granted', JSON.stringify(platform));
   check('Device is online', platform?.online === true, JSON.stringify(platform));
-  check('Notifications and exact alarms allowed', platform?.notifications === true && platform?.exactAlarms === true, JSON.stringify(platform));
+  check('Notifications and exact alarms allowed', platform?.notifications === true && platform?.exactAlarms === true,
+    `${JSON.stringify(platform)} appops set: ${appopsOutput.trim() || 'ok'}; appops get: ${appopsState.trim()}`);
 
   stepTo('official list');
   // The official City list check through the app's HTTP clients.

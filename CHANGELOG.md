@@ -13,17 +13,21 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
 The first build of `main` after this change is merged publishes it as the next release, above v1.0.11, and installs
 over the earlier version.
 
+No issue tracker entry exists for this work; add the pull request number here once it exists (PR #TBD).
+
+### Breaking changes
+
+- Android 6.0 is no longer supported: the app needs Android 7.0 or later.
+
 ### Changed
 
-- Rebuilt the app as a .NET 10 MAUI app (Blazor Hybrid, Pivot.Framework) with the same answers: the decision logic is
-  ported to C# and tested against the answers of the earlier version at 17 recorded places. The screen, the map, the
-  card, the car, the parking alerts and the timer look and work as before; Android 7.0 or later is needed (the earlier
-  version needed 6.0).
-- The parking alerts use the fused location provider of Google Play services and an own foreground location service.
-- The release workflow builds with .NET, signs with the same key and refuses to publish when the versionCode is not
-  above the latest release's or the signing certificate differs, so that the update installs over the old app.
-- The app brings the saved card, car, timer, alerts switch, map layers and location-banner snooze over from the
-  earlier version on the first launch, so updating keeps them.
+- The app was rebuilt on a new technology (.NET MAUI) and gives the same answers as before: they were compared with
+  the earlier version at 17 recorded places. The screen, the map, the card, the car, the parking alerts and the timer
+  look and work as before.
+- The parking alerts take your position from Google Play services and run as a foreground location service with a
+  small notification.
+- The first launch after the update brings your saved card, car, timer, alerts switch, map layers and location-banner
+  snooze over from the earlier version, so updating keeps them.
 
 ### Added
 

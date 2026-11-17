@@ -8,10 +8,10 @@ Status: proposal for branch `chore/maui-migration`, 2026-11-16. The decisions ar
 The work moves the existing Android app to .NET 10 and .NET MAUI without changing what it does. There is no separate
 functional analysis: the current code is the specification.
 
-The Capacitor and web files named below were deleted at cut-over (stage 7); they stay readable at the Git tag
-`v1.0.11`.
+The Capacitor and web files named below are historical: they were deleted at cut-over (stage 7) and stay readable at
+the Git tag `v1.0.11`.
 
-| Input | What it defines |
+| Input (historical, deleted at cut-over, see tag `v1.0.11`) | What it defines |
 | --- | --- |
 | `README.md` | Features, the 19 municipalities, data sources, how the app decides |
 | `live.js` | All live data access and the decision engine |
@@ -80,7 +80,7 @@ services.AddPivotMediator(options => options
 
 Options: (a) port everything except map drawing; (b) keep `live.js` and call it from C#; (c) port the engine but let
 JavaScript fetch the map layers. Option (a) wins: (b) keeps the untested engine and CORS problems; (c) fails because
-parking.brussels does not allow calls from a page origin (the reason for today's dev-server proxy).
+parking.brussels does not allow calls from a page origin (the reason for the dev-server proxy of the earlier version, deleted at cut-over, see tag `v1.0.11`).
 
 | Concern | Today | After |
 | --- | --- | --- |
@@ -137,7 +137,7 @@ Options: (a) embedded JSON written by the Python tools; (b) generated C# source;
 wins: the data stays diff-able and readable by Python, needs no C# generator, and keeps working offline; (b) makes the
 Python tools emit C#, and (c) adds a new hosting need and a new failure mode.
 
-| Today | After | Written by |
+| Before (deleted at cut-over, see tag `v1.0.11`) | After | Written by |
 | --- | --- | --- |
 | `city-sectors.js` | `src/Infrastructure/ParkingTracker.Infrastructure/Data/city-sectors.json` | `tools/build_city_sectors.py` (same `--check` mode) |
 | `sectors.js` | `.../Data/tolerance-sectors.json` | by hand, checked by `tools/verify_sectors.py` |
@@ -150,8 +150,9 @@ City source has a SHA-256, and that the street counts per sector equal those of 
 `ReferenceDataProvider` implements the port `IReferenceData.GetReferenceData()`, which returns a
 `Result<ReferenceDataSet>`; a missing or invalid file gives `ReferenceData.ResourceMissing` or
 `ReferenceData.InvalidFormat`. `tolerance-sectors.json` keeps the shape of `sectors.js` (a `louise` object with
-`streets`, `sources` and `tolerances`); `tools/verify_sectors.py` reads it. `tools/build_city_sectors.py` writes only the City JSON and `tools/verify_sectors.py` also checks that it agrees with
-`tolerance-sectors.json` for the Louise sector (the JavaScript copies are deleted).
+`streets`, `sources` and `tolerances`); `tools/verify_sectors.py` reads it. `tools/build_city_sectors.py` writes only
+the City JSON and `tools/verify_sectors.py` also checks that it agrees with `tolerance-sectors.json` for the Louise
+sector (the JavaScript copies were deleted at cut-over, see tag `v1.0.11`).
 
 An empty side cell has two meanings: in a sector's street list it means the whole side is covered, in a tolerance
 agreement it means the side is not covered. `SectorStreet.EmptyMeansWholeSide` carries this, set by the reader from
@@ -297,17 +298,19 @@ and never stores them. Then build and test everything with `python .agent-kit/ve
 The workflow `.github/workflows/dotnet.yml` does the same in CI: restore with the two variables filled from the
 workflow actor and token, `dotnet format --verify-no-changes`, a Release build and the tests.
 
-The host `src/Containers/UI/Hosting/ParkingTracker.App` builds only where the `maui-android` workload is installed, which
-is the CI workflow `.github/workflows/android.yml` (on pushes to `main` and `chore/maui-migration`, on pull requests
-into `main` and on demand; only a push to `main` publishes). It is therefore not in `ParkingTracker.slnx`, so `verify.py` and `dotnet.yml` stay free of Android tooling; on a
-machine that has the workload, build the host csproj directly (`dotnet publish <csproj> -f net10.0-android -c Release`),
-because a second solution file at the root would be picked up by `verify.py`. The workflow restores with the package
-token, installs the Android SDK packages (`InstallAndroidDependencies`), publishes the Release APK twice, plain and with
-`-p:EnableTestHooks=true`, the first signed with the release key (secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`,
-`ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`; skipped, with the debug key instead, for pull requests from forks, which
-get no secrets), the second with the debug key, both with `ApplicationVersion` = the run number, then runs the version
-and certificate guards of section 7, and runs `test/ParkingTracker.E2E.Tests/emulator-test.mjs` on an API 34 emulator. The host
-supports Android 7.0 (API 24) and later, because .NET MAUI 10 does; the Capacitor app supported API 23.
+The host `src/Containers/UI/Hosting/ParkingTracker.App` builds only where the `maui-android` workload is installed,
+which is the CI workflow `.github/workflows/android.yml` (on pushes to `main` and `chore/maui-migration`, on pull
+requests into `main` and on demand; only a push to `main` publishes). It is therefore not in `ParkingTracker.slnx`, so
+`verify.py` and `dotnet.yml` stay free of Android tooling; on a machine that has the workload, build the host csproj
+directly (`dotnet publish <csproj> -f net10.0-android -c Release`), because a second solution file at the root would be
+picked up by `verify.py`. The workflow restores with the package token, installs the Android SDK packages
+(`InstallAndroidDependencies`), publishes the Release APK twice, plain and with `-p:EnableTestHooks=true`, the first
+signed with the release key (secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
+`ANDROID_KEY_PASSWORD`; only for pushes to `main` and `chore/maui-migration` and for manual runs; every pull request
+uses the debug key instead and skips the certificate guard), the second with the debug key, both with
+`ApplicationVersion` = the run number, then runs the version and certificate guards of section 7, and runs
+`test/ParkingTracker.E2E.Tests/emulator-test.mjs` on an API 34 emulator. The host supports Android 7.0 (API 24) and
+later, because .NET MAUI 10 does; the Capacitor app supported API 23.
 
 The live smoke tests (`LiveSourcesSmokeTests`) call each real service once around Avenue Louise 216. They are skipped by
 default, so `verify.py` needs no network beyond the feed. Switch them on with the environment variable
@@ -662,8 +665,8 @@ Emulator test changes:
   job allows 40 minutes, which these checks (about 8 minutes) do not exceed.
 - Upgrade job (stage 6c, to be proven by its first CI run; job `upgrade-test` of `android.yml`, parallel to the
   emulator test): the job creates a throwaway PKCS12 key with `keytool`, builds the Capacitor debug APK from the
-  checkout of the tag `v1.0.11` in the subfolder `capacitor/` (`npm ci`, `npm run build`, `npx cap sync android`, `./gradlew assembleDebug` with
-  `VERSION_CODE=1`; a debug build has web view debugging on, because Capacitor's `webContentsDebuggingEnabled` defaults
+  checkout of the tag `v1.0.11` in the subfolder `capacitor/` (`npm ci`, `npm run build`, `npx cap sync android`,
+  `./gradlew assembleDebug` with `VERSION_CODE=1`; a debug build has web view debugging on, because Capacitor's `webContentsDebuggingEnabled` defaults
   to the debuggable flag), and re-signs it and the test-hooks APK of the build job with that key (`resign-apk.sh`:
   `zipalign`, `apksigner`). It fails when the MAUI versionCode (the run number) is not above 1 (`version-code.sh`,
   `aapt2`). `upgrade-test.mjs` installs the Capacitor APK, launches it, writes `pt.card`, `pt.car`, `pt.layers`,
@@ -752,11 +755,10 @@ separate pull requests into `chore/maui-migration` (or separate reviewed commits
    `ParkingTracker.Shared` with `map.js` and the Leaflet files, and their tests. Stage 5b (written, to be proven by
    its first CI run): MAUI project, `MainActivity` name, the Android implementations of the device ports and of the
    settings store, the composition root, the test hooks, the E2E project and `maui-android.yml` (merged into `android.yml` at stage 7). CI builds the APKs on
-   the branch. Done when the emulator test's answer and screen checks pass
-   on the new app.
+   the branch. Done when the emulator test's answer and screen checks pass on the new app.
 6. **Platform services, OCR, migration.** ADR-0002, ADR-0003, ADR-0004, ADR-0008. Stage 6a (parking alerts,
-   notifications and timer; written, to be proven by its first CI run): the foreground service, `INotifier`, `IAlarmScheduler`, the boot
-   receiver, the car dialog switch and timer, and the emulator checks above. Stage 6b (card photo scan; written, to be
+   notifications and timer; written, to be proven by its first CI run): the foreground service, `INotifier`,
+   `IAlarmScheduler`, the boot receiver, the car dialog switch and timer, and the emulator checks above. Stage 6b (card photo scan; written, to be
    proven by its first CI run and a check with a real card on a phone): `ICardTextReader`, `CardTextParser`,
    `MlKitCardTextReader` and the scan button of the card dialog. Stage 6c (migration of saved data; written, to be
    proven by the first CI run of the upgrade job): `LegacyDataMigration`, the LevelDB parser and the hidden web view
@@ -768,8 +770,8 @@ separate pull requests into `chore/maui-migration` (or separate reviewed commits
    `style.css`, the root JavaScript and icon files, `tools/dev-server.mjs`, `tools/build-web.mjs`,
    `tools/emulator-test.mjs`, `tools/parity/record.mjs` and `tools/make_icons.py`; the two Python data tools now work
    on the JSON only; `README.md` rewritten for the .NET app (install, build, test, data tools; no web version) and
-   the changelog entry written. The upgrade job builds the Capacitor app from the tag `v1.0.11`. Done when the branch run is green and the
-   owner installs the APK over v1.0.11 on the real phone and sees the card. Then the pull request to `main`; its
+   the changelog entry written. The upgrade job builds the Capacitor app from the tag `v1.0.11`. Done when the branch
+   run is green and the owner installs the APK over v1.0.11 on the real phone and sees the card. Then the pull request to `main`; its
    first run publishes `v1.0.<run_number>` above 11.
 
 Rollback: the previous APK cannot be installed over a higher versionCode without uninstalling. If the MAUI release is

@@ -44,10 +44,11 @@ code is 1 when a check fails.
 `upgrade-test.mjs` proves that the saved data of the Capacitor version survives the update to the MAUI version
 ([ADR-0004](../../docs/adr/0004-migrate-saved-data-from-the-capacitor-webview-once.md), reader of
 [ADR-0008](../../docs/adr/0008-read-capacitor-data-from-leveldb-with-a-web-view-fallback.md)). It needs two APKs of
-the same app id signed with the same key, the MAUI one with the higher versionCode: the Capacitor debug build of the Git tag `v1.0.11`, the last Capacitor release (web view
-debugging on) and the MAUI test-hooks build. `resign-apk.sh` signs both with a throwaway key and `version-code.sh`
-prints a versionCode; the workflow `android.yml` (job `upgrade-test`) builds, signs and runs everything. Both
-scripts need `ANDROID_HOME`, echo each stage and report every failure as an `::error::` line on stderr.
+the same app id signed with the same key, the MAUI one with the higher versionCode: the Capacitor debug build of the
+Git tag `v1.0.11`, the last Capacitor release (web view debugging on) and the MAUI test-hooks build.
+`resign-apk.sh` signs both with a throwaway key and `version-code.sh` prints a versionCode; the workflow `android.yml`
+(job `upgrade-test`) builds, signs and runs everything. Both scripts need `ANDROID_HOME`, echo each stage and report every failure as an `::error::` line on
+stderr.
 
 ```bash
 export UPGRADE_KEY_PASSWORD=changeit
@@ -56,8 +57,11 @@ keytool -genkeypair -keystore upgrade.p12 -storetype PKCS12 \
   -alias upgrade -keyalg RSA -keysize 2048 -validity 2 -dname "CN=upgrade test"
 # build the Capacitor app from the tag v1.0.11 (needs Node 22 and JDK 21):
 git worktree add ../parking-capacitor v1.0.11
-(cd ../parking-capacitor && npm ci && npm run build && npx cap sync android \n  && cd android && VERSION_CODE=1 ./gradlew assembleDebug)
-bash test/ParkingTracker.E2E.Tests/resign-apk.sh ../parking-capacitor/android/app/build/outputs/apk/debug/app-debug.apk \
+(cd ../parking-capacitor \
+  && npm ci && npm run build && npx cap sync android \
+  && cd android && VERSION_CODE=1 ./gradlew assembleDebug)
+bash test/ParkingTracker.E2E.Tests/resign-apk.sh \
+  ../parking-capacitor/android/app/build/outputs/apk/debug/app-debug.apk \
   upgrade/capacitor.apk upgrade.p12 upgrade
 bash test/ParkingTracker.E2E.Tests/resign-apk.sh path/to/ParkingTracker-test.apk \
   upgrade/maui-test.apk upgrade.p12 upgrade

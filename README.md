@@ -7,6 +7,19 @@ and sends you to the nearest covered street in **Waze** or **Google Maps**.
 **Status: Production.** Owned by Gihed Annabi ([AnnabiGihed](https://github.com/AnnabiGihed) on GitHub; use the
 issues of this repository).
 
+## Build, test and docs
+
+```bash
+export GITHUB_PACKAGES_USER=<your GitHub user name>
+export GITHUB_PACKAGES_TOKEN="$(gh auth token)"
+python .agent-kit/verify.py
+```
+
+The token must be able to read packages, because the `Pivot.Framework.*` packages come from GitHub Packages. The
+Android app builds only in CI (it needs the `maui-android` workload); the solution on a PC holds everything else,
+with its unit tests. Documentation: [docs/architecture.md](docs/architecture.md) (design, build and CI) and
+[CONTRIBUTING.md](CONTRIBUTING.md) (rules for contributions).
+
 ## Features
 
 - **My card** (🪪): type your card details or **scan a photo** of the card (text recognition on the phone fills in the
@@ -25,9 +38,9 @@ issues of this repository).
 - **Roadworks & traffic events** (Brussels Mobility / Osiris): warned at your spot and shown on the map.
 - **Public car parks** (capacity, height, operator, phone) and **EV charging points** as map layers (🗂️ switches).
 - **My car** (🚗): save where you parked, see it on the map, walk back with Google Maps.
-- **Parking alerts** (on by default, switch in 🚗 My car): when you stop after driving, the app saves where the car is,
-  checks the spot live and notifies you ("Free for you here", "Paid parking" with the price and the nearest free spot,
-  "Reserved space"…) even when the app isn't on screen. It runs as a foreground location service with a small
+- **Parking alerts** (on by default, switch in 🚗 My car): when you stop after driving, the app saves where the car
+  is, checks the spot live and notifies you ("Free for you here", "Paid parking" with the price and the nearest free
+  spot, "Reserved space"…) even when the app isn't on screen. It runs as a foreground location service with a small
   persistent notification; allow location **all the time** for it to work reliably.
 - **Parking timer**: notification 10 minutes before the end and at the end; it survives a restart of the phone.
 - **Pay** buttons open 4411 / EasyPark / Seety: paying itself happens in those apps.
@@ -105,20 +118,11 @@ instead of FREE/PAY. Public holidays are computed (1 Jan, Easter Monday, 1 May, 
 
 Always check the street signs: works, delivery zones, disabled spots and other local rules still apply.
 
-## Build and test
+## CI tests
 
-Prerequisites: the .NET SDK named in `global.json`, and a GitHub token that can read packages, because the
-`Pivot.Framework.*` packages come from GitHub Packages.
-
-```bash
-export GITHUB_PACKAGES_USER=<your GitHub user name>
-export GITHUB_PACKAGES_TOKEN="$(gh auth token)"
-python .agent-kit/verify.py
-```
-
-The MAUI host needs the `maui-android` workload and builds only in CI ([docs/architecture.md](docs/architecture.md),
-section 4.1); the solution on a PC holds everything else, with its unit tests. CI also runs the emulator test and the
-upgrade test (`test/ParkingTracker.E2E.Tests`).
+The MAUI host builds only in CI ([docs/architecture.md](docs/architecture.md), section 4.1). CI also runs the
+emulator test and the upgrade test (`test/ParkingTracker.E2E.Tests`). On a PC you need the .NET SDK named in
+`global.json`.
 
 ## Check the street data
 

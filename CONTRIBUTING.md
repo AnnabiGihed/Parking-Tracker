@@ -39,10 +39,9 @@ Review your own pull request against the author self-review checklist before you
 needs:
 
 1. Green checks: the **.NET quality gate** workflow (`.github/workflows/dotnet.yml`: restore, format check, Release
-   build, unit tests) and the **Android APK** workflow (`.github/workflows/android.yml`: build, version and certificate guards,
-   emulator test, upgrade test). The repository owner should
-   mark the ".NET quality gate" and Android checks as required in the branch protection of `main`; until then they
-   are expected, not enforced.
+   build, unit tests) and the **Android APK** workflow (`.github/workflows/android.yml`: build, version and
+   certificate guards, emulator test, upgrade test). The repository owner should mark the ".NET quality gate" and
+   Android checks as required in the branch protection of `main`; until then they are expected, not enforced.
 2. One approval from the repository owner.
 3. A `CHANGELOG.md` entry under `[Unreleased]` for every user-visible change, or a line saying why there is none.
 4. Documentation (`README.md`, `docs/`, ADRs) updated in the same pull request as the behavior it describes.
