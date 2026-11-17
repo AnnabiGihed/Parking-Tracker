@@ -37,6 +37,13 @@ The .NET migration is in progress and is not part of any release yet: the publis
   found, with the same card number, dates, plate, municipality, sector and tolerance-code rules as before and the same
   "please double-check" line. The photo never leaves the phone and is deleted after reading. The emulator test checks
   the parsing of a sample card text. Nothing is released yet.
+- Added the one-time copy of the saved data of the Capacitor version to the .NET app (ADR-0004), so that an update keeps
+  the card, the parked car, the timer, the alerts switch, the map layers and the location-banner snooze: on the first
+  start it reads the old `localStorage` straight from the files of the old web view (no web view is started), keeps the
+  card in the encrypted storage and the rest in the preferences, skips values that do not read, never replaces what the
+  new app already holds, and records `pt.migration`. A read that fails is tried again at the next launch, three times at
+  most, then the welcome dialog asks for the card again. A new CI job installs the Capacitor build, stores a card, updates
+  to the .NET build with `install -r` and checks that the card came over. Nothing is released yet.
 - Split the on-screen parking reaction out of the host relay into a tested view model class and renamed
   `AppVisibility.Set` to `MarkVisible` and `MarkHidden`.
 - Added the Meziantou analyzers, the StyleCop documentation settings (`stylecop.json`) and the target framework in

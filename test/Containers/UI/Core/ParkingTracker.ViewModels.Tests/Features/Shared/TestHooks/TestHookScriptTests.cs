@@ -27,12 +27,12 @@ public sealed class TestHookScriptTests
 	}
 
 	/// <summary>
-	/// Verifies that the hooks are the nine the emulator test calls.
+	/// Verifies that the hooks are the eleven the emulator tests call.
 	/// </summary>
 	[Fact]
-	public void Hooks_ShouldBeTheNineOfTheEmulatorTest()
+	public void Hooks_ShouldBeTheElevenOfTheEmulatorTests()
 	{
-		TestHookScript.Hooks.Select(h => h.JsName).Should().Equal("setCard", "getCard", "decide", "freeSpots", "officialList", "platformStatus", "screenState", "startTimer", "parseCardText");
+		TestHookScript.Hooks.Select(h => h.JsName).Should().Equal("setCard", "getCard", "decide", "freeSpots", "officialList", "platformStatus", "screenState", "startTimer", "parseCardText", "getCar", "migration");
 	}
 	#endregion
 }

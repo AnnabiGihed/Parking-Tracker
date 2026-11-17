@@ -18,14 +18,15 @@ public sealed class RoutesTests : UiTestContext
 	/// <summary>
 	/// Verifies that the router of the app shows the home page at the root address, inside the layout that holds the toast.
 	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
-	public void Routes_RootAddress_ShouldShowTheHomePageInTheLayout()
+	public async Task Routes_RootAddress_ShouldShowTheHomePageInTheLayout()
 	{
 		SetUpMap();
 
 		var cut = Render<Routes>();
 
-		cut.FindComponent<Home>().Should().NotBeNull();
+		await cut.WaitForAssertionAsync(() => cut.FindComponent<Home>().Should().NotBeNull());
 		cut.FindComponent<Toast>().Should().NotBeNull();
 	}
 	#endregion

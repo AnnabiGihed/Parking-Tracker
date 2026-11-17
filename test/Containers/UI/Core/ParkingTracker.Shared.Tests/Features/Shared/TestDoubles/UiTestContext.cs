@@ -1,5 +1,6 @@
 using Bunit;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
@@ -15,6 +16,8 @@ using ParkingTracker.Domain.Features.Sectors.ValueObjects;
 using ParkingTracker.Domain.Features.Shared.ValueObjects;
 using ParkingTracker.Domain.Features.SpotDecisions.ValueObjects;
 using ParkingTracker.Domain.Features.Zones.ValueObjects;
+using ParkingTracker.ViewModels.Features.Shared.Settings;
+using ParkingTracker.ViewModels.Features.Shared.Settings.Legacy;
 using Pivot.Framework.Application.Abstractions.Messaging;
 using Pivot.Framework.Domain.Shared;
 
@@ -66,6 +69,10 @@ public abstract class UiTestContext : BunitContext
 		Services.AddSingleton(Alarms);
 		Services.AddSingleton(Notifier);
 		Services.AddSingleton(AlertCoordinator);
+
+		// The migration of the previous version's data has finished before a screen is shown, unless a test says otherwise.
+		LegacyPlain.ReadAsync(LegacyDataMigration.MarkerKey).Returns("{}");
+		Services.AddSingleton(new LegacyDataMigration(LegacyReader, Settings, LegacyPlain, Clock, NullLogger<LegacyDataMigration>.Instance));
 		var configuration = new ConfigurationBuilder().Build();
 		new global::ParkingTracker.ViewModels.UiServiceInstaller().Install(Services, configuration);
 		new global::ParkingTracker.Shared.UiServiceInstaller().Install(Services, configuration);
@@ -122,6 +129,16 @@ public abstract class UiTestContext : BunitContext
 	/// Gets the notifier substitute, which allows notifications.
 	/// </summary>
 	protected INotifier Notifier { get; } = Substitute.For<INotifier>();
+
+	/// <summary>
+	/// Gets the substitute for the reader of the previous version's storage.
+	/// </summary>
+	protected ILegacyStorageReader LegacyReader { get; } = Substitute.For<ILegacyStorageReader>();
+
+	/// <summary>
+	/// Gets the substitute for the preferences that hold the migration marker; the marker exists unless a test removes it.
+	/// </summary>
+	protected IKeyValueStorage LegacyPlain { get; } = Substitute.For<IKeyValueStorage>();
 
 	/// <summary>
 	/// Gets the substitute for the coordinator of the background service.

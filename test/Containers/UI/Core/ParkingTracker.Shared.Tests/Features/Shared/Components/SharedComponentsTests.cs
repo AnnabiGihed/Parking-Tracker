@@ -1,8 +1,10 @@
 using Bunit;
+using NSubstitute;
 using ParkingTracker.Shared.Features.Shared.Components;
 using ParkingTracker.Shared.Features.Shared.Layout;
 using ParkingTracker.Shared.Tests.Features.Shared.TestDoubles;
 using ParkingTracker.ViewModels.Features.Shared;
+using ParkingTracker.ViewModels.Features.Shared.Settings.Legacy;
 
 namespace ParkingTracker.Shared.Tests.Features.Shared.Components;
 
@@ -81,13 +83,34 @@ public sealed class SharedComponentsTests : UiTestContext
 	/// <summary>
 	/// Verifies that the layout draws the page and the toast.
 	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
-	public void MainLayout_Body_ShouldDrawThePageAndTheToast()
+	public async Task MainLayout_Body_ShouldDrawThePageAndTheToast()
 	{
 		var cut = Render<MainLayout>(parameters => parameters.Add(layout => layout.Body, builder => builder.AddMarkupContent(0, "<main>page</main>")));
 
-		cut.Find("main").TextContent.Should().Be("page");
+		await cut.WaitForAssertionAsync(() => cut.Find("main").TextContent.Should().Be("page"));
 		cut.Find("#toast").Should().NotBeNull();
+	}
+
+	/// <summary>
+	/// Verifies that the layout shows the page only after the migration of the previous version's data finished, and always shows
+	/// the toast.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task MainLayout_MigrationRunning_ShouldShowThePageOnlyWhenItFinished()
+	{
+		var release = new TaskCompletionSource<LegacyStorageReading>();
+		LegacyPlain.ReadAsync(LegacyDataMigration.MarkerKey).Returns((string?)null);
+		LegacyReader.ReadAsync(Arg.Any<CancellationToken>()).Returns(release.Task);
+
+		var cut = Render<MainLayout>(parameters => parameters.Add(layout => layout.Body, builder => builder.AddMarkupContent(0, "<main>page</main>")));
+
+		cut.FindAll("main").Should().BeEmpty();
+		cut.Find("#toast").Should().NotBeNull();
+		release.SetResult(LegacyStorageReading.Success(new Dictionary<string, string>(StringComparer.Ordinal)));
+		await cut.WaitForAssertionAsync(() => cut.Find("main").TextContent.Should().Be("page"));
 	}
 
 	/// <summary>

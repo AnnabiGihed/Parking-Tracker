@@ -31,6 +31,8 @@ public static class TestHookScript
 		("screenState", "ScreenState"),
 		("startTimer", "StartTimer"),
 		("parseCardText", "ParseCardText"),
+		("getCar", "GetCar"),
+		("migration", "Migration"),
 	];
 	#endregion
 

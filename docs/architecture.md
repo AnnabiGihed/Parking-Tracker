@@ -548,8 +548,33 @@ already, checks the place.
 
 ### 5.5 Persisted data
 
-Only the six settings keys of ADR-0004, plus `pt.migration`. Their JSON is a contract with existing installs: changing
-a shape later needs a versioned reader.
+Only the six settings keys of ADR-0004, plus `pt.welcomeSeen` (new), `pt.migration` and `pt.migrationAttempts`. Their
+JSON is a contract with existing installs: changing a shape later needs a versioned reader. The card is kept in
+`SecureStorage`, everything else in `Preferences` (file `parkingtracker`).
+
+Migration of the Capacitor data (stage 6c, `Features/Shared/Settings/Legacy` in `ParkingTracker.ViewModels`):
+
+- `LegacyDataMigration` runs once per process (`RunOnceAsync`, on a pool thread, started by `HostApplication` before the
+  web view exists). `MainLayout` renders the page and `PlatformRelay` starts the alerts only after it finished, so no
+  screen reads the card first. While `pt.migration` is absent it reads the old values through the port
+  `ILegacyStorageReader`, validates each with `SettingsJson` (a bad value is logged and skipped), saves the card with
+  `ISettingsStore.SaveCardAsync` and the other values unchanged to the preferences, never replaces a value that is
+  already set, and writes `pt.migration` = `{ "version": 1, "outcome": "migrated" | "nothing" | "gaveUp", "found": [...], "at": ms }`.
+  A new install (no old data) gives `nothing`.
+- A read that fails (corrupt or unsupported file, I/O error, more than 10 seconds), or a value that cannot be saved, writes
+  no marker, so the next launch tries again. `pt.migrationAttempts` counts the failures; the third one writes the marker
+  with `gaveUp`, and the user enters the card again through the welcome dialog (no card, dialog not seen).
+- `LegacyLocalStorageReader` reads the old data without a web view: Android keeps `app_webview/Default/Local Storage/leveldb`
+  across an update of the same package, and `ChromiumLocalStorageParser` reads its files (`LevelDb/`): the write-ahead
+  `*.log` (32 KB blocks, write batches) and the tables `*.ldb` (footer, index block, prefix-compressed blocks, Snappy). A key
+  is `_https://localhost` + `0x00` + a format byte + the name, a value a format byte (`1` Latin-1, `0` UTF-16LE) + the
+  text; the highest sequence number wins across all files and a deletion removes the key. A block with another compression
+  (Chromium may use Zstandard) makes the read fail instead of giving partial data. The old data is never deleted.
+- ADR-0004 describes a hidden `WebView` as the way to read the old values; the implementation reads the files instead, which
+  needs no web view and no network answer, and keeps everything else of the decision (keys, storages, marker, fallback). The
+  ADR is Accepted and unchanged; changing its wording needs a decision of the owner.
+- The host supplies only the directory (`AppServiceInstaller`); everything else runs in `net10.0` with unit tests on byte
+  layouts of a log and a table. The real Chromium files are covered by the upgrade job (section 6.3).
 
 ## 6. Cross-cutting concerns
 
@@ -618,9 +643,18 @@ Emulator test changes:
   notification --noredact` for the title "Free for you here"), then that the saved car shows as the car chip; and the
   timer (a 1-minute timer, Home, wait up to 2.5 minutes for the text "Your parking time is over."). The `emulator-test`
   job allows 40 minutes, which these checks (about 8 minutes) do not exceed.
-- Upgrade job: build the Capacitor app from the last Capacitor commit with `webContentsDebuggingEnabled` and a
-  throwaway key, build the MAUI test APK with the same key, install the first, store a card through CDP in
-  `https://localhost`, install the second with `install -r`, check `ptTest.getCard()` and the welcome dialog.
+- Upgrade job (stage 6c, to be proven by its first CI run; job `upgrade-test` of `maui-android.yml`, parallel to the
+  emulator test): the job creates a throwaway PKCS12 key with `keytool`, builds the Capacitor debug APK from the branch's
+  `android/` (`npm ci`, `npm run build`, `npx cap sync android`, `./gradlew assembleDebug` with `VERSION_CODE=1`; a debug
+  build has web view debugging on, because Capacitor's `webContentsDebuggingEnabled` defaults to the debuggable flag),
+  and re-signs it and the test-hooks APK of the build job with that key (`resign-apk.sh`: `zipalign`, `apksigner`). It
+  fails when the MAUI versionCode (the run number) is not above 1 (`version-code.sh`, `aapt2`). `upgrade-test.mjs`
+  installs the Capacitor APK, launches it, writes `pt.card`, `pt.car`, `pt.layers`, `pt.bgAlerts` and `pt.permSnooze`
+  into the `localStorage` of `https://localhost` through CDP (`webview-cdp.mjs`), waits until the web view data on disk
+  mentions the card (`run-as ... grep`, at least 12 seconds, as Chromium writes after a delay), force-stops, installs the
+  MAUI APK with `adb install -r`, launches it and checks through `ptTest.getCard()`, `ptTest.getCar()` and
+  `ptTest.migration()` that the card and the car came over, that the marker says `migrated` and lists the keys, and that
+  `#welcomeDialog` is not shown. Report and logcat go to the artifact `maui-upgrade-report`.
 
 ## 7. Infrastructure footprint and platform dependencies
 
@@ -630,7 +664,7 @@ No servers. CI on GitHub-hosted Ubuntu runners, same workflow file `.github/work
 | --- | --- | --- |
 | build | checkout; `setup-dotnet` from `global.json`; `setup-java` 21; `dotnet workload install maui-android`; Android SDK platform 36 (`InstallAndroidDependencies` target); restore with `nuget.config` whose GitHub Packages credentials read `%GITHUB_TOKEN%`-style environment variables; `dotnet test` on the test projects; `dotnet publish` of the signed APK and of the test-hooks APK | `contents: read`, `packages: read` |
 | test | emulator API 34, `node tools/emulator-test.mjs` | `contents: read` |
-| upgrade-test | as section 6.3, until cut-over | `contents: read` |
+| upgrade-test | as section 6.3 (in `maui-android.yml`), until cut-over | `contents: read` |
 | release | only on `main`, only if the tests passed; `gh release create v1.0.<run_number>` | `contents: write` |
 
 Signing and version (illustrative MSBuild properties for `dotnet publish -f net10.0-android -c Release`; check the
@@ -699,7 +733,9 @@ separate pull requests into `chore/maui-migration` (or separate reviewed commits
    timer; written, to be proven by its first CI run): the foreground service, `INotifier`, `IAlarmScheduler`, the boot
    receiver, the car dialog switch and timer, and the emulator checks above. Stage 6b (card photo scan; written, to be
    proven by its first CI run and a check with a real card on a phone): `ICardTextReader`, `CardTextParser`,
-   `MlKitCardTextReader` and the scan button of the card dialog. Stage 6c (migration of saved data) follows. Done when
+   `MlKitCardTextReader` and the scan button of the card dialog. Stage 6c (migration of saved data; written, to be
+   proven by the first CI run of the upgrade job): `LegacyDataMigration`, the parser of the old web view's LevelDB files,
+   the start-up gate and the upgrade job and script of section 6.3. Done when
    the emulator test's background parking alert and timer checks pass and the upgrade test shows the card kept.
 7. **CI and cut-over.** Final `android.yml` (version and certificate guards, test-hooks build, release on `main`
    only); delete `android/`, `capacitor.config.json`, `package.json`, `www` build, `sw.js`, `manifest.webmanifest`,

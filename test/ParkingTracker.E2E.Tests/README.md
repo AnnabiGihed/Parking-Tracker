@@ -1,6 +1,6 @@
 # Parking Tracker E2E tests
 
-The Android emulator test of the .NET MAUI app. It replaces the API end-to-end test of a service
+The Android emulator test and the upgrade test of the .NET MAUI app. It replaces the API end-to-end test of a service
 ([ADR-0006](../../docs/adr/0006-mobile-client-layout.md)) and ports `tools/emulator-test.mjs`, which stays in place for the
 Capacitor workflow until cut-over.
 
@@ -21,7 +21,7 @@ The host builds only where the `maui-android` workload is installed; CI does it 
 
 - Install with `-g`, launch `be.parkingtracker.app/be.parkingtracker.app.MainActivity`, find the
   `webview_devtools_remote_<pid>` socket and talk to the web view over the Chrome DevTools Protocol.
-- `window.ptTest` (setCard, getCard, decide, freeSpots, officialList, platformStatus, screenState, startTimer, parseCardText) reaches the app's own C# code.
+- `window.ptTest` (setCard, getCard, decide, freeSpots, officialList, platformStatus, screenState, startTimer, parseCardText, getCar, migration) reaches the app's own C# code.
   The answers at Avenue Louise 216 and Place du Châtelain, the official-list check, the permissions and the nearest
   free spot are compared with the expected values.
 - The card scan (ADR-0003): `ptTest.parseCardText` reads a recognised sample card text (number with a misread `8`, validity range with an
@@ -37,3 +37,34 @@ The host builds only where the `maui-android` workload is installed; CI does it 
 
 The report goes to `emulator-report/` (`summary.md`, `report.json`, screenshots, `logcat.txt`, `crash.txt`); the exit
 code is 1 when a check fails.
+
+## Upgrade test
+
+`upgrade-test.mjs` proves that the saved data of the Capacitor version survives the update to the MAUI version
+([ADR-0004](../../docs/adr/0004-migrate-saved-data-from-the-capacitor-webview-once.md)). It needs two APKs of the same app
+id signed with the same key, the MAUI one with the higher versionCode: the Capacitor debug build (web view debugging on) and
+the MAUI test-hooks build. `resign-apk.sh` signs both with a throwaway key and `version-code.sh` prints a versionCode; the
+workflow `maui-android.yml` (job `upgrade-test`) builds, signs and runs everything.
+
+```bash
+export UPGRADE_KEY_PASSWORD=changeit
+keytool -genkeypair -keystore upgrade.p12 -storetype PKCS12 -storepass "$UPGRADE_KEY_PASSWORD" -keypass "$UPGRADE_KEY_PASSWORD"   -alias upgrade -keyalg RSA -keysize 2048 -validity 2 -dname "CN=upgrade test"
+(cd android && VERSION_CODE=1 ./gradlew assembleDebug)   # after npm ci, npm run build and npx cap sync android
+bash test/ParkingTracker.E2E.Tests/resign-apk.sh android/app/build/outputs/apk/debug/app-debug.apk upgrade/capacitor.apk upgrade.p12 upgrade
+bash test/ParkingTracker.E2E.Tests/resign-apk.sh path/to/ParkingTracker-test.apk upgrade/maui-test.apk upgrade.p12 upgrade
+node test/ParkingTracker.E2E.Tests/upgrade-test.mjs upgrade/capacitor.apk upgrade/maui-test.apk
+```
+
+What it checks:
+
+- The Capacitor build installs, runs in the origin `https://localhost`, and takes `pt.card`, `pt.car`, `pt.layers`,
+  `pt.bgAlerts` and `pt.permSnooze` in `localStorage` through the devtools protocol (`webview-cdp.mjs`).
+- The test waits until the web view data on disk mentions the card (`run-as` on the debug build; Chromium writes a few
+  seconds after the change), then force-stops the app.
+- The MAUI build installs over it with `adb install -r` and a higher versionCode.
+- Through `ptTest.getCard()`, `ptTest.getCar()` and `ptTest.migration()`: the card and the car are the stored ones, the
+  marker `pt.migration` says `migrated` and lists the keys, and the welcome dialog (`#welcomeDialog`) is not shown.
+- No JavaScript error, no unhandled .NET exception in logcat.
+
+The report goes to `upgrade-report/` (`summary.md`, `report.json`, `logcat.txt`, screenshots); the exit code is 1 when a check
+fails. The script is needed until the Capacitor code is deleted at cut-over.

@@ -1,4 +1,5 @@
 using ParkingTracker.App.Features.Shared;
+using ParkingTracker.ViewModels.Features.Shared.Settings.Legacy;
 
 namespace ParkingTracker.App;
 
@@ -7,7 +8,8 @@ namespace ParkingTracker.App;
 /// Date        : 11-2026
 /// Purpose     : The MAUI application: opens the one window with the page that hosts the Blazor screens and tells the rest of the app
 ///              when the user comes back to it, so that the location permission is read again after a visit to the settings, and
-///              whether the window is on screen, so that a parking alert is shown as a message instead of a notification.
+///              whether the window is on screen, so that a parking alert is shown as a message instead of a notification. It also starts the
+///              one-time copy of the saved data of the previous version (ADR-0004).
 /// </summary>
 public sealed class HostApplication : Microsoft.Maui.Controls.Application
 {
@@ -21,6 +23,11 @@ public sealed class HostApplication : Microsoft.Maui.Controls.Application
 	/// Records whether the window is on screen.
 	/// </summary>
 	private readonly AppVisibility visibility;
+
+	/// <summary>
+	/// Copies the saved data of the previous version.
+	/// </summary>
+	private readonly LegacyDataMigration migration;
 	#endregion
 
 	#region Constructors
@@ -29,10 +36,12 @@ public sealed class HostApplication : Microsoft.Maui.Controls.Application
 	/// </summary>
 	/// <param name="resumeNotifier">Passes the "app resumed" moment on to the screens.</param>
 	/// <param name="visibility">Records whether the window is on screen.</param>
-	public HostApplication(AppResumeNotifier resumeNotifier, AppVisibility visibility)
+	/// <param name="migration">Copies the saved data of the previous version.</param>
+	public HostApplication(AppResumeNotifier resumeNotifier, AppVisibility visibility, LegacyDataMigration migration)
 	{
 		this.resumeNotifier = resumeNotifier;
 		this.visibility = visibility;
+		this.migration = migration;
 	}
 	#endregion
 
@@ -40,6 +49,8 @@ public sealed class HostApplication : Microsoft.Maui.Controls.Application
 	/// <inheritdoc />
 	protected override Window CreateWindow(IActivationState? activationState)
 	{
+		// Starts on a pool thread before the web view exists; the screens and the relay wait for the same run before they read settings.
+		_ = migration.RunOnceAsync();
 		var window = new Window(new MainPage());
 		window.Activated += (_, _) => visibility.MarkVisible();
 		window.Deactivated += (_, _) => visibility.MarkHidden();

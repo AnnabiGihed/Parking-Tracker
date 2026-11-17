@@ -1,6 +1,7 @@
 #if TEST_HOOKS
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
+using ParkingTracker.ViewModels.Features.Shared.Settings.Legacy;
 using ParkingTracker.ViewModels.Features.Shared.TestHooks;
 
 namespace ParkingTracker.App.Features.Shared.TestHooks;
@@ -33,6 +34,12 @@ public sealed class TestHookInstaller : ComponentBase, IDisposable
 	/// </summary>
 	[Inject]
 	public TestHookService Hooks { get; set; } = null!;
+
+	/// <summary>
+	/// Gets or sets the migration of the saved data, whose marker the upgrade test reads.
+	/// </summary>
+	[Inject]
+	public LegacyDataMigration Migration { get; set; } = null!;
 	#endregion
 
 	#region IDisposable Implementation
@@ -59,7 +66,7 @@ public sealed class TestHookInstaller : ComponentBase, IDisposable
 	private async Task RegisterTestHooksAsync()
 	{
 		await JS.InvokeVoidAsync("eval", TestHookScript.Build()).ConfigureAwait(true);
-		bridgeReference = DotNetObjectReference.Create(new TestHookBridge(Hooks));
+		bridgeReference = DotNetObjectReference.Create(new TestHookBridge(Hooks, Migration));
 		await JS.InvokeVoidAsync(TestHookScript.InstallFunction, bridgeReference).ConfigureAwait(true);
 	}
 	#endregion

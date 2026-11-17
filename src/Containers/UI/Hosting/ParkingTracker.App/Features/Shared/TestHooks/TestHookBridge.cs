@@ -1,5 +1,6 @@
 #if TEST_HOOKS
 using Microsoft.JSInterop;
+using ParkingTracker.ViewModels.Features.Shared.Settings.Legacy;
 using ParkingTracker.ViewModels.Features.Shared.TestHooks;
 
 namespace ParkingTracker.App.Features.Shared.TestHooks;
@@ -18,6 +19,11 @@ public sealed class TestHookBridge
 	/// The service that does the work.
 	/// </summary>
 	private readonly TestHookService hooks;
+
+	/// <summary>
+	/// The migration of the saved data of the previous version.
+	/// </summary>
+	private readonly LegacyDataMigration migration;
 	#endregion
 
 	#region Constructors
@@ -25,11 +31,14 @@ public sealed class TestHookBridge
 	/// Initializes a new instance of the <see cref="TestHookBridge"/> class.
 	/// </summary>
 	/// <param name="hooks">The service that does the work.</param>
-	/// <exception cref="ArgumentNullException">Thrown when <paramref name="hooks"/> is <see langword="null"/>.</exception>
-	public TestHookBridge(TestHookService hooks)
+	/// <param name="migration">The migration of the saved data of the previous version.</param>
+	/// <exception cref="ArgumentNullException">Thrown when an argument is <see langword="null"/>.</exception>
+	public TestHookBridge(TestHookService hooks, LegacyDataMigration migration)
 	{
 		ArgumentNullException.ThrowIfNull(hooks);
+		ArgumentNullException.ThrowIfNull(migration);
 		this.hooks = hooks;
+		this.migration = migration;
 	}
 	#endregion
 
@@ -98,6 +107,20 @@ public sealed class TestHookBridge
 	/// <returns>The fields that were found.</returns>
 	[JSInvokable("ParseCardText")]
 	public Task<CardTextAnswer> ParseCardText(string text) => hooks.ParseCardTextAsync(text);
+
+	/// <summary>
+	/// Reads the saved parked car as the JSON of <c>pt.car</c>.
+	/// </summary>
+	/// <returns>A task with the JSON, or <see langword="null"/> when none is saved.</returns>
+	[JSInvokable("GetCar")]
+	public Task<string?> GetCar() => hooks.GetCarAsync();
+
+	/// <summary>
+	/// Reads the marker <c>pt.migration</c> that records the outcome of the migration of the previous version's data.
+	/// </summary>
+	/// <returns>A task with the JSON of the marker, or <see langword="null"/> when none is saved.</returns>
+	[JSInvokable("Migration")]
+	public Task<string?> Migration() => migration.ReadMarkerAsync();
 
 	/// <summary>
 	/// Reads what the main screen holds: tracking, position, headline and busy state.

@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Maui.Devices;
+using Microsoft.Maui.Storage;
 using ParkingTracker.App.Features.Cards;
 using ParkingTracker.App.Features.ParkingDetection;
 using ParkingTracker.App.Features.Shared;
@@ -12,6 +13,7 @@ using ParkingTracker.Application.Features.ParkingDetection.Abstractions;
 using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
 using ParkingTracker.ViewModels.Features.Shared.Settings;
+using ParkingTracker.ViewModels.Features.Shared.Settings.Legacy;
 using Pivot.Framework.Tools.DependencyInjection.Abstractions;
 #if TEST_HOOKS
 using ParkingTracker.ViewModels.Features.Shared.TestHooks;
@@ -43,6 +45,14 @@ public sealed class AppServiceInstaller : IServiceInstaller
 		services.AddSingleton<ISettingsStore>(provider => new SettingsStore(
 			new SecureValueStorage(provider.GetRequiredService<ILogger<SecureValueStorage>>()),
 			new PreferencesValueStorage()));
+
+		// One run of the copy of the previous version's data (ADR-0004); the Blazor screens wait for it before they read the settings.
+		services.AddSingleton(provider => new LegacyDataMigration(
+			new LegacyLocalStorageReader(LegacyStorageDirectory()),
+			provider.GetRequiredService<ISettingsStore>(),
+			new PreferencesValueStorage(),
+			provider.GetRequiredService<TimeProvider>(),
+			provider.GetRequiredService<ILogger<LegacyDataMigration>>()));
 		services.AddSingleton<ILocationTracker, FusedLocationTracker>();
 		services.AddSingleton<ILocationPermissions, MauiLocationPermissions>();
 		services.AddSingleton<ILinkLauncher, MauiLinkLauncher>();
@@ -70,6 +80,19 @@ public sealed class AppServiceInstaller : IServiceInstaller
 		// Scoped like the view models it reads, so that the hooks see the same card line the screen shows.
 		services.AddScoped<TestHookService>();
 #endif
+	}
+	#endregion
+
+	#region Private Helpers
+	/// <summary>
+	/// Finds the <c>Local Storage/leveldb</c> directory of the web view of the Capacitor version: <c>app_webview</c> lies next to the
+	/// <c>files</c> directory that <see cref="FileSystem.AppDataDirectory"/> names.
+	/// </summary>
+	/// <returns>The path; the directory does not exist on a new install.</returns>
+	private static string LegacyStorageDirectory()
+	{
+		var dataDirectory = Path.GetDirectoryName(FileSystem.AppDataDirectory) ?? FileSystem.AppDataDirectory;
+		return Path.Combine(dataDirectory, "app_webview", "Default", "Local Storage", "leveldb");
 	}
 	#endregion
 }

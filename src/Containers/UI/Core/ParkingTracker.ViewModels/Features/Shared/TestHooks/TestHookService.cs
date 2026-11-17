@@ -154,6 +154,15 @@ public sealed class TestHookService
 	}
 
 	/// <summary>
+	/// Reads the saved parked car back in the JSON of <c>pt.car</c>.
+	/// </summary>
+	/// <returns>A task with the JSON, or <see langword="null"/> when no car is saved.</returns>
+	public async Task<string?> GetCarAsync()
+	{
+		return await settings.GetCarAsync().ConfigureAwait(false) is { } saved ? SettingsJson.SerializeCar(saved) : null;
+	}
+
+	/// <summary>
 	/// Decides a place as a check of the screen does.
 	/// </summary>
 	/// <param name="latitude">Degrees north.</param>

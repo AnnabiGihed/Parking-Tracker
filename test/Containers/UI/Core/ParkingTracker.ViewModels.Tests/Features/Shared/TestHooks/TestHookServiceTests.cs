@@ -109,6 +109,22 @@ public sealed class TestHookServiceTests
 
 		(await hooks.GetCardAsync()).Should().Contain("\"municipality\":\"bruxelles\"").And.Contain("\"sector\":\"louise\"");
 	}
+
+	/// <summary>
+	/// Verifies that the saved parked car is read back in the JSON of the first version, and that no car gives <see langword="null"/>.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task GetCar_SavedCarOrNone_ShouldGiveJsonOrNull()
+	{
+		using var ui = new UiFixture();
+		var hooks = Create(ui);
+		(await hooks.GetCarAsync()).Should().BeNull();
+
+		ui.Settings.GetCarAsync().Returns(new ParkedCar(new GeoPoint(50.8, 4.36), DateTimeOffset.FromUnixTimeMilliseconds(1000), "Parked", "Rue X"));
+
+		(await hooks.GetCarAsync()).Should().Contain("\"lat\":50.8").And.Contain("\"where\":\"Rue X\"");
+	}
 	#endregion
 
 	#region Query Tests
