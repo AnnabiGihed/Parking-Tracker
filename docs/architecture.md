@@ -653,7 +653,7 @@ Emulator test changes:
   It depends on Android and Play services, so it has no unit test; this emulator test is its coverage.
 - The on-screen check reads `.hero-title` and `.hero-sub`, which the Razor markup keeps.
 - New checks (done in stage 5b): no .NET unhandled exception in logcat and the Blazor error UI hidden.
-- Parking alerts (stage 6a, to be proven by its first CI run). The setup grants `POST_NOTIFICATIONS` with `pm grant` and
+- Parking alerts (stage 6a, proven by CI). The setup grants `POST_NOTIFICATIONS` with `pm grant` and
   allows exact alarms with `appops set be.parkingtracker.app SCHEDULE_EXACT_ALARM allow`. `ptTest.platformStatus()` also
   returns `service`, `notifications` and `exactAlarms`; `ptTest.startTimer(minutes)` starts a timer below the 5-minute
   minimum of the form. The test checks: the foreground service is running (`dumpsys activity services
@@ -663,7 +663,7 @@ Emulator test changes:
   notification --noredact` for the title "Free for you here"), then that the saved car shows as the car chip; and the
   timer (a 1-minute timer, Home, wait up to 2.5 minutes for the text "Your parking time is over."). The `emulator-test`
   job allows 40 minutes, which these checks (about 8 minutes) do not exceed.
-- Upgrade job (stage 6c, to be proven by its first CI run; job `upgrade-test` of `android.yml`, parallel to the
+- Upgrade job (stage 6c, proven by CI; job `upgrade-test` of `android.yml`, parallel to the
   emulator test): the job creates a throwaway PKCS12 key with `keytool`, builds the Capacitor debug APK from the
   checkout of the tag `v1.0.11` in the subfolder `capacitor/` (`npm ci`, `npm run build`, `npx cap sync android`,
   `./gradlew assembleDebug` with `VERSION_CODE=1`; a debug build has web view debugging on, because Capacitor's `webContentsDebuggingEnabled` defaults
@@ -752,19 +752,18 @@ separate pull requests into `chore/maui-migration` (or separate reviewed commits
 4. **Infrastructure.** HTTP clients and the official-list check. Done when fixture tests cover every source's URL,
    parsing, filters, timeout and error mapping, and the opt-in live smoke tests pass once by hand.
 5. **App shell and UI.** Stage 5a (done): the device ports, the missing sources, `ParkingTracker.ViewModels`,
-   `ParkingTracker.Shared` with `map.js` and the Leaflet files, and their tests. Stage 5b (written, to be proven by
-   its first CI run): MAUI project, `MainActivity` name, the Android implementations of the device ports and of the
+   `ParkingTracker.Shared` with `map.js` and the Leaflet files, and their tests. Stage 5b (done, proven by
+   CI): MAUI project, `MainActivity` name, the Android implementations of the device ports and of the
    settings store, the composition root, the test hooks, the E2E project and `maui-android.yml` (merged into `android.yml` at stage 7). CI builds the APKs on
    the branch. Done when the emulator test's answer and screen checks pass on the new app.
 6. **Platform services, OCR, migration.** ADR-0002, ADR-0003, ADR-0004, ADR-0008. Stage 6a (parking alerts,
-   notifications and timer; written, to be proven by its first CI run): the foreground service, `INotifier`,
-   `IAlarmScheduler`, the boot receiver, the car dialog switch and timer, and the emulator checks above. Stage 6b (card photo scan; written, to be
-   proven by its first CI run and a check with a real card on a phone): `ICardTextReader`, `CardTextParser`,
+   notifications and timer; done, proven by CI): the foreground service, `INotifier`,
+   `IAlarmScheduler`, the boot receiver, the car dialog switch and timer, and the emulator checks above. Stage 6b (card photo scan; done; proven by CI and on the owner's phone): `ICardTextReader`, `CardTextParser`,
    `MlKitCardTextReader` and the scan button of the card dialog. Stage 6c (migration of saved data; written, to be
    proven by the first CI run of the upgrade job): `LegacyDataMigration`, the LevelDB parser and the hidden web view
    fallback (ADR-0008), the start-up gate and the upgrade job and script of section 6.3. Done when the emulator test's
    background parking alert and timer checks pass and the upgrade test shows the card kept.
-7. **CI and cut-over** (written, to be proven by the first CI run of the branch). Final `android.yml` (version and
+7. **CI and cut-over** (done: the branch run is green and on 2026-11-17 the owner installed the APK over v1.0.11 on the phone with the card kept). Final `android.yml` (version and
    certificate guards, test-hooks build, release on `main` only) replaces `maui-android.yml`; deleted: `android/`,
    `capacitor.config.json`, `package.json`, `package-lock.json`, `sw.js`, `manifest.webmanifest`, `index.html`,
    `style.css`, the root JavaScript and icon files, `tools/dev-server.mjs`, `tools/build-web.mjs`,
