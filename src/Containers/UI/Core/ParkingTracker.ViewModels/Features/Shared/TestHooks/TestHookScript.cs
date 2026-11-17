@@ -29,6 +29,7 @@ public static class TestHookScript
 		("officialList", "OfficialList"),
 		("platformStatus", "PlatformStatus"),
 		("screenState", "ScreenState"),
+		("startTimer", "StartTimer"),
 	];
 	#endregion
 

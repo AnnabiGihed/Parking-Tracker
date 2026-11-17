@@ -32,6 +32,16 @@ public static class SettingsJson
 	public const string CarKey = "pt.car";
 
 	/// <summary>
+	/// The key of the parking timer.
+	/// </summary>
+	public const string TimerKey = "pt.timer";
+
+	/// <summary>
+	/// The key of the parking alerts switch.
+	/// </summary>
+	public const string AlertsKey = "pt.bgAlerts";
+
+	/// <summary>
 	/// The key of the map layer switches.
 	/// </summary>
 	public const string LayersKey = "pt.layers";
@@ -171,6 +181,58 @@ public static class SettingsJson
 			writer.WriteEndObject();
 		});
 	}
+	#endregion
+
+	#region Timer
+	/// <summary>
+	/// Reads the <c>pt.timer</c> value: <c>end</c> (milliseconds since 1970) and <c>minutes</c>.
+	/// </summary>
+	/// <param name="json">The saved text, or <see langword="null"/> when nothing is saved.</param>
+	/// <returns>The timer, or <see langword="null"/> when the text is missing or has no end.</returns>
+	public static ParkingTimer? ParseTimer(string? json)
+	{
+		using var document = ParseObject(json);
+		if (document is null || ReadNumber(document.RootElement, "end") is not { } end)
+		{
+			return null;
+		}
+
+		return new ParkingTimer(FromUnixMilliseconds(end), (int)Math.Clamp(ReadNumber(document.RootElement, "minutes") ?? 0, 0, int.MaxValue));
+	}
+
+	/// <summary>
+	/// Writes a timer as the <c>pt.timer</c> value.
+	/// </summary>
+	/// <param name="timer">The timer to write.</param>
+	/// <returns>The JSON text.</returns>
+	/// <exception cref="ArgumentNullException">Thrown when <paramref name="timer"/> is <see langword="null"/>.</exception>
+	public static string SerializeTimer(ParkingTimer timer)
+	{
+		ArgumentNullException.ThrowIfNull(timer);
+		return Write(writer =>
+		{
+			writer.WriteStartObject();
+			writer.WriteNumber("end", timer.End.ToUnixTimeMilliseconds());
+			writer.WriteNumber("minutes", timer.Minutes);
+			writer.WriteEndObject();
+		});
+	}
+	#endregion
+
+	#region Alerts
+	/// <summary>
+	/// Reads the <c>pt.bgAlerts</c> value: a JSON boolean. The alerts are on unless the value is <c>false</c>, as <c>app.js</c> read it.
+	/// </summary>
+	/// <param name="json">The saved text, or <see langword="null"/> when nothing is saved.</param>
+	/// <returns><see langword="false"/> only when the text is the JSON value <c>false</c>.</returns>
+	public static bool ParseAlertsEnabled(string? json) => !string.Equals(json?.Trim(), "false", StringComparison.Ordinal);
+
+	/// <summary>
+	/// Writes the alerts switch as the <c>pt.bgAlerts</c> value.
+	/// </summary>
+	/// <param name="enabled">Whether the alerts are on.</param>
+	/// <returns><c>true</c> or <c>false</c> as text.</returns>
+	public static string SerializeAlertsEnabled(bool enabled) => enabled ? "true" : "false";
 	#endregion
 
 	#region Layers

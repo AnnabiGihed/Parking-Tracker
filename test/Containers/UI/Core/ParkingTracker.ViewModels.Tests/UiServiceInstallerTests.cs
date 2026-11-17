@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
+using ParkingTracker.Application.Features.ParkingDetection.Abstractions;
+using ParkingTracker.Application.Features.ParkingDetection.Services;
 using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
 using ParkingTracker.Domain.Features.Sectors.ValueObjects;
@@ -31,6 +33,9 @@ public sealed class UiServiceInstallerTests
 		services.AddSingleton(Substitute.For<ILocationPermissions>());
 		services.AddSingleton(Substitute.For<ISettingsStore>());
 		services.AddSingleton(Substitute.For<ILinkLauncher>());
+		services.AddSingleton(Substitute.For<IAlarmScheduler>());
+		services.AddSingleton(Substitute.For<INotifier>());
+		services.AddSingleton(Substitute.For<IParkingAlertCoordinator>());
 		var referenceData = Substitute.For<IReferenceData>();
 		referenceData.GetReferenceData().Returns(Result.Success(new ReferenceDataSet([], [], [])));
 		services.AddSingleton(referenceData);

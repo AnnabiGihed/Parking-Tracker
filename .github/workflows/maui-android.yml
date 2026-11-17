@@ -4,7 +4,7 @@ name: MAUI Android APK
 # The host project needs the maui-android workload, which developer PCs may not have, so only this workflow builds it.
 # It never publishes a release and never runs for main; the Capacitor workflow (android.yml) keeps releasing until cut-over.
 #   1. build - Release APK, and the same code with the test hooks (-p:EnableTestHooks=true); both signed with the debug key
-#   2. test  - install the test-hooks APK on an Android 14 emulator and check the answers and the screen
+#   2. test  - install the test-hooks APK on an Android 14 emulator and check the answers, the screen, the parking alert service and the timer
 on:
   push:
     branches: [chore/maui-migration]

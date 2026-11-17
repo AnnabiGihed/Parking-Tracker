@@ -1,9 +1,12 @@
 using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
+using ParkingTracker.Application.Features.ParkingDetection.Abstractions;
+using ParkingTracker.Application.Features.ParkingDetection.Services;
 using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Queries.DecideSpot;
 using ParkingTracker.Application.Features.SpotDecisions.Queries.FindFreeSpots;
+using ParkingTracker.Domain.Features.Cars.ValueObjects;
 using ParkingTracker.Domain.Features.MapLayers.ValueObjects;
 using ParkingTracker.Domain.Features.ParkingDetection.ValueObjects;
 using ParkingTracker.Domain.Features.Sectors.ValueObjects;
@@ -52,6 +55,7 @@ internal sealed class UiFixture : IDisposable
 		Network.IsOnline.Returns(true);
 		Permissions.GetStatusAsync(Arg.Any<CancellationToken>()).Returns(new LocationPermissionStatus(PermissionState.Unknown, PermissionState.Unknown));
 		Settings.GetLayersAsync().Returns(new LayerSettings());
+		Settings.GetAlertsEnabledAsync().Returns(true);
 		configureSettings?.Invoke(Settings);
 		ReferenceData.GetReferenceData().Returns(Result.Success(Data()));
 		Toast = new ToastViewModel(Clock);
@@ -61,7 +65,10 @@ internal sealed class UiFixture : IDisposable
 		Nearest = new NearestSpotViewModel(Sender, Launcher, Clock);
 		Spot = new SpotCheckViewModel(Sender, Tracker, Clock, Toast, Nearest, Card);
 		Search = new SearchViewModel(Sender, Spot, Toast);
-		Car = new CarViewModel(Settings, Launcher, Spot, Toast, Clock);
+		Notifier.RequestPermissionAsync(Arg.Any<CancellationToken>()).Returns(true);
+		Notifier.AreAllowedAsync(Arg.Any<CancellationToken>()).Returns(true);
+		Alarms.ScheduleAsync(Arg.Any<IReadOnlyList<TimerReminder>>(), Arg.Any<CancellationToken>()).Returns(AlarmPrecision.Exact);
+		Car = new CarViewModel(Settings, Launcher, Spot, Toast, Clock, Alarms, Notifier, AlertCoordinator);
 		Layers = new MapLayersViewModel(Sender, Settings, Network, Launcher, Clock);
 	}
 	#endregion
@@ -148,6 +155,26 @@ internal sealed class UiFixture : IDisposable
 	public CarViewModel Car { get; }
 
 	/// <summary>
+	/// Gets the substitute for the alarms that show the timer reminders; it schedules exact alarms.
+	/// </summary>
+	public IAlarmScheduler Alarms { get; } = Substitute.For<IAlarmScheduler>();
+
+	/// <summary>
+	/// Gets the substitute for the background service of the parking alerts; it is not running.
+	/// </summary>
+	public IParkingWatchService WatchService { get; } = Substitute.For<IParkingWatchService>();
+
+	/// <summary>
+	/// Gets the substitute for the notifications; it allows them.
+	/// </summary>
+	public INotifier Notifier { get; } = Substitute.For<INotifier>();
+
+	/// <summary>
+	/// Gets the substitute for the coordinator of the background service.
+	/// </summary>
+	public IParkingAlertCoordinator AlertCoordinator { get; } = Substitute.For<IParkingAlertCoordinator>();
+
+	/// <summary>
 	/// Gets the real view model of the map layers, over the mediator, settings and network substitutes.
 	/// </summary>
 	public MapLayersViewModel Layers { get; }
@@ -215,6 +242,7 @@ internal sealed class UiFixture : IDisposable
 	/// <inheritdoc />
 	public void Dispose()
 	{
+		Car.Dispose();
 		Spot.Dispose();
 		Layers.Dispose();
 		Toast.Dispose();

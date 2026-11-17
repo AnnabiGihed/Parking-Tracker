@@ -1,0 +1,6 @@
+@namespace ParkingTracker.Shared.Features.Car.Components
+@inherits ViewModelComponent<CarViewModel>
+@if (ViewModel.TimerLine is { } line)
+{
+    <div id="timerLine" class="timerline"><Icon Name="timer" />@line</div>
+}

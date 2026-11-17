@@ -84,6 +84,14 @@ public sealed class TestHookBridge
 	public Task<PlatformAnswer> PlatformStatus() => hooks.PlatformStatusAsync();
 
 	/// <summary>
+	/// Starts a parking timer of the given length in minutes, below the 5-minute minimum of the form.
+	/// </summary>
+	/// <param name="minutes">The length in minutes, at least 1.</param>
+	/// <returns>A task with <see langword="true"/> when the timer started.</returns>
+	[JSInvokable("StartTimer")]
+	public Task<bool> StartTimer(int minutes) => hooks.StartTimerAsync(minutes);
+
+	/// <summary>
 	/// Reads what the main screen holds: tracking, position, headline and busy state.
 	/// </summary>
 	/// <returns>The state of the screen.</returns>

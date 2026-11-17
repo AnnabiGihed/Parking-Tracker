@@ -3,8 +3,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Maui.Devices;
+using ParkingTracker.App.Features.ParkingDetection;
 using ParkingTracker.App.Features.Shared;
 using ParkingTracker.App.Features.SpotDecisions;
+using ParkingTracker.Application.Features.ParkingDetection.Abstractions;
 using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
 using ParkingTracker.ViewModels.Features.Shared.Settings;
@@ -19,7 +21,7 @@ namespace ParkingTracker.App;
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
 /// Purpose     : Registers what only the phone can provide: the implementations of the device ports of the Application layer (position,
-///              permissions, links, connection, saved settings) and the helpers that join phone events to the view models. They are
+///              permissions, links, connection, saved settings, notifications, alarms, the background service of the parking alerts) and the helpers that join phone events to the view models. They are
 ///              registered by hand, not by convention, because each one is tied to the platform.
 /// </summary>
 public sealed class AppServiceInstaller : IServiceInstaller
@@ -39,6 +41,13 @@ public sealed class AppServiceInstaller : IServiceInstaller
 		services.AddSingleton<ILocationTracker, FusedLocationTracker>();
 		services.AddSingleton<ILocationPermissions, MauiLocationPermissions>();
 		services.AddSingleton<ILinkLauncher, MauiLinkLauncher>();
+
+		// Parking alerts (ADR-0002): notifications, exact alarms for the timer and the foreground service. Singletons, because the
+		// service lives outside the scope of the web view and reaches them from the root provider.
+		services.AddSingleton<INotifier, AndroidNotifier>();
+		services.AddSingleton<IAlarmScheduler, AndroidAlarmScheduler>();
+		services.AddSingleton<IParkingWatchService, AndroidParkingWatchService>();
+
 
 		// One instance behind two names: the relay needs the change event, the view models the port.
 		services.AddSingleton<ConnectivityNetworkStatus>();

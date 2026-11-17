@@ -1,6 +1,10 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Logging;
 using ParkingTracker.App.Features.SpotDecisions;
+using ParkingTracker.Application.Features.ParkingDetection.Abstractions;
+using ParkingTracker.Application.Features.ParkingDetection.Services;
+using ParkingTracker.Application.Features.Shared.Abstractions;
+using ParkingTracker.ViewModels.Features.Car;
 using ParkingTracker.ViewModels.Features.Shared;
 using ParkingTracker.ViewModels.Features.SpotCheck;
 
@@ -12,10 +16,20 @@ namespace ParkingTracker.App.Features.Shared;
 /// Purpose     : A component without markup that joins events of the phone to the view models. It is a component because the view
 ///              models live in the scope of the web view, which only components (and not the MAUI app) can reach. It answers a change
 ///              of the connection with <see cref="SpotCheckViewModel.HandleConnectivityChangeAsync"/>, a return to the app with
-///              <see cref="LocationPermissionViewModel.RefreshAsync"/>, and a change between covered and not covered with a vibration.
+///              <see cref="LocationPermissionViewModel.RefreshAsync"/>, and a change between covered and not covered with a vibration. It also keeps the background service of the parking
+///              alerts in line with the switch and the permissions (when the app opens and when the user comes back), asks for the
+///              notification permission a few seconds after the start while the alerts are on, and reads the saved car again on a
+///              return, because the service saves it while the app is away.
 /// </summary>
 public sealed partial class PlatformRelay : ComponentBase, IDisposable
 {
+	#region Static Instances
+	/// <summary>
+	/// How long after the start the notification permission is asked, so that it does not collide with the location question.
+	/// </summary>
+	private static readonly TimeSpan NotificationAskDelay = TimeSpan.FromSeconds(4);
+	#endregion
+
 	#region Injected Services
 	/// <summary>
 	/// Gets or sets the spot check, which answers a change of the connection and announces a change of coverage.
@@ -48,6 +62,30 @@ public sealed partial class PlatformRelay : ComponentBase, IDisposable
 	public CoverageVibrator Vibrator { get; set; } = null!;
 
 	/// <summary>
+	/// Gets or sets the coordinator that starts and stops the background service of the parking alerts.
+	/// </summary>
+	[Inject]
+	public IParkingAlertCoordinator Alerts { get; set; } = null!;
+
+	/// <summary>
+	/// Gets or sets the notifications of the phone, whose permission is asked while the alerts are on.
+	/// </summary>
+	[Inject]
+	public INotifier Notifier { get; set; } = null!;
+
+	/// <summary>
+	/// Gets or sets the saved settings, which hold the alerts switch.
+	/// </summary>
+	[Inject]
+	public ISettingsStore Settings { get; set; } = null!;
+
+	/// <summary>
+	/// Gets or sets the car dialog, whose saved car is read again after a return to the app.
+	/// </summary>
+	[Inject]
+	public CarViewModel Car { get; set; } = null!;
+
+	/// <summary>
 	/// Gets or sets the log, where a failure of one of these background reactions goes.
 	/// </summary>
 	[Inject]
@@ -61,6 +99,7 @@ public sealed partial class PlatformRelay : ComponentBase, IDisposable
 		Network.OnlineChanged += OnOnlineChanged;
 		Resume.Resumed += OnResumed;
 		Spot.CoverageChanged += OnCoverageChanged;
+		_ = StartAlertsAsync();
 	}
 	#endregion
 
@@ -93,7 +132,8 @@ public sealed partial class PlatformRelay : ComponentBase, IDisposable
 	}
 
 	/// <summary>
-	/// Reads the location permission again after the user came back to the app.
+	/// Reads the location permission and the saved car again after the user came back to the app, and starts or stops the background
+	/// service of the parking alerts to match, because the user may have allowed the location all the time in the settings.
 	/// </summary>
 	/// <param name="sender">The notifier.</param>
 	/// <param name="e">Nothing.</param>
@@ -102,6 +142,8 @@ public sealed partial class PlatformRelay : ComponentBase, IDisposable
 		try
 		{
 			await Permission.RefreshAsync().ConfigureAwait(false);
+			await Car.LoadAsync().ConfigureAwait(false);
+			await Alerts.ApplyAsync().ConfigureAwait(false);
 		}
 		catch (Exception exception)
 		{
@@ -127,7 +169,40 @@ public sealed partial class PlatformRelay : ComponentBase, IDisposable
 	}
 	#endregion
 
+	#region Private Helpers
+	/// <summary>
+	/// Asks for the notification permission a few seconds after the start (the location question comes first), while the alerts are
+	/// on, as the first version did, then starts the background service when everything it needs is allowed.
+	/// </summary>
+	/// <returns>A task that completes when the service follows the switch.</returns>
+	private async Task StartAlertsAsync()
+	{
+		try
+		{
+			await Task.Delay(NotificationAskDelay).ConfigureAwait(false);
+			if (await Settings.GetAlertsEnabledAsync().ConfigureAwait(false))
+			{
+				await Notifier.RequestPermissionAsync().ConfigureAwait(false);
+			}
+
+			await Alerts.ApplyAsync().ConfigureAwait(false);
+		}
+		catch (Exception exception)
+		{
+			LogAlertsStartFailed(Logger, exception);
+		}
+	}
+	#endregion
+
 	#region Logging
+	/// <summary>
+	/// Logs that starting the parking alerts failed.
+	/// </summary>
+	/// <param name="logger">The log.</param>
+	/// <param name="exception">What went wrong.</param>
+	[LoggerMessage(Level = LogLevel.Error, Message = "Starting the parking alerts failed")]
+	private static partial void LogAlertsStartFailed(ILogger logger, Exception exception);
+
 	/// <summary>
 	/// Logs that handling a change of the connection failed.
 	/// </summary>

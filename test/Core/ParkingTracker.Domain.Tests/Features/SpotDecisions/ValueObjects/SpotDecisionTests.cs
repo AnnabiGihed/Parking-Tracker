@@ -35,4 +35,27 @@ public sealed class SpotDecisionTests
 		decision.Status.Should().Be(status);
 	}
 	#endregion
+
+	#region Headline Tests
+	/// <summary>
+	/// Verifies the friendly headline of every verdict; a verdict without one keeps its title.
+	/// </summary>
+	/// <param name="verdict">Verdict to test.</param>
+	/// <param name="headline">The expected headline.</param>
+	[Theory]
+	[InlineData(Verdict.Free, "Free for you here")]
+	[InlineData(Verdict.FreeNow, "Free for everyone right now")]
+	[InlineData(Verdict.Pay, "Paid parking")]
+	[InlineData(Verdict.Reserved, "Reserved space")]
+	[InlineData(Verdict.TimeLimited, "Time-limited parking")]
+	[InlineData(Verdict.ParkingDisc, "Blue zone: use your disc")]
+	[InlineData(Verdict.CheckNumber, "Check the house number")]
+	[InlineData(Verdict.CheckCard, "CHECK YOUR CARD")]
+	[InlineData(Verdict.CheckSigns, "CHECK THE SIGNS")]
+	[InlineData(Verdict.CantVerify, "Can't verify right now")]
+	public void Headline_ByVerdict_ShouldMatchTheFirstVersion(Verdict verdict, string headline)
+	{
+		SpotDecision.Create(verdict, "detail").Headline.Should().Be(headline);
+	}
+	#endregion
 }

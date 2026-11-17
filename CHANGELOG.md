@@ -27,6 +27,11 @@ The .NET migration is in progress and is not part of any release yet: the publis
   version, vibration on a change of coverage), the opt-in test hooks, the Node emulator test in
   `test/ParkingTracker.E2E.Tests` and the workflow `maui-android.yml`, which builds the APKs on the migration branch.
   The host supports Android 7.0 (API 24) and later. Nothing is released yet.
+- Added the parking alerts and the parking timer to the .NET app: a foreground location service that notices that you
+  parked while the app is off screen, saves the car and sends the "Free for you here" or "Paid parking" notification
+  with the nearest free spot, the alerts switch and the timer (30 min, 1 h, 2 h, 3 h or minutes, reminders 10 minutes
+  before the end and at the end, exact alarms when allowed) in the car dialog, notification and exact-alarm
+  permissions, and emulator checks for the service, a background alert and a timer reminder. Nothing is released yet.
 - Added the Meziantou analyzers, the StyleCop documentation settings (`stylecop.json`) and the target framework in
   `Directory.Build.props`, and fixed the findings they raised.
 - Added the `.NET quality gate` GitHub workflow: restore, format check, Release build and unit tests on every push and

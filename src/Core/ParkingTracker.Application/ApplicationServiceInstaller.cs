@@ -1,6 +1,7 @@
 using FluentValidation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using ParkingTracker.Application.Features.ParkingDetection.Services;
 using ParkingTracker.Application.Features.Sectors.Services;
 using ParkingTracker.Application.Features.SpotDecisions.Services;
 using Pivot.Framework.Application.Behaviors;
@@ -13,7 +14,7 @@ namespace ParkingTracker.Application;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : Registers the Application layer: the Pivot mediator with every query and command handler of this
+/// Purpose     : Registers the Application layer: the parking watcher and alert coordinator, the Pivot mediator with every query and command handler of this
 ///              assembly, the FluentValidation validators of this assembly and the validation pipeline behavior, called from the composition root.
 /// </summary>
 public sealed class ApplicationServiceInstaller : BaseServiceInstaller, IServiceInstaller
@@ -37,6 +38,10 @@ public sealed class ApplicationServiceInstaller : BaseServiceInstaller, IService
 		services.AddTransient<IDecisionContextFactory, DecisionContextFactory>();
 		services.AddTransient<IDecisionStepRunner, DecisionStepRunner>();
 		services.AddTransient<IAreaStatusProvider, AreaStatusProvider>();
+
+		// One instance each: the watcher holds the detector of the background service, the coordinator is stateless.
+		services.AddSingleton<ParkingWatcher>();
+		services.AddSingleton<IParkingAlertCoordinator, ParkingAlertCoordinator>();
 
 		if (includeConventionBasedRegistration)
 		{

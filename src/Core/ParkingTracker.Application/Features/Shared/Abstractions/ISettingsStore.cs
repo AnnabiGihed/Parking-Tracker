@@ -7,10 +7,10 @@ namespace ParkingTracker.Application.Features.Shared.Abstractions;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : Port to what the user saved on the phone: the card, the parked car, the map layer switches, whether the welcome
+/// Purpose     : Port to what the user saved on the phone: the card, the parked car, the parking timer, the parking alerts switch, the map layer switches, whether the welcome
 ///              screen was seen and when the location banner was postponed. The calls are asynchronous because the encrypted
 ///              storage of the phone is. The implementation keeps the JSON shapes of the first version of the app (<c>pt.card</c>,
-///              <c>pt.car</c>, <c>pt.layers</c>, <c>pt.permSnooze</c>), so that saved values stay readable.
+///              <c>pt.car</c>, <c>pt.timer</c>, <c>pt.bgAlerts</c>, <c>pt.layers</c>, <c>pt.permSnooze</c>), so that saved values stay readable.
 /// </summary>
 public interface ISettingsStore
 {
@@ -52,6 +52,38 @@ public interface ISettingsStore
 	/// </summary>
 	/// <returns>A task that completes when the car is forgotten.</returns>
 	Task ClearCarAsync();
+
+	/// <summary>
+	/// Gets the saved parking timer.
+	/// </summary>
+	/// <returns>A task with the timer, or <see langword="null"/> when none is saved.</returns>
+	Task<ParkingTimer?> GetTimerAsync();
+
+	/// <summary>
+	/// Saves the parking timer, replacing the saved one.
+	/// </summary>
+	/// <param name="timer">The timer to keep.</param>
+	/// <returns>A task that completes when the timer is saved.</returns>
+	Task SaveTimerAsync(ParkingTimer timer);
+
+	/// <summary>
+	/// Forgets the parking timer.
+	/// </summary>
+	/// <returns>A task that completes when the timer is forgotten.</returns>
+	Task ClearTimerAsync();
+
+	/// <summary>
+	/// Tells whether the parking alerts are on.
+	/// </summary>
+	/// <returns>A task with <see langword="true"/> unless the user switched the alerts off; they are on by default.</returns>
+	Task<bool> GetAlertsEnabledAsync();
+
+	/// <summary>
+	/// Saves the parking alerts switch.
+	/// </summary>
+	/// <param name="enabled">Whether the alerts are on.</param>
+	/// <returns>A task that completes when the switch is saved.</returns>
+	Task SaveAlertsEnabledAsync(bool enabled);
 
 	/// <summary>
 	/// Gets the map layer switches.

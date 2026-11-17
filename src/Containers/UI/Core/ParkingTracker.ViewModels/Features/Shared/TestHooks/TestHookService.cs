@@ -1,8 +1,11 @@
+using ParkingTracker.Application.Features.ParkingDetection.Abstractions;
 using ParkingTracker.Application.Features.Sectors.Queries.GetOfficialListStatus;
 using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Queries.DecideSpot;
 using ParkingTracker.Application.Features.SpotDecisions.Queries.FindFreeSpots;
+using ParkingTracker.Domain.Features.Cars.ValueObjects;
+using ParkingTracker.ViewModels.Features.Car;
 using ParkingTracker.ViewModels.Features.Card;
 using ParkingTracker.ViewModels.Features.Shared.Settings;
 using ParkingTracker.ViewModels.Features.SpotCheck;
@@ -14,7 +17,8 @@ namespace ParkingTracker.ViewModels.Features.Shared.TestHooks;
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
 /// Purpose     : What the emulator test (<c>test/ParkingTracker.E2E.Tests</c>) asks of the running app: save a card, read it back,
-///              decide a place, search free spots, read the official-list check and the permission and network state. It goes through
+///              decide a place, search free spots, read the official-list check and the permission, network, background service,
+///              notification and exact-alarm state, and start a parking timer of any length (the form allows 5 minutes at least). It goes through
 ///              the same ports and queries as the screens, so the test proves the real path. The class is plain C#, so unit tests cover
 ///              it; the host registers it and exposes it to the web view as <c>window.ptTest</c> only in a build made with
 ///              <c>-p:EnableTestHooks=true</c>. A failure is thrown, which the test sees as a rejected promise.
@@ -56,6 +60,26 @@ public sealed class TestHookService
 	/// Clock for the age of the last fix.
 	/// </summary>
 	private readonly TimeProvider clock;
+
+	/// <summary>
+	/// The background service that follows the position for the parking alerts.
+	/// </summary>
+	private readonly IParkingWatchService watchService;
+
+	/// <summary>
+	/// The notifications of the device.
+	/// </summary>
+	private readonly INotifier notifier;
+
+	/// <summary>
+	/// The alarms of the device.
+	/// </summary>
+	private readonly IAlarmScheduler alarms;
+
+	/// <summary>
+	/// The car dialog, which runs the parking timer.
+	/// </summary>
+	private readonly CarViewModel car;
 	#endregion
 
 	#region Constructors
@@ -69,9 +93,21 @@ public sealed class TestHookService
 	/// <param name="network">The connection status of the device.</param>
 	/// <param name="spot">The main screen, whose state the test reads when a check fails.</param>
 	/// <param name="clock">Clock for the age of the last fix.</param>
+	/// <param name="watchService">The background service that follows the position for the parking alerts.</param>
+	/// <param name="notifier">The notifications of the device.</param>
+	/// <param name="alarms">The alarms of the device.</param>
+	/// <param name="car">The car dialog, which runs the parking timer.</param>
 	/// <exception cref="ArgumentNullException">Thrown when an argument is <see langword="null"/>.</exception>
-	public TestHookService(ISender sender, ISettingsStore settings, CardViewModel card, ILocationPermissions permissions, INetworkStatus network, SpotCheckViewModel spot, TimeProvider clock)
+	public TestHookService(ISender sender, ISettingsStore settings, CardViewModel card, ILocationPermissions permissions, INetworkStatus network, SpotCheckViewModel spot, TimeProvider clock, IParkingWatchService watchService, INotifier notifier, IAlarmScheduler alarms, CarViewModel car)
 	{
+		ArgumentNullException.ThrowIfNull(watchService);
+		ArgumentNullException.ThrowIfNull(notifier);
+		ArgumentNullException.ThrowIfNull(alarms);
+		ArgumentNullException.ThrowIfNull(car);
+		this.watchService = watchService;
+		this.notifier = notifier;
+		this.alarms = alarms;
+		this.car = car;
 		ArgumentNullException.ThrowIfNull(sender);
 		ArgumentNullException.ThrowIfNull(settings);
 		ArgumentNullException.ThrowIfNull(card);
@@ -172,16 +208,33 @@ public sealed class TestHookService
 	}
 
 	/// <summary>
-	/// Reads what the device allows and whether it is online.
+	/// Reads what the device allows, whether it is online, whether the background service runs and whether notifications and
+	/// exact alarms are allowed.
 	/// </summary>
-	/// <returns>The foreground and background location permission and the connection.</returns>
+	/// <returns>The foreground and background location permission, the connection, the service, the notifications and the exact alarms.</returns>
 	public async Task<PlatformAnswer> PlatformStatusAsync()
 	{
 		var status = await permissions.GetStatusAsync().ConfigureAwait(false);
 		return new PlatformAnswer(
 			status.Foreground.ToString().ToLowerInvariant(),
 			status.Background.ToString().ToLowerInvariant(),
-			network.IsOnline);
+			network.IsOnline,
+			watchService.IsRunning,
+			await notifier.AreAllowedAsync().ConfigureAwait(false),
+			await alarms.CanScheduleExactAsync().ConfigureAwait(false));
+	}
+
+	/// <summary>
+	/// Starts a parking timer that ends the given number of minutes from now, without the 5-minute minimum of the form, so that
+	/// the emulator test does not wait long for the end reminder.
+	/// </summary>
+	/// <param name="minutes">The length in minutes, at least 1.</param>
+	/// <returns>A task with <see langword="true"/> when the timer started; <see langword="false"/> when notifications were refused.</returns>
+	/// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="minutes"/> is below 1.</exception>
+	public Task<bool> StartTimerAsync(int minutes)
+	{
+		ArgumentOutOfRangeException.ThrowIfLessThan(minutes, 1);
+		return car.ApplyTimerAsync(new ParkingTimer(clock.GetLocalNow().AddMinutes(minutes), minutes));
 	}
 
 	/// <summary>

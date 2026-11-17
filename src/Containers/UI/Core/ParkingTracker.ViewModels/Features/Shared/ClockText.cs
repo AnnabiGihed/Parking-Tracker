@@ -19,6 +19,13 @@ public static class ClockText
 	public static string Time(DateTimeOffset moment) => moment.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
 
 	/// <summary>
+	/// Writes the time of day without seconds, for example <c>14:05</c>.
+	/// </summary>
+	/// <param name="moment">The moment, on the clock of the device.</param>
+	/// <returns>The time text.</returns>
+	public static string ShortTime(DateTimeOffset moment) => moment.ToString("HH:mm", CultureInfo.InvariantCulture);
+
+	/// <summary>
 	/// Writes a date as day, month and year, for example <c>17/11/2026</c>.
 	/// </summary>
 	/// <param name="date">The date, or <see langword="null"/>.</param>

@@ -5,8 +5,9 @@
 // Output: emulator-report/ (report.json, summary.md, screenshot-*.png, logcat.txt, crash.txt) and exit code 1 on failure.
 //
 // The test APK is the Release build made with -p:EnableTestHooks=true: its web view can be inspected through the Chrome
-// DevTools Protocol, and window.ptTest (setCard, getCard, decide, freeSpots, officialList, platformStatus, screenState) calls the
-// app's own C# code. See docs/architecture.md section 6.3.
+// DevTools Protocol, and window.ptTest (setCard, getCard, decide, freeSpots, officialList, platformStatus, screenState, startTimer)
+// calls the app's own C# code. It also checks the parking alerts of ADR-0002: the foreground service, a parking alert while the app is
+// in the background and a timer reminder. See docs/architecture.md section 6.3.
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -15,6 +16,10 @@ const APK = process.argv[2];
 const PKG = 'be.parkingtracker.app';
 const ACTIVITY = `${PKG}/${PKG}.MainActivity`; // the Java name is fixed by [Activity(Name = ...)], see ADR-0001
 const OUT = 'emulator-report';
+// A short drive that ends at Avenue Louise 216: fixes 2 s apart and about 24 m apart (12 m/s, above the 5.5 m/s of the detector).
+const DRIVE_STEPS = 14;
+const DRIVE_STEP_DEGREES = 0.00022;
+const DRIVE_KNOTS = 23; // about 11.8 m/s
 const HOME = { name: 'Avenue Louise 216', lat: 50.82655, lon: 4.36505, expect: ['FREE ✓'] };
 const CHATELAIN = { name: 'Place du Châtelain (Ixelles)', lat: 50.82480, lon: 4.36040, expect: ['PAY', 'FREE NOW'] };
 const TEST_CARD = { number: 'TEST', plate: '1TST000', sector: 'louise', from: '2026-01-01', to: '2099-12-31', tolerances: [] };
@@ -32,6 +37,21 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const adb = (args, opts = {}) => execFileSync('adb', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim();
 const tryAdb = (args, opts = {}) => { try { return adb(args, opts); } catch (e) { return `ERR ${e.message.split('\n')[0]}`; } };
 const geo = (p) => tryAdb(['emu', 'geo', 'fix', String(p.lon), String(p.lat)]); // longitude first
+// A fix with a speed: emu geo fix <lon> <lat> <altitude> <satellites> <velocity in knots>. Without a speed the emulator may report zero.
+const geoMoving = (p, knots) => tryAdb(['emu', 'geo', 'fix', String(p.lon), String(p.lat), '0', '10', String(knots)]);
+const pressHome = () => tryAdb(['shell', 'input', 'keyevent', 'KEYCODE_HOME']);
+const dumpsys = (args) => tryAdb(['shell', 'dumpsys', ...args], { maxBuffer: 64 * 1024 * 1024 });
+// Polls the notifications of the phone until the pattern shows; returns the matching line or null.
+const waitForNotification = async (pattern, ms, each = null) => {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    const line = dumpsys(['notification', '--noredact']).split(/\r?\n/).find((l) => pattern.test(l));
+    if (line) return line.trim();
+    if (each) each();
+    await sleep(5000);
+  }
+  return null;
+};
 const screenshot = (name) => {
   const r = spawnSync('adb', ['exec-out', 'screencap', '-p'], { maxBuffer: 50 * 1024 * 1024 });
   if (r.status === 0) writeFileSync(join(OUT, `screenshot-${name}.png`), r.stdout);
@@ -114,6 +134,9 @@ async function main() {
   // Install and grant what a user grants on first launch ("Allow all the time").
   console.log(adb(['install', '-r', '-g', APK]));
   for (const p of ['ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION', 'ACCESS_BACKGROUND_LOCATION']) tryAdb(['shell', 'pm', 'grant', PKG, `android.permission.${p}`]);
+  // Notifications (Android 13+) and exact alarms, which a user allows on the first timer.
+  tryAdb(['shell', 'pm', 'grant', PKG, 'android.permission.POST_NOTIFICATIONS']);
+  tryAdb(['shell', 'appops', 'set', PKG, 'SCHEDULE_EXACT_ALARM', 'allow']);
   tryAdb(['shell', 'settings', 'put', 'secure', 'location_mode', '3']);
   geo(HOME);
   tryAdb(['logcat', '-c']);
@@ -139,6 +162,7 @@ async function main() {
   report.platform = platform;
   check('Location allowed all the time', platform?.locationForeground === 'granted' && platform?.locationBackground === 'granted', JSON.stringify(platform));
   check('Device is online', platform?.online === true, JSON.stringify(platform));
+  check('Notifications and exact alarms allowed', platform?.notifications === true && platform?.exactAlarms === true, JSON.stringify(platform));
 
   stepTo('official list');
   // The official City list check through the app's HTTP clients.
@@ -174,6 +198,42 @@ async function main() {
   const spots = await evaluate(`ptTest.freeSpots(${CHATELAIN.lat}, ${CHATELAIN.lon}, 3).then((list) => list.map((s) => s.label + ' ' + Math.round(s.metres) + ' m'))`);
   report.freeSpots = spots;
   check('Nearest free spot found from Place du Châtelain', Array.isArray(spots) && spots.length > 0, (spots || []).join(', '));
+
+  stepTo('parking service');
+  // The app starts the foreground service by itself once alerts are on and the location is allowed all the time (a few seconds after launch).
+  let services = '';
+  for (let i = 0; i < 30 && !/ParkingTrackerLocationService/.test(services); i++) { services = dumpsys(['activity', 'services', PKG]); if (!/ParkingTrackerLocationService/.test(services)) await sleep(2000); }
+  report.service = services.split(/\r?\n/).filter((l) => /ParkingTrackerLocationService|isForeground/.test(l)).slice(0, 4).join(' | ');
+  check('Foreground service of the parking alerts is running', /ParkingTrackerLocationService/.test(services) && /isForeground=true/.test(services), report.service || 'service not listed');
+  const notice = await waitForNotification(/Watching where you park/, 20000);
+  check('Permanent notice of the service is shown', !!notice, notice || 'not found in dumpsys notification');
+  check('platformStatus reports the service', (await evaluate('ptTest.platformStatus()'))?.service === true);
+
+  stepTo('background parking alert');
+  // Drive along Avenue Louise above 20 km/h and stop at number 216, then leave the app and wait for the detector (2 minutes still).
+  for (let i = DRIVE_STEPS; i >= 1; i--) { geoMoving({ lat: HOME.lat + i * DRIVE_STEP_DEGREES, lon: HOME.lon }, DRIVE_KNOTS); await sleep(2000); }
+  geoMoving(HOME, 0);
+  pressHome();
+  const alert = await waitForNotification(/android\.title=.*Free for you here/, 240000, () => geoMoving(HOME, 0));
+  report.parkingAlert = alert;
+  check('Parking alert shown while the app is in the background', !!alert, alert || 'no alert after 4 minutes; notifications: ' + dumpsys(['notification', '--noredact']).split(/\r?\n/).filter((l) => /android\.(title|text)=/.test(l)).slice(0, 6).join(' | '));
+  tryAdb(['shell', 'am', 'start', '-n', ACTIVITY]);
+  await sleep(3000);
+  const carChip = await waitFor(`(() => { const c = document.querySelector('#carChip'); return !!c && !c.classList.contains('hidden'); })()`, 30000);
+  check('The parked car was saved by the service and shows as the car chip', !!carChip);
+
+  stepTo('parking timer');
+  // A one-minute timer (the form allows 5 at least, the hook does not): the reminder at the end must come while the app is away.
+  const started = await evaluate('ptTest.startTimer(1)');
+  check('Timer started through the app', started === true, String(started));
+  const timerChip = await waitFor(`/left|over/.test(document.querySelector('#carChip')?.innerText || '')`, 15000);
+  check('The car chip shows the time left', !!timerChip);
+  pressHome();
+  const reminder = await waitForNotification(/android\.text=.*Your parking time is over/, 150000);
+  report.timerReminder = reminder;
+  check('Timer reminder shown at the end of the timer', !!reminder, reminder || 'no reminder after 2.5 minutes');
+  tryAdb(['shell', 'am', 'start', '-n', ACTIVITY]);
+  await sleep(2000);
 
   stepTo('errors');
   const exceptions = logs.filter((l) => l.startsWith('EXCEPTION'));

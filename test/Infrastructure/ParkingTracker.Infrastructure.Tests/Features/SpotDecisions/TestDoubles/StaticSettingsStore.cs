@@ -50,6 +50,21 @@ public sealed class StaticSettingsStore : ISettingsStore
 	public Task ClearCarAsync() => throw new NotSupportedException("This store is read-only.");
 
 	/// <inheritdoc />
+	public Task<ParkingTimer?> GetTimerAsync() => Task.FromResult<ParkingTimer?>(null);
+
+	/// <inheritdoc />
+	public Task SaveTimerAsync(ParkingTimer timer) => throw new NotSupportedException("This store is read-only.");
+
+	/// <inheritdoc />
+	public Task ClearTimerAsync() => throw new NotSupportedException("This store is read-only.");
+
+	/// <inheritdoc />
+	public Task<bool> GetAlertsEnabledAsync() => Task.FromResult(true);
+
+	/// <inheritdoc />
+	public Task SaveAlertsEnabledAsync(bool enabled) => throw new NotSupportedException("This store is read-only.");
+
+	/// <inheritdoc />
 	public Task<LayerSettings> GetLayersAsync() => Task.FromResult(new LayerSettings());
 
 	/// <inheritdoc />

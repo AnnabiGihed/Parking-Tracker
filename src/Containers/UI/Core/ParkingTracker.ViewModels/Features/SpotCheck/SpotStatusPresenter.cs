@@ -22,18 +22,18 @@ public static class SpotStatusPresenter
 
 	#region Static Instances
 	/// <summary>
-	/// The friendly headline and icon of each answer title. A title that is not listed is shown as it is, with the help icon.
+	/// The icon of each answer title; the headline itself is <see cref="SpotDecision.Headline"/>. A title that is not listed gets the help icon.
 	/// </summary>
-	private static readonly Dictionary<string, (string Headline, string Icon)> Headlines = new(StringComparer.Ordinal)
+	private static readonly Dictionary<string, string> Icons = new(StringComparer.Ordinal)
 	{
-		["FREE ✓"] = ("Free for you here", "check"),
-		["FREE NOW"] = ("Free for everyone right now", "check"),
-		["PAY"] = ("Paid parking", "euro"),
-		["RESERVED"] = ("Reserved space", "block"),
-		["CHECK THE NUMBER"] = ("Check the house number", "warning"),
-		["TIME LIMITED"] = ("Time-limited parking", "timer"),
-		["PARKING DISC"] = ("Blue zone: use your disc", "timer"),
-		["CAN'T VERIFY"] = ("Can't verify right now", "help"),
+		["FREE ✓"] = "check",
+		["FREE NOW"] = "check",
+		["PAY"] = "euro",
+		["RESERVED"] = "block",
+		["CHECK THE NUMBER"] = "warning",
+		["TIME LIMITED"] = "timer",
+		["PARKING DISC"] = "timer",
+		["CAN'T VERIFY"] = "help",
 	};
 
 	/// <summary>
@@ -61,11 +61,11 @@ public static class SpotStatusPresenter
 	public static SpotStatusView Present(SpotDecision decision)
 	{
 		ArgumentNullException.ThrowIfNull(decision);
-		var (headline, icon) = Headlines.TryGetValue(decision.Title, out var known) ? known : (decision.Title, "help");
+		var icon = Icons.TryGetValue(decision.Title, out var known) ? known : "help";
 		var isFree = decision.Status == SpotStatus.Free;
 		var showTariff = decision.Tariff is not null && (!isFree || decision.Verdict == Verdict.FreeNow);
 		return new SpotStatusView(
-			headline,
+			decision.Headline,
 			icon,
 			decision.Detail,
 			ColourKey(decision.Status),
@@ -84,7 +84,7 @@ public static class SpotStatusPresenter
 	public static string HeadlineOf(SpotDecision decision)
 	{
 		ArgumentNullException.ThrowIfNull(decision);
-		return Headlines.TryGetValue(decision.Title, out var known) ? known.Headline : decision.Title;
+		return decision.Headline;
 	}
 
 	/// <summary>

@@ -120,6 +120,25 @@ public sealed class SettingsStore : ISettingsStore
 	public Task ClearCarAsync() => plain.DeleteAsync(SettingsJson.CarKey);
 
 	/// <inheritdoc />
+	public async Task<ParkingTimer?> GetTimerAsync() => SettingsJson.ParseTimer(await plain.ReadAsync(SettingsJson.TimerKey).ConfigureAwait(false));
+
+	/// <inheritdoc />
+	public Task SaveTimerAsync(ParkingTimer timer)
+	{
+		ArgumentNullException.ThrowIfNull(timer);
+		return plain.WriteAsync(SettingsJson.TimerKey, SettingsJson.SerializeTimer(timer));
+	}
+
+	/// <inheritdoc />
+	public Task ClearTimerAsync() => plain.DeleteAsync(SettingsJson.TimerKey);
+
+	/// <inheritdoc />
+	public async Task<bool> GetAlertsEnabledAsync() => SettingsJson.ParseAlertsEnabled(await plain.ReadAsync(SettingsJson.AlertsKey).ConfigureAwait(false));
+
+	/// <inheritdoc />
+	public Task SaveAlertsEnabledAsync(bool enabled) => plain.WriteAsync(SettingsJson.AlertsKey, SettingsJson.SerializeAlertsEnabled(enabled));
+
+	/// <inheritdoc />
 	public async Task<LayerSettings> GetLayersAsync() => SettingsJson.ParseLayers(await plain.ReadAsync(SettingsJson.LayersKey).ConfigureAwait(false));
 
 	/// <inheritdoc />

@@ -1,9 +1,11 @@
 using NSubstitute;
+using ParkingTracker.Application.Features.ParkingDetection.Abstractions;
 using ParkingTracker.Application.Features.Sectors.Queries.GetOfficialListStatus;
 using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Queries.DecideSpot;
 using ParkingTracker.Application.Features.SpotDecisions.Queries.FindFreeSpots;
 using ParkingTracker.Domain.Features.Cards.ValueObjects;
+using ParkingTracker.Domain.Features.Cars.ValueObjects;
 using ParkingTracker.Domain.Features.Sectors.ValueObjects;
 using ParkingTracker.Domain.Features.Shared.ValueObjects;
 using ParkingTracker.Domain.Features.SpotDecisions.ValueObjects;
@@ -210,19 +212,53 @@ public sealed class TestHookServiceTests
 
 	#region Platform Tests
 	/// <summary>
-	/// Verifies that the permissions and the connection are reported in lower case.
+	/// Verifies that the permissions and the connection are reported in lower case, with the service, notifications and exact alarms.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
-	public async Task PlatformStatusAsync_ShouldReportPermissionsAndConnection()
+	public async Task PlatformStatusAsync_ShouldReportPermissionsConnectionAndAlertState()
 	{
 		using var ui = new UiFixture();
 		ui.Permissions.GetStatusAsync(Arg.Any<CancellationToken>()).Returns(new LocationPermissionStatus(PermissionState.Granted, PermissionState.Denied));
+		ui.WatchService.IsRunning.Returns(true);
+		ui.Alarms.CanScheduleExactAsync(Arg.Any<CancellationToken>()).Returns(false);
 		var hooks = Create(ui);
 
 		var status = await hooks.PlatformStatusAsync();
 
-		status.Should().Be(new PlatformAnswer("granted", "denied", true));
+		status.Should().Be(new PlatformAnswer("granted", "denied", true, true, true, false));
+	}
+
+	/// <summary>
+	/// Verifies that a timer of one minute starts below the 5-minute minimum of the form and ends one minute from now.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task StartTimerAsync_OneMinute_ShouldStartTimerEndingInOneMinute()
+	{
+		using var ui = new UiFixture();
+		var hooks = Create(ui);
+
+		var started = await hooks.StartTimerAsync(1);
+
+		started.Should().BeTrue();
+		ui.Car.Timer.Should().Be(new ParkingTimer(UiFixture.Start.AddMinutes(1), 1));
+		_ = ui.Alarms.Received(1).ScheduleAsync(Arg.Is<IReadOnlyList<TimerReminder>>(plan => plan.Count == 1 && plan[0].Id == ParkingTimer.EndId), Arg.Any<CancellationToken>());
+	}
+
+	/// <summary>
+	/// Verifies that a length below one minute is rejected.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task StartTimerAsync_Zero_ShouldThrowArgumentOutOfRangeException()
+	{
+		using var ui = new UiFixture();
+		var hooks = Create(ui);
+
+		var act = () => hooks.StartTimerAsync(0);
+
+		await act.Should().ThrowAsync<ArgumentOutOfRangeException>();
 	}
 	#endregion
 
@@ -295,13 +331,13 @@ public sealed class TestHookServiceTests
 	{
 		using var ui = new UiFixture();
 
-		var noSender = () => new TestHookService(null!, ui.Settings, ui.Card, ui.Permissions, ui.Network, ui.Spot, ui.Clock); // null on purpose: proves the guard clause rejects it
-		var noSettings = () => new TestHookService(ui.Sender, null!, ui.Card, ui.Permissions, ui.Network, ui.Spot, ui.Clock); // null on purpose: proves the guard clause rejects it
-		var noCard = () => new TestHookService(ui.Sender, ui.Settings, null!, ui.Permissions, ui.Network, ui.Spot, ui.Clock); // null on purpose: proves the guard clause rejects it
-		var noPermissions = () => new TestHookService(ui.Sender, ui.Settings, ui.Card, null!, ui.Network, ui.Spot, ui.Clock); // null on purpose: proves the guard clause rejects it
-		var noNetwork = () => new TestHookService(ui.Sender, ui.Settings, ui.Card, ui.Permissions, null!, ui.Spot, ui.Clock); // null on purpose: proves the guard clause rejects it
-		var noSpot = () => new TestHookService(ui.Sender, ui.Settings, ui.Card, ui.Permissions, ui.Network, null!, ui.Clock); // null on purpose: proves the guard clause rejects it
-		var noClock = () => new TestHookService(ui.Sender, ui.Settings, ui.Card, ui.Permissions, ui.Network, ui.Spot, null!); // null on purpose: proves the guard clause rejects it
+		var noSender = () => new TestHookService(null!, ui.Settings, ui.Card, ui.Permissions, ui.Network, ui.Spot, ui.Clock, ui.WatchService, ui.Notifier, ui.Alarms, ui.Car); // null on purpose: proves the guard clause rejects it
+		var noSettings = () => new TestHookService(ui.Sender, null!, ui.Card, ui.Permissions, ui.Network, ui.Spot, ui.Clock, ui.WatchService, ui.Notifier, ui.Alarms, ui.Car); // null on purpose: proves the guard clause rejects it
+		var noCard = () => new TestHookService(ui.Sender, ui.Settings, null!, ui.Permissions, ui.Network, ui.Spot, ui.Clock, ui.WatchService, ui.Notifier, ui.Alarms, ui.Car); // null on purpose: proves the guard clause rejects it
+		var noPermissions = () => new TestHookService(ui.Sender, ui.Settings, ui.Card, null!, ui.Network, ui.Spot, ui.Clock, ui.WatchService, ui.Notifier, ui.Alarms, ui.Car); // null on purpose: proves the guard clause rejects it
+		var noNetwork = () => new TestHookService(ui.Sender, ui.Settings, ui.Card, ui.Permissions, null!, ui.Spot, ui.Clock, ui.WatchService, ui.Notifier, ui.Alarms, ui.Car); // null on purpose: proves the guard clause rejects it
+		var noSpot = () => new TestHookService(ui.Sender, ui.Settings, ui.Card, ui.Permissions, ui.Network, null!, ui.Clock, ui.WatchService, ui.Notifier, ui.Alarms, ui.Car); // null on purpose: proves the guard clause rejects it
+		var noClock = () => new TestHookService(ui.Sender, ui.Settings, ui.Card, ui.Permissions, ui.Network, ui.Spot, null!, ui.WatchService, ui.Notifier, ui.Alarms, ui.Car); // null on purpose: proves the guard clause rejects it
 
 		noSender.Should().Throw<ArgumentNullException>();
 		noSettings.Should().Throw<ArgumentNullException>();
@@ -310,6 +346,14 @@ public sealed class TestHookServiceTests
 		noNetwork.Should().Throw<ArgumentNullException>();
 		noSpot.Should().Throw<ArgumentNullException>();
 		noClock.Should().Throw<ArgumentNullException>();
+		var noWatchService = () => new TestHookService(ui.Sender, ui.Settings, ui.Card, ui.Permissions, ui.Network, ui.Spot, ui.Clock, null!, ui.Notifier, ui.Alarms, ui.Car); // null on purpose: proves the guard clause rejects it
+		var noNotifier = () => new TestHookService(ui.Sender, ui.Settings, ui.Card, ui.Permissions, ui.Network, ui.Spot, ui.Clock, ui.WatchService, null!, ui.Alarms, ui.Car); // null on purpose: proves the guard clause rejects it
+		var noAlarms = () => new TestHookService(ui.Sender, ui.Settings, ui.Card, ui.Permissions, ui.Network, ui.Spot, ui.Clock, ui.WatchService, ui.Notifier, null!, ui.Car); // null on purpose: proves the guard clause rejects it
+		var noCar = () => new TestHookService(ui.Sender, ui.Settings, ui.Card, ui.Permissions, ui.Network, ui.Spot, ui.Clock, ui.WatchService, ui.Notifier, ui.Alarms, null!); // null on purpose: proves the guard clause rejects it
+		noWatchService.Should().Throw<ArgumentNullException>();
+		noNotifier.Should().Throw<ArgumentNullException>();
+		noAlarms.Should().Throw<ArgumentNullException>();
+		noCar.Should().Throw<ArgumentNullException>();
 	}
 	#endregion
 
@@ -319,6 +363,6 @@ public sealed class TestHookServiceTests
 	/// </summary>
 	/// <param name="ui">The fixture.</param>
 	/// <returns>The hooks.</returns>
-	private static TestHookService Create(UiFixture ui) => new(ui.Sender, ui.Settings, ui.Card, ui.Permissions, ui.Network, ui.Spot, ui.Clock);
+	private static TestHookService Create(UiFixture ui) => new(ui.Sender, ui.Settings, ui.Card, ui.Permissions, ui.Network, ui.Spot, ui.Clock, ui.WatchService, ui.Notifier, ui.Alarms, ui.Car);
 	#endregion
 }

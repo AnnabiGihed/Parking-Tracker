@@ -145,7 +145,7 @@ public sealed class CarViewModelTests
 	/// <returns>A task with the car view model, after it read the saved car.</returns>
 	private static async Task<CarViewModel> BuildCarViewModelAsync(UiFixture ui)
 	{
-		var car = new CarViewModel(ui.Settings, ui.Launcher, ui.Spot, ui.Toast, ui.Clock);
+		var car = new CarViewModel(ui.Settings, ui.Launcher, ui.Spot, ui.Toast, ui.Clock, ui.Alarms, ui.Notifier, ui.AlertCoordinator);
 		await car.LoadAsync().ConfigureAwait(false);
 		return car;
 	}

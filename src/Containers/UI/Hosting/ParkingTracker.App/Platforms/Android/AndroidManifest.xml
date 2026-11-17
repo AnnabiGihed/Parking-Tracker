@@ -23,6 +23,15 @@
   <!-- "Allow all the time": the user chooses it in the location settings of the app. -->
   <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
   <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+  <!--
+    Parking alerts (ADR-0002): a foreground service of type location follows the position while the app is off screen, with a
+    small permanent notification; notifications need their runtime permission on Android 13+; the timer reminders are exact
+    alarms. The service and the alarm receiver are declared by attributes on their classes (not exported).
+  -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
   <!-- Short pulses when the position becomes covered or not covered. -->
   <uses-permission android:name="android.permission.VIBRATE" />
 

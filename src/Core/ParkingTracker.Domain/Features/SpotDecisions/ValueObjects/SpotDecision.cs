@@ -42,6 +42,23 @@ public sealed record SpotDecision(
 	};
 
 	/// <summary>
+	/// Gets the friendly headline of the answer, for example <c>Paid parking</c>: the line shown in the status block, saved with a
+	/// parked car and used as the title of the parking alert. A verdict without a friendly headline keeps its <see cref="Title"/>.
+	/// </summary>
+	public string Headline => Verdict switch
+	{
+		Verdict.Free => "Free for you here",
+		Verdict.FreeNow => "Free for everyone right now",
+		Verdict.Pay => "Paid parking",
+		Verdict.Reserved => "Reserved space",
+		Verdict.CheckNumber => "Check the house number",
+		Verdict.TimeLimited => "Time-limited parking",
+		Verdict.ParkingDisc => "Blue zone: use your disc",
+		Verdict.CantVerify => "Can't verify right now",
+		_ => Title,
+	};
+
+	/// <summary>
 	/// Gets the colour of the answer: green for free, red for pay, grey for everything uncertain.
 	/// </summary>
 	public SpotStatus Status => Verdict switch

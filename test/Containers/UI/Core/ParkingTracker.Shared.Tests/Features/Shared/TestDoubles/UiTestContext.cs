@@ -3,10 +3,13 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
+using ParkingTracker.Application.Features.ParkingDetection.Abstractions;
+using ParkingTracker.Application.Features.ParkingDetection.Services;
 using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Queries.DecideSpot;
 using ParkingTracker.Application.Features.SpotDecisions.Queries.FindFreeSpots;
+using ParkingTracker.Domain.Features.Cars.ValueObjects;
 using ParkingTracker.Domain.Features.MapLayers.ValueObjects;
 using ParkingTracker.Domain.Features.Sectors.ValueObjects;
 using ParkingTracker.Domain.Features.Shared.ValueObjects;
@@ -57,6 +60,12 @@ public abstract class UiTestContext : BunitContext
 		Services.AddSingleton(Launcher);
 		Services.AddSingleton(ReferenceData);
 		Services.AddSingleton(Network);
+		Notifier.RequestPermissionAsync(Arg.Any<CancellationToken>()).Returns(true);
+		Alarms.ScheduleAsync(Arg.Any<IReadOnlyList<TimerReminder>>(), Arg.Any<CancellationToken>()).Returns(AlarmPrecision.Exact);
+		Settings.GetAlertsEnabledAsync().Returns(true);
+		Services.AddSingleton(Alarms);
+		Services.AddSingleton(Notifier);
+		Services.AddSingleton(AlertCoordinator);
 		var configuration = new ConfigurationBuilder().Build();
 		new global::ParkingTracker.ViewModels.UiServiceInstaller().Install(Services, configuration);
 		new global::ParkingTracker.Shared.UiServiceInstaller().Install(Services, configuration);
@@ -103,6 +112,21 @@ public abstract class UiTestContext : BunitContext
 	/// Gets the network status substitute.
 	/// </summary>
 	protected INetworkStatus Network { get; } = Substitute.For<INetworkStatus>();
+
+	/// <summary>
+	/// Gets the alarm scheduler substitute, which schedules exact alarms.
+	/// </summary>
+	protected IAlarmScheduler Alarms { get; } = Substitute.For<IAlarmScheduler>();
+
+	/// <summary>
+	/// Gets the notifier substitute, which allows notifications.
+	/// </summary>
+	protected INotifier Notifier { get; } = Substitute.For<INotifier>();
+
+	/// <summary>
+	/// Gets the substitute for the coordinator of the background service.
+	/// </summary>
+	protected IParkingAlertCoordinator AlertCoordinator { get; } = Substitute.For<IParkingAlertCoordinator>();
 	#endregion
 
 	#region Protected Methods
