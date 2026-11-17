@@ -1,5 +1,4 @@
 using Android.Gms.Common;
-using Android.Gms.Extensions;
 using Android.Gms.Location;
 using Android.OS;
 using Microsoft.Extensions.Logging;
@@ -16,8 +15,8 @@ namespace ParkingTracker.App.Features.SpotDecisions;
 /// Date        : 11-2026
 /// Purpose     : The <see cref="ILocationTracker"/> of the phone over the fused location provider of Google Play services (ADR-0002) in
 ///              the foreground: high accuracy, a fix about every second and no minimum distance, so that fixes keep coming while the
-///              phone stands still (the screen reports a lost signal after 15 seconds without one). Events are raised on the main
-///              looper. Background tracking with the app off screen is a later stage. When the permission is missing, Play services
+///              phone stands still (the screen reports a lost signal after 15 seconds without one). Fixes and interruptions arrive on the
+///              main looper; a failed start is reported on the thread that started. Background tracking off screen is a later stage. When the permission is missing, Play services
 ///              are unavailable or the request fails, the tracker stops and says why through <see cref="ErrorOccurred"/>; a moment
 ///              without position (<see cref="LocationAvailability.IsLocationAvailable"/> false) is reported as an interruption and
 ///              the updates go on.
@@ -118,7 +117,7 @@ public sealed partial class FusedLocationTracker : ILocationTracker
 	/// <inheritdoc />
 	/// <remarks>
 	/// A refusal or any other failure resets <see cref="IsRunning"/> and is reported through <see cref="ErrorOccurred"/>.
-	/// A cancelled start also cleans up, and then throws the <see cref="OperationCanceledException"/>.
+	/// A cancelled start also cleans up, and then throws the <see cref="System.OperationCanceledException"/>.
 	/// </remarks>
 	public async Task StartAsync(CancellationToken cancellationToken = default)
 	{
@@ -140,7 +139,7 @@ public sealed partial class FusedLocationTracker : ILocationTracker
 		{
 			await RequestUpdatesAsync(attempt, cancellationToken).ConfigureAwait(false);
 		}
-		catch (OperationCanceledException)
+		catch (System.OperationCanceledException)
 		{
 			await AbortAsync(attempt).ConfigureAwait(false);
 			throw;
@@ -235,7 +234,7 @@ public sealed partial class FusedLocationTracker : ILocationTracker
 			.SetMinUpdateDistanceMeters(0)
 			.Build();
 		var client = LocationServices.GetFusedLocationProviderClient(Platform.AppContext);
-		await client.RequestLocationUpdates(request, registered, Looper.MainLooper!).AsAsync().ConfigureAwait(false);
+		await client.RequestLocationUpdatesAsync(request, registered, Looper.MainLooper!).ConfigureAwait(false);
 	}
 
 	/// <summary>
@@ -254,7 +253,8 @@ public sealed partial class FusedLocationTracker : ILocationTracker
 		var accuracy = location.HasAccuracy ? location.Accuracy : UnknownAccuracyMetres;
 		if (Interlocked.Exchange(ref firstFixLogged, 1) == 0 && logger.IsEnabled(LogLevel.Information))
 		{
-			LogFirstFix(logger, accuracy, Math.Round((clock.GetUtcNow() - time).TotalSeconds, 1));
+			var ageSeconds = Math.Round((clock.GetUtcNow() - time).TotalSeconds, 1);
+			LogFirstFix(logger, accuracy, ageSeconds);
 		}
 
 		double? speed = location.HasSpeed ? location.Speed : null;
@@ -343,11 +343,16 @@ public sealed partial class FusedLocationTracker : ILocationTracker
 
 		try
 		{
-			await MainThread.InvokeOnMainThreadAsync(() => LocationServices.GetFusedLocationProviderClient(Platform.AppContext).RemoveLocationUpdates(stopped).AsAsync()).ConfigureAwait(false);
+			await MainThread.InvokeOnMainThreadAsync(() => LocationServices.GetFusedLocationProviderClient(Platform.AppContext).RemoveLocationUpdatesAsync(stopped)).ConfigureAwait(false);
 		}
 		catch (Exception exception)
 		{
 			LogRemoveFailed(logger, exception);
+		}
+		finally
+		{
+			// The Java peer holds delegates into this tracker; release it once the provider no longer uses it.
+			stopped.Dispose();
 		}
 	}
 

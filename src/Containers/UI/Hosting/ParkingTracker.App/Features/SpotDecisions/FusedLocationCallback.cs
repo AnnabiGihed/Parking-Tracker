@@ -50,9 +50,9 @@ internal sealed class FusedLocationCallback : LocationCallback
 	}
 
 	/// <inheritdoc />
-	public override void OnLocationAvailability(LocationAvailability availability)
+	public override void OnLocationAvailability(LocationAvailability locationAvailability)
 	{
-		onAvailability(availability.IsLocationAvailable);
+		onAvailability(locationAvailability.IsLocationAvailable);
 	}
 	#endregion
 }
