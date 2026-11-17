@@ -332,8 +332,8 @@ the card number and plate next to the validity data, and `ParkedCar` the positio
 is asynchronous, because `SecureStorage` is; the store keeps the card in memory after the first read, so a spot check does
 not decrypt it again.
 
-The host implements the ports in `Features/<Feature>/` with thin MAUI classes: `GeolocationTracker` (continuous
-foreground listening at best accuracy, one fix per second, no minimum distance), `MauiLocationPermissions`,
+The host implements the ports in `Features/<Feature>/` with thin MAUI classes: `FusedLocationTracker` (fused
+location of Google Play services in the foreground, high accuracy, one fix per second, no minimum distance), `MauiLocationPermissions`,
 `MauiLinkLauncher`, `ConnectivityNetworkStatus` and `SecureValueStorage` / `PreferencesValueStorage`. Everything that can
 be tested without a phone sits in `ParkingTracker.ViewModels`: `SettingsStore` and `SettingsJson` (the JSON of
 `pt.card`, `pt.car`, `pt.layers`, `pt.permSnooze` exactly as `app.js` wrote it; a card without a municipality reads as
@@ -516,7 +516,8 @@ Emulator test changes:
   notification permission, foreground and background location).
 - `ptTest.screenState()` returns `{ tracking, me: { lat, lon, acc, ageSeconds } | null, title, sub, busy }`; the test prints it
   after `setCard` and in the detail of a failed GPS or screen check, and re-sends the emulator fix every 2 seconds while it
-  waits for the position. `GeolocationTracker` logs the start, a failure and the first fix (with its age).
+  waits for the position. `FusedLocationTracker` logs the start, a failure (at warning level) and the first fix (with its age).
+  It depends on Android and Play services, so it has no unit test; this emulator test is its coverage.
 - The on-screen check reads `.hero-title` and `.hero-sub`, which the Razor markup keeps.
 - New checks (done in stage 5b): no .NET unhandled exception in logcat and the Blazor error UI hidden. Still to come in
   stage 6: a background parking alert: drive the

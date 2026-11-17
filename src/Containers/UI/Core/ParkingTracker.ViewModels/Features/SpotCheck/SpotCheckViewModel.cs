@@ -480,10 +480,9 @@ public sealed class SpotCheckViewModel : ViewModelBase, IDisposable
 			return;
 		}
 
-		bool hasPin;
+		var hasPin = HasPin();
 		lock (gate)
 		{
-			hasPin = pin is not null;
 			isTracking = false;
 		}
 
@@ -505,15 +504,21 @@ public sealed class SpotCheckViewModel : ViewModelBase, IDisposable
 	/// </summary>
 	private void ShowInterruption()
 	{
-		bool hasPin;
-		lock (gate)
-		{
-			hasPin = pin is not null;
-		}
-
-		if (!hasPin)
+		if (!HasPin())
 		{
 			checker.ShowCantVerify("No GPS position right now: waiting for a fix.", CheckSource.Me);
+		}
+	}
+
+	/// <summary>
+	/// Tells whether the user dropped a pin that the screen shows instead of the position.
+	/// </summary>
+	/// <returns><see langword="true"/> when a pin is set.</returns>
+	private bool HasPin()
+	{
+		lock (gate)
+		{
+			return pin is not null;
 		}
 	}
 

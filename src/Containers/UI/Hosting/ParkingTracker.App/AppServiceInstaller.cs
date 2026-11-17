@@ -36,7 +36,7 @@ public sealed class AppServiceInstaller : IServiceInstaller
 
 		// The card goes to the encrypted storage, everything else to the preferences (ADR-0004).
 		services.AddSingleton<ISettingsStore>(provider => new SettingsStore(new SecureValueStorage(provider.GetRequiredService<ILogger<SecureValueStorage>>()), new PreferencesValueStorage()));
-		services.AddSingleton<ILocationTracker, GeolocationTracker>();
+		services.AddSingleton<ILocationTracker, FusedLocationTracker>();
 		services.AddSingleton<ILocationPermissions, MauiLocationPermissions>();
 		services.AddSingleton<ILinkLauncher, MauiLinkLauncher>();
 

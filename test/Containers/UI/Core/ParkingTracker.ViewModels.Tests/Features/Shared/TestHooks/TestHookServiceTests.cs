@@ -57,6 +57,24 @@ public sealed class TestHookServiceTests
 	}
 
 	/// <summary>
+	/// Verifies that a card replacing a saved one is announced as not the first card.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task SetCard_CardExistsAlready_ShouldAnnounceANotFirstCard()
+	{
+		using var ui = new UiFixture();
+		ui.Settings.GetCardAsync().Returns(new ParkingCard("bruxelles", "louise", new CardPeriod(null, null), [], [], []));
+		var hooks = Create(ui);
+		bool? announcedFirst = null;
+		ui.Card.CardSaved += (_, e) => announcedFirst = e.Value;
+
+		await hooks.SetCardAsync("""{"number":"TEST","plate":"1TST000","sector":"louise","from":"2026-01-01","to":"2099-12-31","tolerances":[]}""");
+
+		announcedFirst.Should().BeFalse();
+	}
+
+	/// <summary>
 	/// Verifies that text that is not a card is rejected, and that nothing is saved.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>

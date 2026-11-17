@@ -32,7 +32,6 @@
     <DefineConstants>$(DefineConstants);TEST_HOOKS</DefineConstants>
   </PropertyGroup>
   <ItemGroup Condition="'$(EnableTestHooks)' != 'true'">
-    <Compile Remove="**\*.TestHooks.cs" />
     <Compile Remove="Features\Shared\TestHooks\**" />
   </ItemGroup>
 
@@ -47,6 +46,7 @@
     <PackageReference Include="Microsoft.Maui.Controls" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" />
     <PackageReference Include="Microsoft.Extensions.Logging.Debug" />
+    <PackageReference Include="Xamarin.GooglePlayServices.Location" />
   </ItemGroup>
 
 

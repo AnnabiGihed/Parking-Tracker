@@ -34,4 +34,6 @@ The .NET migration is in progress and is not part of any release yet: the publis
 - Made the emulator test explain a missing position: a `ptTest.screenState()` hook, a log of the start, failures and first fix
   of the location tracker, a fix re-sent during the wait, and a "finding your position" chip that no longer overwrites the
   chips of a check that a fix already started.
+- Replaced the MAUI geolocation listener by the fused location provider of Google Play services (ADR-0002), which kept
+  reporting "position unavailable" on the emulator and stopped delivering fixes.
 - Added `CONTRIBUTING.md` and this changelog.
