@@ -1,12 +1,14 @@
+using System.Net.Http.Headers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using System.Net.Http.Headers;
-using ParkingTracker.Application.ReferenceData;
-using ParkingTracker.Application.Sources;
-using ParkingTracker.Infrastructure.ReferenceData;
-using ParkingTracker.Infrastructure.Sources;
-using Pivot.Framework.Tools.DependencyInjection;
+using ParkingTracker.Application.Features.Sectors.Abstractions;
+using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
+using ParkingTracker.Infrastructure.Features.PaidHours;
+using ParkingTracker.Infrastructure.Features.Sectors;
+using ParkingTracker.Infrastructure.Features.Shared.Http;
+using ParkingTracker.Infrastructure.Features.Zones;
 using Pivot.Framework.Tools.DependencyInjection.Abstractions;
+using Pivot.Framework.Tools.DependencyInjection;
 
 namespace ParkingTracker.Infrastructure;
 
@@ -45,6 +47,12 @@ public sealed class InfrastructureServiceInstaller : BaseServiceInstaller, IServ
 	#endregion
 
 	#region Private Helpers
+	/// <summary>
+	/// Registers a source client as a typed HTTP client behind its port.
+	/// </summary>
+	/// <typeparam name="TPort">The type of the t port.</typeparam>
+	/// <typeparam name="TClient">The type of the t client.</typeparam>
+	/// <param name="services">The service collection.</param>
 	private static void AddSourceClient<TPort, TClient>(IServiceCollection services)
 		where TPort : class
 		where TClient : class, TPort

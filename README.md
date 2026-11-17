@@ -138,3 +138,16 @@ The same app also runs in a browser. GPS in the browser needs HTTPS, for example
 Copy the `louise` block in `sectors.js` and in `tolerance-sectors.json`, fill in the streets from your sheet and set
 `area` to a box that contains them all. Until the .NET cut-over both the JavaScript copy and the JSON must change;
 `python tools/verify_sectors.py` checks that they agree.
+
+## Project layout
+
+The .NET solution follows the Pivot.Framework layout adapted to a mobile client; the tree is in
+[docs/architecture.md](docs/architecture.md#4-component-and-deployment-model) (section 4) and the reasons are in
+[ADR-0006](docs/adr/0006-mobile-client-layout.md). Contribution rules are in [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Tooling deviations
+
+| Rule | Deviation | Reason | Record |
+| --- | --- | --- | --- |
+| StyleCop SA1514 | Switched off in `.editorconfig` | The region convention forbids the blank line it asks for | [ADR-0005](docs/adr/0005-waive-stylecop-sa1514-for-the-region-convention.md) |
+| CA1716 | Namespaces not checked (`analyzed_symbol_kinds`) | The mandatory `Features/Shared` folder names a Visual Basic keyword; the app is C# only | [ADR-0007](docs/adr/0007-narrow-ca1716-to-exclude-namespaces.md) |

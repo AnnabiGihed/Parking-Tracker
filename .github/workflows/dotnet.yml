@@ -1,0 +1,61 @@
+name: .NET quality gate
+
+# Builds the .NET solution with warnings as errors, checks the formatting and runs the unit tests. It runs on every
+# push and on every pull request into main, so it can be marked as a required check in the branch protection.
+on:
+  # Work branches are pushed for feedback before a pull request exists, so push stays on all branches. Push and pull
+  # request share one concurrency group below, so the later run replaces the earlier one.
+  push:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: dotnet-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+
+jobs:
+  build-and-test:
+    name: Build, format and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the .NET SDK from global.json
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+
+      # Only the restore needs the package token; nuget.config reads it from these variables.
+      - name: Restore
+        env:
+          GITHUB_PACKAGES_USER: ${{ github.actor }}
+          GITHUB_PACKAGES_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: dotnet restore ParkingTracker.slnx
+
+      - name: Verify formatting
+        run: dotnet format ParkingTracker.slnx --no-restore --verify-no-changes
+
+      - name: Build
+        run: dotnet build ParkingTracker.slnx --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test ParkingTracker.slnx --configuration Release --no-build --logger trx --results-directory TestResults
+
+      - name: Upload the test results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-results
+          path: TestResults/*.trx
+          if-no-files-found: ignore
+          retention-days: 7

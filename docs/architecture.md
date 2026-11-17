@@ -189,22 +189,28 @@ flowchart LR
     class pb,bm,urbis,bxl,osm,nav external
 ```
 
-Inside the app, dependencies point inward: the MAUI project composes everything, Infrastructure and the Android code
-implement Application ports, Domain depends only on `Pivot.Framework.Domain`.
+Inside the app, dependencies point inward: the thin MAUI host composes everything, Infrastructure and the Android code
+implement Application ports, Domain depends only on `Pivot.Framework.Domain`. The screens live in a Razor class library
+(`ParkingTracker.Shared`) that the host references, so that they can be tested on any operating system.
 
 ```mermaid
 flowchart TB
-    subgraph apk[ParkingTracker.App - net10.0-android]
-        ui[Razor components<br/>style.css, icons<br/>screen and dialogs]
-        mapjs[wwwroot/js/map.js<br/>Leaflet 1.9.4<br/>map drawing only]
+    subgraph apk[ParkingTracker.App - net10.0-android, thin host]
         droid[Platforms/Android<br/>location service, notifications,<br/>permissions, OCR, migration]
         prefs[(MAUI SecureStorage: pt.card<br/>Preferences: pt.car, pt.timer,<br/>pt.layers, pt.bgAlerts)]
     end
+    subgraph shared[ParkingTracker.Shared - Razor class library]
+        ui[Razor pages and components<br/>style.css, icons<br/>screen and dialogs]
+        mapjs[wwwroot/js/map.js<br/>Leaflet 1.9.4<br/>map drawing only]
+    end
+    vm[ParkingTracker.ViewModels<br/>view models per feature]
     app[ParkingTracker.Application<br/>Pivot queries and commands,<br/>ports, presenter, card parser]
     domain[ParkingTracker.Domain<br/>rules, geometry, decider,<br/>paid hours, parking detector]
     infra[ParkingTracker.Infrastructure<br/>HttpClient sources,<br/>embedded reference data]
 
-    ui -->|ISender.Send<br/>in process| app
+    apk -->|hosts| shared
+    ui -->|binds| vm
+    vm -->|ISender.Send<br/>in process| app
     ui -->|draws via<br/>JS interop| mapjs
     mapjs -->|map events<br/>JSInvokable| ui
     droid -->|parked: ISender.Send<br/>in process| app
@@ -214,26 +220,45 @@ flowchart TB
     droid -->|reads/writes<br/>ISettingsStore| prefs
 
     classDef internal fill:#cfe2f3,stroke:#2c5aa0,stroke-width:1px,color:#000
-    class ui,mapjs,droid,prefs,app,domain,infra internal
+    class ui,mapjs,droid,prefs,vm,app,domain,infra internal
 ```
 
-Solution layout (folders follow the house structure, adapted to a mobile client):
+Solution layout (the Pivot.Framework canonical layout, adapted to a mobile client in
+[ADR-0006](adr/0006-mobile-client-layout.md)). Every project is organised in feature folders (`Features/<Feature>/`,
+with `Features/Shared/` for what several features use); the test tree mirrors `src/`:
 
 ```text
 ParkingTracker.slnx
 global.json                 SDK 10.0.4xx, rollForward latestFeature
-Directory.Build.props       nullable, implicit usings, analyzers, XML docs (no target framework)
+Directory.Build.props       net10.0, nullable, implicit usings, analyzers, StyleCop settings, XML docs
+stylecop.json               documentation and using placement rules
 .editorconfig               organizational analyzer baseline; test/.editorconfig narrows it for tests
 Directory.Packages.props    central versions; Pivot.Framework.* pinned together
 nuget.config                nuget.org + GitHub Packages, source mapping Pivot.* -> GitHub
-src/Core/ParkingTracker.Domain
-src/Core/ParkingTracker.Application
-src/Infrastructure/ParkingTracker.Infrastructure
-src/Containers/Mobile/ParkingTracker.App
-test/ParkingTracker.Domain.Tests
-test/ParkingTracker.Application.Tests
-test/ParkingTracker.Infrastructure.Tests
-test/fixtures/              recorded live responses and expected answers
+src/
+  Core/
+    ParkingTracker.Domain          Features/{Cards,Sectors,Zones,PaidHours,ParkingDetection,SpotDecisions,Shared}
+                                   each with ValueObjects/, Services/ (and Errors/ when needed)
+    ParkingTracker.Application     Features/SpotDecisions/{Queries,Services,Abstractions}
+                                   Features/Sectors/{Services,Abstractions}
+  Infrastructure/
+    ParkingTracker.Infrastructure  Features/{Zones,PaidHours,Sectors,Shared/Http,Shared/Parsing}
+                                   Data/*.json (embedded resources)
+  Containers/
+    UI/
+      Core/
+        ParkingTracker.Shared      planned: Razor class library, pages and components per feature
+        ParkingTracker.ViewModels  planned: view models per feature
+      Hosting/
+        ParkingTracker.App         planned: thin .NET MAUI Blazor Hybrid host (net10.0-android)
+test/
+  Core/
+    ParkingTracker.Domain.Tests
+    ParkingTracker.Application.Tests
+  Infrastructure/
+    ParkingTracker.Infrastructure.Tests   Features/SpotDecisions/Parity holds the parity tests
+  ParkingTracker.E2E.Tests         planned: the Android emulator test
+  fixtures/                        recorded live responses and expected answers
 tools/                      Python data tools, emulator test, parity recorder
 ```
 
@@ -249,11 +274,17 @@ The `Pivot.Framework.*` packages come from GitHub Packages, so restore needs a t
 in the shell that builds: `GITHUB_PACKAGES_USER` (the GitHub user name) and `GITHUB_PACKAGES_TOKEN` (a GitHub token
 with the `read:packages` scope, for example the output of `gh auth token`). `nuget.config` reads them at restore time
 and never stores them. Then build and test everything with `python .agent-kit/verify.py`.
+The workflow `.github/workflows/dotnet.yml` does the same in CI: restore with the two variables filled from the
+workflow actor and token, `dotnet format --verify-no-changes`, a Release build and the tests.
 
 The live smoke tests (`LiveSourcesSmokeTests`) call each real service once around Avenue Louise 216. They are skipped by
 default, so `verify.py` needs no network beyond the feed. Switch them on with the environment variable
-`PARKING_LIVE_TESTS=1`, for example `PARKING_LIVE_TESTS=1 dotnet test test/ParkingTracker.Infrastructure.Tests --filter
-FullyQualifiedName~LiveSourcesSmokeTests`.
+`PARKING_LIVE_TESTS=1`, for example:
+
+```bash
+PARKING_LIVE_TESTS=1 dotnet test test/Infrastructure/ParkingTracker.Infrastructure.Tests \
+  --filter FullyQualifiedName~LiveSourcesSmokeTests
+```
 
 ## 5. Data and integration design
 
@@ -296,9 +327,10 @@ of range, caught by `ValidationPipelineBehavior`).
 
 Two small ports complete the decision: `INetworkStatus` (online or not) and `ISettingsStore`, whose read side
 (`GetCard`) exists so far; the card storage and the other settings come with the app shell. Request addresses, response
-parsers and the HTTP-status failure live in Infrastructure as pure code (`SourceRequests`, `Parsing/*`,
-`SourceResponse`), and the typed `HttpClient` clients that use them (`ParkingBrusselsClient`, `AddressPointsClient`,
-`ParkingRulesClient`, `MobilityLayersClient`, `CityDocumentsClient`, internal to Infrastructure) are registered by
+parsers and the HTTP-status failure live in Infrastructure as pure code (`SourceRequests` and `SourceResponse` under
+`Features/Shared/Http`, the parsers under `Features/Shared/Parsing` and the feature folders), and the typed
+`HttpClient` clients that use them (`ParkingBrusselsClient`, `AddressPointsClient`, `ParkingRulesClient`,
+`MobilityLayersClient`, `CityDocumentsClient`, internal to Infrastructure) are registered by
 `InfrastructureServiceInstaller` with `IHttpClientFactory`. The limit of time is applied per call (`SourceTimeouts`:
 12 s, 30 s for the PDF download), so a timeout (`<Source>.Timeout`, `<name> timed out`) is told apart from the caller's
 cancellation, which is always rethrown; a lost connection gives `<Source>.Unavailable` (`<name> unreachable`). Requests
@@ -380,9 +412,9 @@ UI count as test failures. Resilience is honesty, not retries: any failed source
 
 | Level | What | Where | Runs |
 | --- | --- | --- | --- |
-| Unit | Geometry, street rules, holidays (fixed years incl. Easter), paid hours across DST, zone types, card scope per municipality kind, parking detector with synthetic tracks, card text parser | `test/ParkingTracker.Domain.Tests`, `test/ParkingTracker.Application.Tests` | locally and CI |
-| Parity | For 17 recorded places (Avenue Louise 216, Place du Châtelain with a City card and with two mailles cards, Etterbeek, Uccle, Saint-Josse, a tunnel, a red zone, a reserved space, a `check:` street, a limit between house numbers, outside paid hours, a holiday, City list changed, a failed source, poor GPS) plus a free-spot search and two map areas: the C# answer equals the `live.js` answer, and the C# code asks for exactly the requests `live.js` made | `test/fixtures/parity`, `test/ParkingTracker.Infrastructure.Tests/Parity` (they need the parsers and the handlers together) | locally and CI |
-| Integration | Clients against recorded responses through a stub `HttpMessageHandler`: URLs, parsing, filters, timeouts, error mapping; reference data loading | `test/ParkingTracker.Infrastructure.Tests` | locally and CI |
+| Unit | Geometry, street rules, holidays (fixed years incl. Easter), paid hours across DST, zone types, card scope per municipality kind, parking detector with synthetic tracks, card text parser | `test/Core/ParkingTracker.Domain.Tests`, `test/Core/ParkingTracker.Application.Tests` | locally and CI |
+| Parity | For 17 recorded places (Avenue Louise 216, Place du Châtelain with a City card and with two mailles cards, Etterbeek, Uccle, Saint-Josse, a tunnel, a red zone, a reserved space, a `check:` street, a limit between house numbers, outside paid hours, a holiday, City list changed, a failed source, poor GPS) plus a free-spot search and two map areas: the C# answer equals the `live.js` answer, and the C# code asks for exactly the requests `live.js` made | `test/fixtures/parity`, `test/Infrastructure/ParkingTracker.Infrastructure.Tests/Features/SpotDecisions/Parity` (they need the parsers and the handlers together) | locally and CI |
+| Integration | Clients against recorded responses through a stub `HttpMessageHandler`: URLs, parsing, filters, timeouts, error mapping; reference data loading | `test/Infrastructure/ParkingTracker.Infrastructure.Tests` | locally and CI |
 | Live smoke | Clients against the real services, trait `Live` | Infrastructure tests | on demand, not a gate |
 | Device | Emulator test: Release APK with test hooks | `tools/emulator-test.mjs` in CI | every main build |
 | Upgrade | Capacitor build, then MAUI build over it | CI job | until cut-over, then on demand |

@@ -1,11 +1,12 @@
 using FluentValidation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using ParkingTracker.Application.Decisions;
+using ParkingTracker.Application.Features.Sectors.Services;
+using ParkingTracker.Application.Features.SpotDecisions.Services;
 using Pivot.Framework.Application.Behaviors;
 using Pivot.Framework.Application.Messaging;
-using Pivot.Framework.Tools.DependencyInjection;
 using Pivot.Framework.Tools.DependencyInjection.Abstractions;
+using Pivot.Framework.Tools.DependencyInjection;
 
 namespace ParkingTracker.Application;
 

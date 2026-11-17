@@ -13,6 +13,7 @@ indent_size = 2
 trim_trailing_whitespace = false
 
 [*.cs]
+end_of_line = lf
 # Pivot.Framework house style: C# is indented with tabs.
 indent_style = tab
 indent_size = 4
@@ -33,6 +34,10 @@ dotnet_diagnostic.CS1591.severity = error
 # SA1514 (waiver ADR-0005): csharp-regions forbids a blank line directly after #region, which SA1514 demands before the first
 # member's documentation header; the house skill wins. Author: Gihed Annabi, 11-2026.
 dotnet_diagnostic.SA1514.severity = none
+
+# CA1716 (waiver ADR-0007): namespaces follow the mandatory Features/Shared folder; 'Shared' is only a Visual Basic keyword.
+# Types, members and parameters stay checked. Author: Gihed Annabi, 11-2026.
+dotnet_code_quality.CA1716.analyzed_symbol_kinds = NamedType, Method, Property, Event, Parameter
 
 [*.{g.cs,Designer.cs}]
 generated_code = true
