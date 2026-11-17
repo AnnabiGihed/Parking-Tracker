@@ -62,10 +62,7 @@ public sealed partial class CarDialog : ViewModelComponent<CarViewModel>
 	/// Handles "Start".
 	/// </summary>
 	/// <returns>A task that completes when the timer started or was refused.</returns>
-	private async Task OnStartAsync()
-	{
-		await ViewModel.StartTimerAsync();
-	}
+	private Task<bool> OnStartAsync() => ViewModel.StartTimerAsync();
 
 	/// <summary>
 	/// Handles "Stop the timer".

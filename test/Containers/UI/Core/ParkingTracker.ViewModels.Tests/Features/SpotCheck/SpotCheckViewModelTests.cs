@@ -19,7 +19,8 @@ namespace ParkingTracker.ViewModels.Tests.Features.SpotCheck;
 /// Purpose     : Unit tests for <see cref="SpotCheckViewModel"/>: stale fixes are ignored, a fix triggers a check by the tracking
 ///              rules, the lost signal, a failed location and a lost connection say "can't verify" and cannot be overwritten by a
 ///              check that finishes late, a tap on the map drops a pin, a failing background check is told to the user, and the
-///              nearest-spot search follows an answer that is not free.
+///              nearest-spot search follows an answer that is not free, and the place of a stop found while the app was on screen is
+///              checked unless the user is already followed.
 /// </summary>
 public sealed class SpotCheckViewModelTests
 {
@@ -648,6 +649,39 @@ public sealed class SpotCheckViewModelTests
 		await ui.Spot.FindFreeParkingAsync();
 
 		fit.Should().Be(new MapFitRequest(UiFixture.Here, best.Point));
+	}
+	#endregion
+
+	#region Parked Place Tests
+	/// <summary>
+	/// Verifies that the place of a stop is checked as the position of the user when nobody is followed.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task CheckParkedPlace_NotFollowing_ShouldCheckThePlace()
+	{
+		using var ui = new UiFixture();
+		ui.AnswerChecks(SpotDecision.Create(Verdict.Pay, "Paid."));
+
+		await ui.Spot.CheckParkedPlaceAsync(UiFixture.Here, 6);
+
+		ui.Spot.Status.Title.Should().Be("Paid parking");
+		await ui.Sender.Received(1).Send(Arg.Is<DecideSpotQuery>(query => query.AccuracyMeters.Equals(6.0)), Arg.Any<CancellationToken>());
+	}
+
+	/// <summary>
+	/// Verifies that nothing is checked while the user is followed, because the screen already answers for the position.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task CheckParkedPlace_Following_ShouldCheckNothing()
+	{
+		using var ui = new UiFixture();
+		await ui.Spot.StartTrackingAsync();
+
+		await ui.Spot.CheckParkedPlaceAsync(UiFixture.Here, 6);
+
+		await ui.Sender.DidNotReceive().Send(Arg.Any<DecideSpotQuery>(), Arg.Any<CancellationToken>());
 	}
 	#endregion
 

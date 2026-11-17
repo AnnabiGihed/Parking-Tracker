@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using AndroidX.Core.App;
 using Microsoft.Maui.ApplicationModel;
 using ParkingTracker.Application.Features.ParkingDetection.Abstractions;
@@ -56,7 +57,7 @@ public sealed class AndroidNotifier : INotifier
 			return false;
 		}
 
-		var status = await MainThread.InvokeOnMainThreadAsync(() => new PostNotificationsPermission().RequestAsync()).ConfigureAwait(false);
+		var status = await AskPostNotificationsAsync().ConfigureAwait(false);
 		return status == PermissionStatus.Granted && await AreAllowedAsync(cancellationToken).ConfigureAwait(false);
 	}
 
@@ -66,6 +67,18 @@ public sealed class AndroidNotifier : INotifier
 		var id = ParkingNotifications.AlertIdBase + (int)(clock.GetUtcNow().ToUnixTimeMilliseconds() % 1000);
 		ParkingNotifications.Show(Platform.AppContext, id, ParkingNotifications.AlertsChannelId, title, body);
 		return Task.CompletedTask;
+	}
+	#endregion
+
+	#region Private Helpers
+	/// <summary>
+	/// Shows the system question for the notification permission, which exists from Android 13; the system dialog needs the main thread.
+	/// </summary>
+	/// <returns>A task with the answer of the user.</returns>
+	[SupportedOSPlatform("android33.0")]
+	private static Task<PermissionStatus> AskPostNotificationsAsync()
+	{
+		return MainThread.InvokeOnMainThreadAsync(() => Permissions.RequestAsync<Permissions.PostNotifications>());
 	}
 	#endregion
 }

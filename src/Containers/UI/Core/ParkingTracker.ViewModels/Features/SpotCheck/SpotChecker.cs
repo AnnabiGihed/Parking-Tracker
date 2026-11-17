@@ -84,6 +84,11 @@ public sealed class SpotChecker : IDisposable
 	private string lastHeadline = string.Empty;
 
 	/// <summary>
+	/// The maximum stay in minutes of the zone of the last decision, or <see langword="null"/> when none is known.
+	/// </summary>
+	private int? lastMaxStayMinutes;
+
+	/// <summary>
 	/// The chips under the status block.
 	/// </summary>
 	private IReadOnlyList<StatusChip> chips = [];
@@ -140,6 +145,21 @@ public sealed class SpotChecker : IDisposable
 			lock (gate)
 			{
 				return lastHeadline;
+			}
+		}
+	}
+
+	/// <summary>
+	/// Gets the maximum stay in minutes of the zone of the last decision, or <see langword="null"/> when the rule has none or the
+	/// last answer found no rule.
+	/// </summary>
+	public int? LastMaxStayMinutes
+	{
+		get
+		{
+			lock (gate)
+			{
+				return lastMaxStayMinutes;
 			}
 		}
 	}
@@ -384,6 +404,7 @@ public sealed class SpotChecker : IDisposable
 	{
 		status = SpotStatusPresenter.Present(decision);
 		lastHeadline = SpotStatusPresenter.HeadlineOf(decision);
+		lastMaxStayMinutes = decision.Zone?.Rule?.MaxTime is > 0 and var maximum ? maximum : null;
 		chips = SpotStatusPresenter.Chips(decision, source, accuracyMetres, clock.GetLocalNow());
 	}
 

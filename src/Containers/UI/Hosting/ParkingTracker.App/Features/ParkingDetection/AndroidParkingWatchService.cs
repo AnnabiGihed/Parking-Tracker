@@ -22,6 +22,11 @@ public sealed partial class AndroidParkingWatchService : IParkingWatchService
 	/// The log, where a refused start goes.
 	/// </summary>
 	private readonly ILogger<AndroidParkingWatchService> logger;
+
+	/// <summary>
+	/// Tells whether the service exists.
+	/// </summary>
+	private readonly ParkingServiceState state;
 	#endregion
 
 	#region Constructors
@@ -29,16 +34,19 @@ public sealed partial class AndroidParkingWatchService : IParkingWatchService
 	/// Initializes a new instance of the <see cref="AndroidParkingWatchService"/> class.
 	/// </summary>
 	/// <param name="logger">The log, where a refused start goes.</param>
-	public AndroidParkingWatchService(ILogger<AndroidParkingWatchService> logger)
+	/// <param name="state">Tells whether the service exists.</param>
+	public AndroidParkingWatchService(ILogger<AndroidParkingWatchService> logger, ParkingServiceState state)
 	{
 		ArgumentNullException.ThrowIfNull(logger);
+		ArgumentNullException.ThrowIfNull(state);
 		this.logger = logger;
+		this.state = state;
 	}
 	#endregion
 
 	#region Properties
 	/// <inheritdoc />
-	public bool IsRunning => ParkingTrackerLocationService.IsRunning;
+	public bool IsRunning => state.IsRunning;
 	#endregion
 
 	#region IParkingWatchService Implementation

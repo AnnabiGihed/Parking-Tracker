@@ -16,7 +16,8 @@ namespace ParkingTracker.App.Features.ParkingDetection;
 ///              parking is noticed: it shows the small permanent notice, then lets a <see cref="BackgroundLocationSession"/> follow the
 ///              position for the <see cref="ParkingWatcher"/>. It runs in the process of the app but outside the web view, so it takes
 ///              its services from the root provider of the app. It is not exported. When the system restarts it with the alerts off or
-///              the permission gone, it stops itself. Starting and stopping it is the job of <see cref="AndroidParkingWatchService"/>.
+///              the permission gone, or refuses to let it run in the foreground, it logs that and stops itself. Starting and
+///              stopping it is the job of <see cref="AndroidParkingWatchService"/>.
 /// </summary>
 /// <remarks>
 /// This class depends on Android and Google Play services, so it cannot be unit-tested on a PC; the emulator test covers it
@@ -27,9 +28,10 @@ public sealed partial class ParkingTrackerLocationService : Service
 {
 	#region Fields
 	/// <summary>
-	/// Whether an instance of the service exists in this process; set between <see cref="OnCreate"/> and <see cref="OnDestroy"/>.
+	/// Records whether the service exists, from <see cref="OnCreate"/> to <see cref="OnDestroy"/>; <see langword="null"/> when the
+	/// root provider is not there.
 	/// </summary>
-	private static volatile bool created;
+	private ParkingServiceState? state;
 
 	/// <summary>
 	/// 0 or 1: whether a run was already requested by an earlier start command, changed with <see cref="Interlocked"/>, so that a second
@@ -43,16 +45,9 @@ public sealed partial class ParkingTrackerLocationService : Service
 	private BackgroundLocationSession? session;
 
 	/// <summary>
-	/// The log of the service, taken from the root provider when the service starts.
+	/// The log of the service, taken from the root provider when the service is created.
 	/// </summary>
 	private ILogger<ParkingTrackerLocationService>? logger;
-	#endregion
-
-	#region Properties
-	/// <summary>
-	/// Gets a value indicating whether the service exists in this process, that is, whether it was started and has not ended.
-	/// </summary>
-	public static bool IsRunning => created;
 	#endregion
 
 	#region Overrides
@@ -60,7 +55,10 @@ public sealed partial class ParkingTrackerLocationService : Service
 	public override void OnCreate()
 	{
 		base.OnCreate();
-		created = true;
+		var services = IPlatformApplication.Current?.Services;
+		logger = services?.GetService<ILogger<ParkingTrackerLocationService>>();
+		state = services?.GetService<ParkingServiceState>();
+		state?.MarkCreated();
 	}
 
 	/// <inheritdoc />
@@ -70,15 +68,10 @@ public sealed partial class ParkingTrackerLocationService : Service
 	public override StartCommandResult OnStartCommand(Intent? intent, StartCommandFlags flags, int startId)
 	{
 		// The permanent notice must be up within seconds of the start command, before anything else is done.
-		ParkingNotifications.EnsureChannels(this);
-		var notice = ParkingNotifications.BuildWatchNotice(this);
-		if (OperatingSystem.IsAndroidVersionAtLeast(29))
+		if (!TryStartForeground())
 		{
-			StartForeground(ParkingNotifications.WatchNotificationId, notice, ForegroundService.TypeLocation);
-		}
-		else
-		{
-			StartForeground(ParkingNotifications.WatchNotificationId, notice);
+			StopSelf();
+			return StartCommandResult.NotSticky;
 		}
 
 		if (Interlocked.Exchange(ref sessionRequested, 1) == 0)
@@ -94,12 +87,47 @@ public sealed partial class ParkingTrackerLocationService : Service
 	{
 		session?.Dispose();
 		session = null;
-		created = false;
+		state?.MarkDestroyed();
 		base.OnDestroy();
 	}
 	#endregion
 
 	#region Private Helpers
+	/// <summary>
+	/// Shows the permanent notice and makes the service a foreground service of type <c>location</c>. The system refuses that in
+	/// some cases: since Android 12 when the app is in the background and has no exemption, and when the location permission is
+	/// missing; both are logged and reported by the result, so that the caller can stop the service instead of crashing.
+	/// </summary>
+	/// <returns><see langword="true"/> when the service is in the foreground; <see langword="false"/> when the system refused.</returns>
+	private bool TryStartForeground()
+	{
+		try
+		{
+			ParkingNotifications.EnsureChannels(this);
+			var notice = ParkingNotifications.BuildWatchNotice(this);
+			if (OperatingSystem.IsAndroidVersionAtLeast(29))
+			{
+				StartForeground(ParkingNotifications.WatchNotificationId, notice, ForegroundService.TypeLocation);
+			}
+			else
+			{
+				StartForeground(ParkingNotifications.WatchNotificationId, notice);
+			}
+
+			return true;
+		}
+		catch (Java.Lang.IllegalStateException exception) when (OperatingSystem.IsAndroidVersionAtLeast(31) && exception is ForegroundServiceStartNotAllowedException)
+		{
+			ReportForegroundRefused(exception);
+			return false;
+		}
+		catch (Java.Lang.SecurityException exception)
+		{
+			ReportForegroundRefused(exception);
+			return false;
+		}
+	}
+
 	/// <summary>
 	/// Starts the run, unless the alerts are off or the location is not allowed all the time any more (the system may have restarted
 	/// the service after the user changed that), and stops the service when it cannot run.
@@ -108,7 +136,6 @@ public sealed partial class ParkingTrackerLocationService : Service
 	private async Task StartSessionAsync()
 	{
 		var services = IPlatformApplication.Current?.Services;
-		logger = services?.GetService<ILogger<ParkingTrackerLocationService>>();
 		try
 		{
 			if (services is null || !await services.GetRequiredService<IParkingAlertCoordinator>().ShouldRunAsync().ConfigureAwait(false))
@@ -120,7 +147,7 @@ public sealed partial class ParkingTrackerLocationService : Service
 			var started = new BackgroundLocationSession(services.GetRequiredService<ParkingWatcher>(), services.GetRequiredService<ILogger<BackgroundLocationSession>>(), this);
 			await MainThread.InvokeOnMainThreadAsync(() => started.StartAsync()).ConfigureAwait(false);
 			session = started;
-			if (!created)
+			if (state is not { IsRunning: true })
 			{
 				// The service ended while the run was starting: nobody else will dispose it.
 				started.Dispose();
@@ -140,6 +167,26 @@ public sealed partial class ParkingTrackerLocationService : Service
 	#endregion
 
 	#region Logging
+	/// <summary>
+	/// Logs the refusal of the foreground start when the log is there.
+	/// </summary>
+	/// <param name="exception">The refusal.</param>
+	private void ReportForegroundRefused(Exception exception)
+	{
+		if (logger is not null)
+		{
+			LogForegroundRefused(logger, exception);
+		}
+	}
+
+	/// <summary>
+	/// Logs that the system refused to make the service a foreground service.
+	/// </summary>
+	/// <param name="logger">The log.</param>
+	/// <param name="exception">The cause: the start is not allowed from the background, or the location permission is missing.</param>
+	[LoggerMessage(Level = LogLevel.Warning, Message = "The system refused the foreground start of the parking alert service, which stops")]
+	private static partial void LogForegroundRefused(ILogger logger, Exception exception);
+
 	/// <summary>
 	/// Logs that the run could not start, so that the service stopped itself.
 	/// </summary>

@@ -1,6 +1,7 @@
 using FluentValidation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using ParkingTracker.Application.Features.ParkingDetection.Services;
 using Pivot.Framework.Application.Abstractions.Messaging.Commands;
 using Pivot.Framework.Application.Abstractions.Messaging;
 using Pivot.Framework.Application.Behaviors;
@@ -75,6 +76,23 @@ public sealed class ApplicationServiceInstallerTests
 		new ApplicationServiceInstaller().Install(services, EmptyConfiguration(), includeConventionBasedRegistration: false);
 
 		services.Should().Contain(descriptor => descriptor.ServiceType == typeof(ISender));
+	}
+
+	/// <summary>
+	/// Verifies that the watcher, the alert coordinator and the timer restorer are registered as singletons, because the host
+	/// reaches them from the root provider.
+	/// </summary>
+	[Fact]
+	public void Install_ShouldRegisterTheBackgroundServicesAsSingletons()
+	{
+		var services = new ServiceCollection();
+
+		new ApplicationServiceInstaller().Install(services, EmptyConfiguration(), includeConventionBasedRegistration: false);
+
+		foreach (var type in new[] { typeof(ParkingWatcher), typeof(IParkingAlertCoordinator), typeof(TimerRestorer) })
+		{
+			services.Should().Contain(descriptor => descriptor.ServiceType == type && descriptor.Lifetime == ServiceLifetime.Singleton);
+		}
 	}
 
 	/// <summary>

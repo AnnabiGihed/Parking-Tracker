@@ -13,8 +13,9 @@ namespace ParkingTracker.Application.Features.ParkingDetection.Services;
 /// Purpose     : Joins the pure <see cref="ParkingDetector"/> to the mediator for the background service: the service passes every
 ///              fix to <see cref="Observe"/> and runs <see cref="RunAsync"/>, which looks every 15 seconds whether the user has
 ///              parked; when so it sends a <see cref="HandleParkedCommand"/>. The service lives outside the scope of the web view,
-///              so the command is sent from a scope of its own, created from the root provider. A failure of one look is logged
-///              and the next look goes on.
+///              so the command is sent from a scope of its own, created from the root provider. When the app is on screen no
+///              notification is sent; <see cref="ParkedOnScreen"/> tells the screen instead. A failure of one look is logged and
+///              the next look goes on.
 /// </summary>
 public sealed partial class ParkingWatcher
 {
@@ -70,6 +71,14 @@ public sealed partial class ParkingWatcher
 	}
 	#endregion
 
+	#region Events
+	/// <summary>
+	/// Occurs, on a thread of the background loop, when a stop was found and handled while the app was on screen: the car is saved
+	/// and the listener shows a message and checks the place, as the first version did instead of notifying.
+	/// </summary>
+	public event EventHandler<ParkedOnScreenEventArgs>? ParkedOnScreen;
+	#endregion
+
 	#region Public Methods
 	/// <summary>
 	/// Passes a fix of the device to the detector.
@@ -121,9 +130,15 @@ public sealed partial class ParkingWatcher
 		if (result.IsFailure)
 		{
 			LogHandlingFailed(logger, result.Error.Message);
+			return false;
 		}
 
-		return result.IsSuccess;
+		if (result.Value.Delivery == ParkedDelivery.OnScreen)
+		{
+			ParkedOnScreen?.Invoke(this, new ParkedOnScreenEventArgs(result.Value.Headline, parked.Point, command.AccuracyMeters));
+		}
+
+		return true;
 	}
 
 	/// <summary>

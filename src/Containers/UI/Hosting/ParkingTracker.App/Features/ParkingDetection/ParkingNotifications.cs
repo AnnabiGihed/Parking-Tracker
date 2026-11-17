@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using Android.App;
 using Android.Content;
 using AndroidX.Core.App;
@@ -82,8 +83,8 @@ internal static class ParkingNotifications
 		watch.EnableVibration(false);
 		watch.SetSound(null, null);
 		manager.CreateNotificationChannel(watch);
-		manager.CreateNotificationChannel(new NotificationChannel(AlertsChannelId, "Parking alerts", NotificationImportance.High));
-		manager.CreateNotificationChannel(new NotificationChannel(TimerChannelId, "Parking timer", NotificationImportance.High));
+		manager.CreateNotificationChannel(PrivateChannel(AlertsChannelId, "Parking alerts"));
+		manager.CreateNotificationChannel(PrivateChannel(TimerChannelId, "Parking timer"));
 	}
 
 	/// <summary>
@@ -93,11 +94,16 @@ internal static class ParkingNotifications
 	/// <returns>The notification; a tap opens the app and it cannot be swiped away.</returns>
 	public static Notification BuildWatchNotice(Context context)
 	{
-		return Build(context, WatchChannelId, AppTitle, WatchText, isOngoing: true);
+		return Compose(context, WatchChannelId, AppTitle, WatchText)
+			.SetOngoing(true)!
+			.SetAutoCancel(false)!
+			.SetPriority(NotificationCompat.PriorityLow)!
+			.Build()!;
 	}
 
 	/// <summary>
-	/// Shows a notification; a tap opens the app and removes it.
+	/// Shows a notification; a tap opens the app and removes it. On the lock screen only the icon and a hidden-content notice are
+	/// shown, because the text of an alert names the zone and the tariff of the place where the car stands.
 	/// </summary>
 	/// <param name="context">Any context of the app.</param>
 	/// <param name="id">The id; showing the same id again replaces the notification.</param>
@@ -107,33 +113,47 @@ internal static class ParkingNotifications
 	public static void Show(Context context, int id, string channelId, string title, string body)
 	{
 		EnsureChannels(context);
-		NotificationManagerCompat.From(context)!.Notify(id, Build(context, channelId, title, body, isOngoing: false));
+		var notification = Compose(context, channelId, title, body)
+			.SetOngoing(false)!
+			.SetAutoCancel(true)!
+			.SetPriority(NotificationCompat.PriorityHigh)!
+			.SetVisibility(NotificationCompat.VisibilityPrivate)!
+			.Build()!;
+		NotificationManagerCompat.From(context)!.Notify(id, notification);
 	}
 	#endregion
 
 	#region Private Helpers
 	/// <summary>
-	/// Builds a notification with the icon, colour and tap action of the app.
+	/// Starts a notification with what every one of the app shares: the icon, colour, texts and tap action. The caller adds what
+	/// makes the kind different (permanent or dismissible, priority, lock-screen visibility) and builds it.
 	/// </summary>
 	/// <param name="context">Any context of the app.</param>
 	/// <param name="channelId">The channel.</param>
 	/// <param name="title">The title.</param>
-	/// <param name="body">The text under the title.</param>
-	/// <param name="isOngoing">Whether the notification stays until the service ends instead of being dismissed by a tap or a swipe.</param>
-	/// <returns>The notification.</returns>
-	private static Notification Build(Context context, string channelId, string title, string body, bool isOngoing)
+	/// <param name="body">The text under the title, shown in full when the notification is expanded.</param>
+	/// <returns>The builder, ready for the settings of the kind.</returns>
+	private static NotificationCompat.Builder Compose(Context context, string channelId, string title, string body)
 	{
-		var builder = new NotificationCompat.Builder(context, channelId)
+		return new NotificationCompat.Builder(context, channelId)
 			.SetContentTitle(title)!
 			.SetContentText(body)!
 			.SetStyle(new NotificationCompat.BigTextStyle().BigText(body))!
 			.SetSmallIcon(Resource.Drawable.ic_stat_parking)!
 			.SetColor(AndroidColor.ParseColor(BrandColour))!
-			.SetContentIntent(OpenAppIntent(context))!
-			.SetOngoing(isOngoing)!
-			.SetAutoCancel(!isOngoing)!
-			.SetPriority(isOngoing ? NotificationCompat.PriorityLow : NotificationCompat.PriorityHigh)!;
-		return builder.Build()!;
+			.SetContentIntent(OpenAppIntent(context))!;
+	}
+
+	/// <summary>
+	/// Makes a channel of important notifications whose content is hidden on the lock screen.
+	/// </summary>
+	/// <param name="id">The id of the channel.</param>
+	/// <param name="name">The name the user sees in the settings.</param>
+	/// <returns>The channel.</returns>
+	[SupportedOSPlatform("android26.0")]
+	private static NotificationChannel PrivateChannel(string id, string name)
+	{
+		return new NotificationChannel(id, name, NotificationImportance.High) { LockscreenVisibility = NotificationVisibility.Private };
 	}
 
 	/// <summary>

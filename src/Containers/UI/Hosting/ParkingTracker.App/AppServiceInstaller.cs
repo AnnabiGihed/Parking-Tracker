@@ -20,8 +20,9 @@ namespace ParkingTracker.App;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : Registers what only the phone can provide: the implementations of the device ports of the Application layer (position,
-///              permissions, links, connection, saved settings, notifications, alarms, the background service of the parking alerts) and the helpers that join phone events to the view models. They are
+/// Purpose     : Registers what only the phone can provide: the implementations of the device ports of the Application layer
+///              (position, permissions, links, connection, saved settings, notifications, alarms, the background service of the
+///              parking alerts, whether the app is on screen) and the helpers that join phone events to the view models. They are
 ///              registered by hand, not by convention, because each one is tied to the platform.
 /// </summary>
 public sealed class AppServiceInstaller : IServiceInstaller
@@ -37,17 +38,23 @@ public sealed class AppServiceInstaller : IServiceInstaller
 		services.TryAddSingleton(TimeProvider.System);
 
 		// The card goes to the encrypted storage, everything else to the preferences (ADR-0004).
-		services.AddSingleton<ISettingsStore>(provider => new SettingsStore(new SecureValueStorage(provider.GetRequiredService<ILogger<SecureValueStorage>>()), new PreferencesValueStorage()));
+		services.AddSingleton<ISettingsStore>(provider => new SettingsStore(
+			new SecureValueStorage(provider.GetRequiredService<ILogger<SecureValueStorage>>()),
+			new PreferencesValueStorage()));
 		services.AddSingleton<ILocationTracker, FusedLocationTracker>();
 		services.AddSingleton<ILocationPermissions, MauiLocationPermissions>();
 		services.AddSingleton<ILinkLauncher, MauiLinkLauncher>();
 
 		// Parking alerts (ADR-0002): notifications, exact alarms for the timer and the foreground service. Singletons, because the
-		// service lives outside the scope of the web view and reaches them from the root provider.
+		// service and the receivers live outside the scope of the web view and reach them from the root provider.
 		services.AddSingleton<INotifier, AndroidNotifier>();
 		services.AddSingleton<IAlarmScheduler, AndroidAlarmScheduler>();
+		services.AddSingleton<ParkingServiceState>();
 		services.AddSingleton<IParkingWatchService, AndroidParkingWatchService>();
 
+		// One instance behind two names: the application records the visibility, the Application layer reads it.
+		services.AddSingleton<AppVisibility>();
+		services.AddSingleton<IAppVisibility>(provider => provider.GetRequiredService<AppVisibility>());
 
 		// One instance behind two names: the relay needs the change event, the view models the port.
 		services.AddSingleton<ConnectivityNetworkStatus>();

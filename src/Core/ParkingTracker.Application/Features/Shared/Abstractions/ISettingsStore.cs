@@ -7,10 +7,11 @@ namespace ParkingTracker.Application.Features.Shared.Abstractions;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : Port to what the user saved on the phone: the card, the parked car, the parking timer, the parking alerts switch, the map layer switches, whether the welcome
-///              screen was seen and when the location banner was postponed. The calls are asynchronous because the encrypted
-///              storage of the phone is. The implementation keeps the JSON shapes of the first version of the app (<c>pt.card</c>,
-///              <c>pt.car</c>, <c>pt.timer</c>, <c>pt.bgAlerts</c>, <c>pt.layers</c>, <c>pt.permSnooze</c>), so that saved values stay readable.
+/// Purpose     : Port to what the user saved on the phone: the card, the parked car, the parking timer, the parking alerts switch,
+///              the map layer switches, whether the welcome screen was seen and when the location banner was postponed. The calls
+///              are asynchronous because the encrypted storage of the phone is. The implementation keeps the JSON shapes of the
+///              first version of the app (<c>pt.card</c>, <c>pt.car</c>, <c>pt.timer</c>, <c>pt.bgAlerts</c>, <c>pt.layers</c>,
+///              <c>pt.permSnooze</c>), so that saved values stay readable.
 /// </summary>
 public interface ISettingsStore
 {

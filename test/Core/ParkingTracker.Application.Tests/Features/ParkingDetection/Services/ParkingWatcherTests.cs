@@ -16,7 +16,8 @@ namespace ParkingTracker.Application.Tests.Features.ParkingDetection.Services;
 /// Date        : 11-2026
 /// Purpose     : Unit tests for <see cref="ParkingWatcher"/>: a drive followed by two minutes of standing still sends one command
 ///              from a scope of its own, the same stop is not sent twice, nothing is sent without a drive, a failed command is
-///              reported by the result, and the loop looks by itself and ends when cancelled.
+///              reported by the result, a stop found with the app on screen is passed to the listener of the screen, and the loop
+///              looks by itself and ends when cancelled.
 /// </summary>
 public sealed class ParkingWatcherTests : IDisposable
 {
@@ -25,6 +26,11 @@ public sealed class ParkingWatcherTests : IDisposable
 	/// Where the car stops.
 	/// </summary>
 	private static readonly GeoPoint Stop = new(50.8265, 4.3650);
+
+	/// <summary>
+	/// The outcome of a command that sent a notification.
+	/// </summary>
+	private static readonly ParkedOutcome Notified = new("Paid parking", ParkedDelivery.Notified);
 	#endregion
 
 	#region Fields
@@ -55,7 +61,7 @@ public sealed class ParkingWatcherTests : IDisposable
 	/// </summary>
 	public ParkingWatcherTests()
 	{
-		sender.Send(Arg.Any<HandleParkedCommand>(), Arg.Any<CancellationToken>()).Returns(Result.Success());
+		sender.Send(Arg.Any<HandleParkedCommand>(), Arg.Any<CancellationToken>()).Returns(Result.Success(Notified));
 		var services = new ServiceCollection();
 		services.AddScoped(_ => sender);
 		provider = services.BuildServiceProvider(validateScopes: true);
@@ -128,7 +134,7 @@ public sealed class ParkingWatcherTests : IDisposable
 	[Fact]
 	public async Task Check_CommandFails_ShouldReturnFalseAndNotRepeat()
 	{
-		sender.Send(Arg.Any<HandleParkedCommand>(), Arg.Any<CancellationToken>()).Returns(Result.Failure(new Error("Test.Down", "down")));
+		sender.Send(Arg.Any<HandleParkedCommand>(), Arg.Any<CancellationToken>()).Returns(Result.Failure<ParkedOutcome>(new Error("Test.Down", "down")));
 		watcher.Observe(Fix(speed: 10));
 		clock.Advance(TimeSpan.FromMinutes(2));
 
@@ -138,6 +144,45 @@ public sealed class ParkingWatcherTests : IDisposable
 		first.Should().BeFalse();
 		second.Should().BeFalse();
 		await sender.Received(1).Send(Arg.Any<HandleParkedCommand>(), Arg.Any<CancellationToken>());
+	}
+
+	/// <summary>
+	/// Verifies that a stop found with the app on screen raises the event with the headline, the place and the accuracy.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Check_HandledOnScreen_ShouldRaiseParkedOnScreen()
+	{
+		sender.Send(Arg.Any<HandleParkedCommand>(), Arg.Any<CancellationToken>()).Returns(Result.Success(new ParkedOutcome("Paid parking", ParkedDelivery.OnScreen)));
+		var raised = new List<ParkedOnScreenEventArgs>();
+		watcher.ParkedOnScreen += (_, e) => raised.Add(e);
+		watcher.Observe(Fix(speed: 10));
+		clock.Advance(TimeSpan.FromMinutes(2));
+
+		var found = await watcher.CheckAsync();
+
+		found.Should().BeTrue();
+		var single = raised.Should().ContainSingle().Subject;
+		single.Headline.Should().Be("Paid parking");
+		single.Point.Should().Be(Stop);
+		single.AccuracyMetres.Should().Be(6);
+	}
+
+	/// <summary>
+	/// Verifies that a stop that was notified does not raise the event of the screen.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Check_Notified_ShouldNotRaiseParkedOnScreen()
+	{
+		var raised = false;
+		watcher.ParkedOnScreen += (_, _) => raised = true;
+		watcher.Observe(Fix(speed: 10));
+		clock.Advance(TimeSpan.FromMinutes(2));
+
+		await watcher.CheckAsync();
+
+		raised.Should().BeFalse();
 	}
 
 	/// <summary>
@@ -169,7 +214,7 @@ public sealed class ParkingWatcherTests : IDisposable
 		sender.Send(Arg.Any<HandleParkedCommand>(), Arg.Any<CancellationToken>()).Returns(_ =>
 		{
 			handled.TrySetResult();
-			return Task.FromResult(Result.Success());
+			return Task.FromResult(Result.Success(Notified));
 		});
 		using var cancellation = new CancellationTokenSource();
 		watcher.Observe(Fix(speed: 10));
@@ -196,7 +241,7 @@ public sealed class ParkingWatcherTests : IDisposable
 		{
 			attempts++;
 			recovered.TrySetResult();
-			return Task.FromException<Result>(new InvalidOperationException("boom"));
+			return Task.FromException<Result<ParkedOutcome>>(new InvalidOperationException("boom"));
 		});
 		using var cancellation = new CancellationTokenSource();
 		watcher.Observe(Fix(speed: 10));

@@ -18,16 +18,23 @@ namespace ParkingTracker.Application.Features.ParkingDetection.Commands.HandlePa
 /// Date        : 11-2026
 /// Purpose     : Handles <see cref="HandleParkedCommand"/> as the first version of the app did when it noticed parking: decides the
 ///              spot, saves the car with the headline of the answer, and notifies "icon + headline" with the explanation, the tariff
-///              and, when parking is not free in a known zone, the nearest free spot. A failed search for a free spot only leaves
-///              the suggestion out; a failed decision (broken reference data) fails the command and notifies nothing.
+///              and, when parking is not free in a known zone, the nearest free spot. With the app on screen it sends no
+///              notification and reports <see cref="ParkedDelivery.OnScreen"/>, so that the screen shows a message and checks the
+///              place. A failed search for a free spot only leaves the suggestion out; a failed decision (broken reference data)
+///              becomes the answer "can't verify", which is saved and notified like any other, because the user must be told.
 /// </summary>
-public sealed class HandleParkedCommandHandler : ICommandHandler<HandleParkedCommand>
+public sealed class HandleParkedCommandHandler : ICommandHandler<HandleParkedCommand, ParkedOutcome>
 {
 	#region Constants
 	/// <summary>
 	/// The accuracy used when the device reported none or zero, as the first version of the app did.
 	/// </summary>
 	private const double DefaultAccuracyMetres = 10;
+
+	/// <summary>
+	/// How many spots the search for a free spot asks for: the nearest one.
+	/// </summary>
+	private const int NearestSpotCount = 1;
 	#endregion
 
 	#region Fields
@@ -47,6 +54,11 @@ public sealed class HandleParkedCommandHandler : ICommandHandler<HandleParkedCom
 	private readonly INotifier notifier;
 
 	/// <summary>
+	/// Tells whether the app is on screen, in which case no notification is sent.
+	/// </summary>
+	private readonly IAppVisibility visibility;
+
+	/// <summary>
 	/// Clock that stamps the saved car.
 	/// </summary>
 	private readonly TimeProvider clock;
@@ -59,37 +71,52 @@ public sealed class HandleParkedCommandHandler : ICommandHandler<HandleParkedCom
 	/// <param name="sender">Sends the spot decision and the free-spot search.</param>
 	/// <param name="settings">The saved settings, where the parked car goes.</param>
 	/// <param name="notifier">Shows the alert.</param>
+	/// <param name="visibility">Tells whether the app is on screen, in which case no notification is sent.</param>
 	/// <param name="clock">Clock that stamps the saved car.</param>
-	public HandleParkedCommandHandler(ISender sender, ISettingsStore settings, INotifier notifier, TimeProvider clock)
+	public HandleParkedCommandHandler(ISender sender, ISettingsStore settings, INotifier notifier, IAppVisibility visibility, TimeProvider clock)
 	{
 		this.sender = sender;
 		this.settings = settings;
 		this.notifier = notifier;
+		this.visibility = visibility;
 		this.clock = clock;
 	}
 	#endregion
 
 	#region Public Methods
 	/// <inheritdoc />
-	public async Task<Result> Handle(HandleParkedCommand request, CancellationToken cancellationToken)
+	public async Task<Result<ParkedOutcome>> Handle(HandleParkedCommand request, CancellationToken cancellationToken)
 	{
 		var place = new GeoPoint(request.Latitude, request.Longitude);
 		var accuracy = request.AccuracyMeters is > 0 ? Math.Min(request.AccuracyMeters.Value, SpotDecider.MaxGpsAccuracyMetres) : DefaultAccuracyMetres;
-		var decided = await sender.Send(new DecideSpotQuery(place.Latitude, place.Longitude, accuracy), cancellationToken).ConfigureAwait(false);
-		if (decided.IsFailure)
+		var decision = await DecideAsync(place, accuracy, cancellationToken).ConfigureAwait(false);
+		await settings.SaveCarAsync(new ParkedCar(place, clock.GetLocalNow(), decision.Headline, string.Empty)).ConfigureAwait(false);
+		if (visibility.IsVisible)
 		{
-			return Result.Failure(decided.Error);
+			return Result.Success(new ParkedOutcome(decision.Headline, ParkedDelivery.OnScreen));
 		}
 
-		var decision = decided.Value;
-		await settings.SaveCarAsync(new ParkedCar(place, clock.GetLocalNow(), decision.Headline, string.Empty)).ConfigureAwait(false);
 		var body = await BuildBodyAsync(decision, place, cancellationToken).ConfigureAwait(false);
 		await notifier.NotifyAsync($"{IconOf(decision.Status)} {decision.Headline}", body, cancellationToken).ConfigureAwait(false);
-		return Result.Success();
+		return Result.Success(new ParkedOutcome(decision.Headline, ParkedDelivery.Notified));
 	}
 	#endregion
 
 	#region Private Helpers
+	/// <summary>
+	/// Decides the spot; a failed query (broken reference data) becomes the answer "can't verify" with the wording of the first
+	/// version, so that the car is still saved and the user still hears about it.
+	/// </summary>
+	/// <param name="place">Where the car stands.</param>
+	/// <param name="accuracy">The accuracy in metres.</param>
+	/// <param name="cancellationToken">Cancels the decision.</param>
+	/// <returns>A task with the answer.</returns>
+	private async Task<SpotDecision> DecideAsync(GeoPoint place, double accuracy, CancellationToken cancellationToken)
+	{
+		var decided = await sender.Send(new DecideSpotQuery(place.Latitude, place.Longitude, accuracy), cancellationToken).ConfigureAwait(false);
+		return decided.IsSuccess ? decided.Value : SpotDecision.CantVerify($"Unexpected error: {decided.Error.Message}");
+	}
+
 	/// <summary>
 	/// Gets the icon in front of the title of the alert.
 	/// </summary>
@@ -138,7 +165,7 @@ public sealed class HandleParkedCommandHandler : ICommandHandler<HandleParkedCom
 	/// <returns>A task with the spot, or <see langword="null"/> when there is none or the search failed.</returns>
 	private async Task<FreeSpot?> FindNearestFreeSpotAsync(GeoPoint place, CancellationToken cancellationToken)
 	{
-		var found = await sender.Send(new FindFreeSpotsQuery(place.Latitude, place.Longitude, 1), cancellationToken).ConfigureAwait(false);
+		var found = await sender.Send(new FindFreeSpotsQuery(place.Latitude, place.Longitude, NearestSpotCount), cancellationToken).ConfigureAwait(false);
 		return found.IsSuccess && found.Value.Count > 0 ? found.Value[0] : null;
 	}
 	#endregion

@@ -66,6 +66,11 @@ internal sealed partial class BackgroundLocationSession : IDisposable
 	/// The callback registered with the provider, or <see langword="null"/> before the start and after the end.
 	/// </summary>
 	private FusedLocationCallback? callback;
+
+	/// <summary>
+	/// 0 or 1: whether <see cref="Dispose"/> ran already, changed with <see cref="Interlocked"/> so that it ends the run only once.
+	/// </summary>
+	private int disposed;
 	#endregion
 
 	#region Constructors
@@ -95,6 +100,8 @@ internal sealed partial class BackgroundLocationSession : IDisposable
 	public async Task StartAsync()
 	{
 		watcher.Reset();
+
+		// Availability changes need no action: the watcher looks at the clock, so a silent provider ends in "no stop found".
 		var registered = new FusedLocationCallback(OnLocation, _ => { });
 		var request = new LocationRequest.Builder(Priority.PriorityHighAccuracy, IntervalMilliseconds)
 			.SetMinUpdateIntervalMillis(IntervalMilliseconds)
@@ -102,16 +109,23 @@ internal sealed partial class BackgroundLocationSession : IDisposable
 			.Build();
 		await LocationServices.GetFusedLocationProviderClient(context).RequestLocationUpdatesAsync(request, registered, Looper.MainLooper!).ConfigureAwait(false);
 		callback = registered;
+
 		// The loop ends by itself when the token is cancelled in Dispose; it logs its own failures.
-		_ = Task.Run(() => watcher.RunAsync(cancellation.Token));
+		_ = Task.Run(() => watcher.RunAsync(cancellation.Token), cancellation.Token);
 		LogStarted(logger);
 	}
 	#endregion
 
 	#region IDisposable Implementation
 	/// <inheritdoc />
+	/// <remarks>Calling it again does nothing: the system and the service may both end the run.</remarks>
 	public void Dispose()
 	{
+		if (Interlocked.Exchange(ref disposed, 1) == 1)
+		{
+			return;
+		}
+
 		cancellation.Cancel();
 		if (callback is { } registered)
 		{

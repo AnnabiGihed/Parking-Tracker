@@ -6,7 +6,8 @@ namespace ParkingTracker.App;
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
 /// Purpose     : The MAUI application: opens the one window with the page that hosts the Blazor screens and tells the rest of the app
-///              when the user comes back to it, so that the location permission is read again after a visit to the settings.
+///              when the user comes back to it, so that the location permission is read again after a visit to the settings, and
+///              whether the window is on screen, so that a parking alert is shown as a message instead of a notification.
 /// </summary>
 public sealed class HostApplication : Microsoft.Maui.Controls.Application
 {
@@ -15,6 +16,11 @@ public sealed class HostApplication : Microsoft.Maui.Controls.Application
 	/// Passes the "app resumed" moment on to the screens.
 	/// </summary>
 	private readonly AppResumeNotifier resumeNotifier;
+
+	/// <summary>
+	/// Records whether the window is on screen.
+	/// </summary>
+	private readonly AppVisibility visibility;
 	#endregion
 
 	#region Constructors
@@ -22,9 +28,11 @@ public sealed class HostApplication : Microsoft.Maui.Controls.Application
 	/// Initializes a new instance of the <see cref="HostApplication"/> class.
 	/// </summary>
 	/// <param name="resumeNotifier">Passes the "app resumed" moment on to the screens.</param>
-	public HostApplication(AppResumeNotifier resumeNotifier)
+	/// <param name="visibility">Records whether the window is on screen.</param>
+	public HostApplication(AppResumeNotifier resumeNotifier, AppVisibility visibility)
 	{
 		this.resumeNotifier = resumeNotifier;
+		this.visibility = visibility;
 	}
 	#endregion
 
@@ -33,6 +41,9 @@ public sealed class HostApplication : Microsoft.Maui.Controls.Application
 	protected override Window CreateWindow(IActivationState? activationState)
 	{
 		var window = new Window(new MainPage());
+		window.Activated += (_, _) => visibility.Set(true);
+		window.Deactivated += (_, _) => visibility.Set(false);
+		window.Stopped += (_, _) => visibility.Set(false);
 		window.Resumed += (_, _) => resumeNotifier.NotifyResumed();
 		return window;
 	}

@@ -16,10 +16,12 @@ namespace ParkingTracker.App.Features.Shared;
 /// Purpose     : A component without markup that joins events of the phone to the view models. It is a component because the view
 ///              models live in the scope of the web view, which only components (and not the MAUI app) can reach. It answers a change
 ///              of the connection with <see cref="SpotCheckViewModel.HandleConnectivityChangeAsync"/>, a return to the app with
-///              <see cref="LocationPermissionViewModel.RefreshAsync"/>, and a change between covered and not covered with a vibration. It also keeps the background service of the parking
-///              alerts in line with the switch and the permissions (when the app opens and when the user comes back), asks for the
-///              notification permission a few seconds after the start while the alerts are on, and reads the saved car again on a
-///              return, because the service saves it while the app is away.
+///              <see cref="LocationPermissionViewModel.RefreshAsync"/>, and a change between covered and not covered with a
+///              vibration. It also keeps the background service of the parking alerts in line with the switch and the permissions
+///              (when the app opens and when the user comes back), asks for the notification permission a few seconds after the
+///              start while the alerts are on, and reads the saved car again on a return, because the service saves it while the
+///              app is away. A parking found while the app is on screen comes here instead of as a notification: it shows a
+///              message and checks the place.
 /// </summary>
 public sealed partial class PlatformRelay : ComponentBase, IDisposable
 {
@@ -86,6 +88,24 @@ public sealed partial class PlatformRelay : ComponentBase, IDisposable
 	public CarViewModel Car { get; set; } = null!;
 
 	/// <summary>
+	/// Gets or sets the watcher of the background service, which reports a parking found while the app is on screen.
+	/// </summary>
+	[Inject]
+	public ParkingWatcher Watcher { get; set; } = null!;
+
+	/// <summary>
+	/// Gets or sets the messages of the screen.
+	/// </summary>
+	[Inject]
+	public ToastViewModel Toast { get; set; } = null!;
+
+	/// <summary>
+	/// Gets or sets the clock that times the wait before the notification question.
+	/// </summary>
+	[Inject]
+	public TimeProvider Clock { get; set; } = null!;
+
+	/// <summary>
 	/// Gets or sets the log, where a failure of one of these background reactions goes.
 	/// </summary>
 	[Inject]
@@ -99,6 +119,7 @@ public sealed partial class PlatformRelay : ComponentBase, IDisposable
 		Network.OnlineChanged += OnOnlineChanged;
 		Resume.Resumed += OnResumed;
 		Spot.CoverageChanged += OnCoverageChanged;
+		Watcher.ParkedOnScreen += OnParkedOnScreen;
 		_ = StartAlertsAsync();
 	}
 	#endregion
@@ -110,6 +131,7 @@ public sealed partial class PlatformRelay : ComponentBase, IDisposable
 		Network.OnlineChanged -= OnOnlineChanged;
 		Resume.Resumed -= OnResumed;
 		Spot.CoverageChanged -= OnCoverageChanged;
+		Watcher.ParkedOnScreen -= OnParkedOnScreen;
 	}
 	#endregion
 
@@ -167,6 +189,26 @@ public sealed partial class PlatformRelay : ComponentBase, IDisposable
 			LogVibrationFailed(Logger, exception);
 		}
 	}
+
+	/// <summary>
+	/// Shows the message for a parking found while the app is on screen, reads the saved car again and checks the place, as the
+	/// first version did instead of sending a notification.
+	/// </summary>
+	/// <param name="sender">The watcher.</param>
+	/// <param name="e">The headline, the place and the accuracy.</param>
+	private async void OnParkedOnScreen(object? sender, ParkedOnScreenEventArgs e)
+	{
+		try
+		{
+			Toast.Show($"🚗 Parked: {e.Headline}");
+			await Car.LoadAsync().ConfigureAwait(false);
+			await Spot.CheckParkedPlaceAsync(e.Point, e.AccuracyMetres).ConfigureAwait(false);
+		}
+		catch (Exception exception)
+		{
+			LogParkedOnScreenFailed(Logger, exception);
+		}
+	}
 	#endregion
 
 	#region Private Helpers
@@ -179,7 +221,7 @@ public sealed partial class PlatformRelay : ComponentBase, IDisposable
 	{
 		try
 		{
-			await Task.Delay(NotificationAskDelay).ConfigureAwait(false);
+			await Task.Delay(NotificationAskDelay, Clock).ConfigureAwait(false);
 			if (await Settings.GetAlertsEnabledAsync().ConfigureAwait(false))
 			{
 				await Notifier.RequestPermissionAsync().ConfigureAwait(false);
@@ -195,6 +237,14 @@ public sealed partial class PlatformRelay : ComponentBase, IDisposable
 	#endregion
 
 	#region Logging
+	/// <summary>
+	/// Logs that showing a parking found while the app was on screen failed.
+	/// </summary>
+	/// <param name="logger">The log.</param>
+	/// <param name="exception">What went wrong.</param>
+	[LoggerMessage(Level = LogLevel.Error, Message = "Showing a parking found while the app is on screen failed")]
+	private static partial void LogParkedOnScreenFailed(ILogger logger, Exception exception);
+
 	/// <summary>
 	/// Logs that starting the parking alerts failed.
 	/// </summary>

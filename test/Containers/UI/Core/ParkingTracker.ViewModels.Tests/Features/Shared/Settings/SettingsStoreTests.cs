@@ -11,8 +11,9 @@ namespace ParkingTracker.ViewModels.Tests.Features.Shared.Settings;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : Unit tests for <see cref="SettingsStore"/>: the card goes to the encrypted storage and everything else to the plain one,
-///              under the keys of the first version, and the card is read from the storage only once (a failed read is not remembered).
+/// Purpose     : Unit tests for <see cref="SettingsStore"/>: the card goes to the encrypted storage and everything else to the plain
+///              one, under the keys of the first version, and the card is read from the storage only once (a failed read is not
+///              remembered). The parking timer and the alerts switch are written and read under <c>pt.timer</c> and <c>pt.bgAlerts</c>.
 /// </summary>
 public sealed class SettingsStoreTests
 {
@@ -146,9 +147,64 @@ public sealed class SettingsStoreTests
 	}
 	#endregion
 
+	#region Timer And Alerts Tests
+	/// <summary>
+	/// Verifies that the timer is written to the plain storage under <c>pt.timer</c> and read back.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task SaveTimerAsync_ThenGet_ShouldRoundTripUnderTheOldKey()
+	{
+		var (store, secure, plain) = Create();
+		var timer = new ParkingTimer(DateTimeOffset.FromUnixTimeMilliseconds(1794996000000), 60);
+
+		await store.SaveTimerAsync(timer);
+
+		plain.Values.Keys.Should().BeEquivalentTo("pt.timer");
+		secure.Values.Should().BeEmpty();
+		(await store.GetTimerAsync()).Should().Be(timer);
+	}
+
+	/// <summary>
+	/// Verifies that clearing the timer deletes <c>pt.timer</c> and that nothing is saved by default.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task ClearTimerAsync_AfterSave_ShouldDeleteTheKey()
+	{
+		var (store, _, plain) = Create();
+		(await store.GetTimerAsync()).Should().BeNull();
+		await store.SaveTimerAsync(new ParkingTimer(DateTimeOffset.UnixEpoch, 30));
+
+		await store.ClearTimerAsync();
+
+		plain.Values.Should().NotContainKey("pt.timer");
+		(await store.GetTimerAsync()).Should().BeNull();
+	}
+
+	/// <summary>
+	/// Verifies that the alerts switch is written under <c>pt.bgAlerts</c> and read back, and that a missing value means on.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task AlertsEnabled_MissingThenSaved_ShouldBeOnThenFollowTheSavedValue()
+	{
+		var (store, _, plain) = Create();
+		plain.Values.Should().NotContainKey("pt.bgAlerts");
+
+		(await store.GetAlertsEnabledAsync()).Should().BeTrue();
+		await store.SaveAlertsEnabledAsync(false);
+
+		plain.Values.Should().ContainKey("pt.bgAlerts");
+		(await store.GetAlertsEnabledAsync()).Should().BeFalse();
+		await store.SaveAlertsEnabledAsync(true);
+		(await store.GetAlertsEnabledAsync()).Should().BeTrue();
+	}
+	#endregion
+
 	#region Guard Tests
 	/// <summary>
-	/// Verifies that missing storages and missing values are rejected.
+	/// Verifies that missing storages and missing values (card, timer) are rejected.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
@@ -160,10 +216,12 @@ public sealed class SettingsStoreTests
 		var noSecure = () => new SettingsStore(null!, storage); // null on purpose: proves the guard clause rejects it
 		var noPlain = () => new SettingsStore(storage, null!); // null on purpose: proves the guard clause rejects it
 		var noCard = () => store.SaveCardAsync(null!); // null on purpose: proves the guard clause rejects it
+		var noTimer = () => store.SaveTimerAsync(null!); // null on purpose: proves the guard clause rejects it
 
 		noSecure.Should().Throw<ArgumentNullException>();
 		noPlain.Should().Throw<ArgumentNullException>();
 		await noCard.Should().ThrowAsync<ArgumentNullException>();
+		await noTimer.Should().ThrowAsync<ArgumentNullException>();
 	}
 	#endregion
 

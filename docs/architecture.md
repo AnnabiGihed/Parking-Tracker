@@ -328,11 +328,13 @@ APIs; the view models and the tests only see the interfaces.
 | `INotifier` | `ParkingDetection/Abstractions` | Asks for the notification permission (Android 13+) and shows one parking alert (title, body; a tap opens the app) | host, `NotificationCompat`, channel `parking_alerts` |
 | `IAlarmScheduler` | `ParkingDetection/Abstractions` | Schedules the timer reminders (10 minutes before the end and at the end; ids 4101 and 4102), cancels them, says whether exact alarms are allowed and opens the system screen for them | host, `AlarmManager`: `SetExactAndAllowWhileIdle` when `CanScheduleExactAlarms()`, else `SetAndAllowWhileIdle` (result `AlarmPrecision.Inexact`) |
 | `IParkingWatchService` | `ParkingDetection/Abstractions` | Starts and stops the background service that follows the position for the parking alerts | host, foreground service of type `location` |
+| `IAppVisibility` | `ParkingDetection/Abstractions` | Says whether the app is on screen, so that a parking alert becomes a message and a check instead of a notification | host, the window events (`Activated`, `Deactivated`, `Stopped`) |
 
-`ISettingsStore` keeps the values of the first version of the app (`pt.card`, `pt.car`, `pt.timer`, `pt.bgAlerts`, `pt.layers`,
-`pt.permSnooze`), so that the migration can copy them unchanged (`pt.bgAlerts` is on unless the stored value is `false`); the welcome flag `pt.welcomeSeen` is new and is not migrated. `ParkingCard` carries
-the card number and plate next to the validity data, and `ParkedCar` the position, moment, headline and place. Every call
-is asynchronous, because `SecureStorage` is; the store keeps the card in memory after the first read, so a spot check does
+`ISettingsStore` keeps the values of the first version of the app (`pt.card`, `pt.car`, `pt.timer`, `pt.bgAlerts`,
+`pt.layers`, `pt.permSnooze`), so that the migration can copy them unchanged (`pt.bgAlerts` is on unless the stored
+value is `false`); the welcome flag `pt.welcomeSeen` is new and is not migrated. `ParkingCard` carries the card number
+and plate next to the validity data, and `ParkedCar` the position, moment, headline and place. Every call is
+asynchronous, because `SecureStorage` is; the store keeps the card in memory after the first read, so a spot check does
 not decrypt it again.
 
 The host implements the ports in `Features/<Feature>/` with thin MAUI classes: `FusedLocationTracker` (fused
@@ -363,27 +365,42 @@ Location is upgraded, and remove the ones the new versions no longer need.
 
 The parking alerts (ADR-0002) add this to the host, in `Features/ParkingDetection/`:
 
-- `ParkingTrackerLocationService` (`[Service]`, foreground service of type `location`, not exported) shows the permanent notice
-  (channel `com.equimaps.capacitor_background_geolocation` and notification id 28351 as the first version, title "Parking Tracker",
-  text "Watching where you park, to tell you if it is free or paid.") and lets a `BackgroundLocationSession` follow the fused
-  provider (high accuracy, 1 s, 5 m). The session only passes each fix to `ParkingWatcher` (Application, `Features/ParkingDetection/Services`),
-  which owns the Domain `ParkingDetector`, looks every 15 seconds whether the user has parked and then sends `HandleParkedCommand`
-  from a scope of its own created from the root provider (the service runs outside the scope of the web view). All of that logic
-  is in net10.0 and tested.
-- `ParkingAlertCoordinator` (Application) decides whether the service should run (alerts on, foreground and background location
-  granted) and starts or stops `IParkingWatchService`; `PlatformRelay` calls it when the app opens and on every return to the app,
-  and `CarViewModel` when the alerts switch changes. The service also checks it when the system restarts it.
-- `AndroidNotifier` (alerts channel, `POST_NOTIFICATIONS` as a MAUI permission), `AndroidAlarmScheduler` plus the receiver
-  `TimerAlarmReceiver` (timer channel, title "🅿️ Parking Tracker"; not exported) and `AndroidParkingWatchService`.
-- The manifest declares `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_LOCATION`, `POST_NOTIFICATIONS` and `SCHEDULE_EXACT_ALARM`; the
-  service and the receiver are declared by their attributes. A timer started without exact alarms still runs, with inexact alarms,
-  and the system screen where the user allows exact alarms opens (owner decision, ADR-0002). Alarms are not restored after a restart
-  of the phone yet.
+- `ParkingTrackerLocationService` (`[Service]`, foreground service of type `location`, not exported) shows the permanent
+  notice (channel `com.equimaps.capacitor_background_geolocation` and notification id 28351 as the first version, title
+  "Parking Tracker", text "Watching where you park, to tell you if it is free or paid.") and lets a
+  `BackgroundLocationSession` follow the fused provider (high accuracy, 1 s, 5 m). When the system refuses the
+  foreground start (`ForegroundServiceStartNotAllowedException` on Android 12+, or a `SecurityException`) the service
+  logs it, stops itself and is not sticky. The session only passes each fix to `ParkingWatcher` (Application,
+  `Features/ParkingDetection/Services`), which owns the Domain `ParkingDetector`, looks every 15 seconds whether the
+  user has parked and then sends `HandleParkedCommand` from a scope of its own created from the root provider (the
+  service runs outside the scope of the web view). All of that logic is in net10.0 and tested. `ParkingServiceState`, a
+  registered singleton, tells whether the service exists.
+- `ParkingAlertCoordinator` (Application) decides whether the service should run (alerts on, foreground and background
+  location granted) and starts or stops `IParkingWatchService`; `PlatformRelay` calls it when the app opens and on every
+  return to the app, and `CarViewModel` when the alerts switch changes. The service also checks it when the system
+  restarts it.
+- `AndroidNotifier` (alerts channel, the MAUI `Permissions.PostNotifications` permission), `AndroidAlarmScheduler` plus
+  the receiver `TimerAlarmReceiver` (timer channel, title "🅿️ Parking Tracker"; not exported) and
+  `AndroidParkingWatchService`. The alerts and timer channels and their notifications are private on the lock screen,
+  because the text of an alert names the zone and the tariff.
+- `BootReceiver` (not exported) listens for `BOOT_COMPLETED` and for
+  `ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED`. It only calls `TimerRestorer` (Application, tested), which
+  cancels the alarms and schedules those of the saved `pt.timer` that are still ahead, and after a boot
+  `ParkingAlertCoordinator.ApplyAsync`, which starts the alert service when the alerts are on and the location is
+  allowed all the time. Android may refuse that start from a boot broadcast; the refusal is logged and the service then
+  starts at the next launch of the app.
+- The manifest declares `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_LOCATION`, `POST_NOTIFICATIONS`,
+  `SCHEDULE_EXACT_ALARM` and `RECEIVE_BOOT_COMPLETED`; the service and the receivers are declared by their attributes. A
+  timer started without exact alarms still runs, with inexact alarms, and the system screen where the user allows exact
+  alarms opens (owner decision, ADR-0002).
 
-The car dialog holds the parking alerts switch and the timer (presets 30 min, 1, 2 and 3 h, minutes from 5 to 1440, start, stop);
-the timer line above the status block and the chip ("1h05 left", late within 10 minutes of the end, "Time is over") follow the clock
-every 30 seconds. `HandleParkedCommand` decides the spot, saves the car, and sends one notification "icon + headline" with the
-explanation, the tariff and, when parking is not free in a known zone, the nearest free spot, with the texts of `app.js`.
+The car dialog holds the parking alerts switch and the timer (presets 30 min, 1, 2 and 3 h, minutes from 5 to 1440,
+start, stop); the form starts with the maximum stay of the zone of the last answer when it is known and no timer runs,
+as `app.js` did. The timer line above the status block and the chip ("1h05 left", late within 10 minutes of the end,
+"Time is over") follow the clock every 30 seconds. `HandleParkedCommand` decides the spot, saves the car, and sends one
+notification "icon + headline" with the explanation, the tariff and, when parking is not free in a known zone, the
+nearest free spot, with the texts of `app.js`. A decision that fails becomes "Can't verify right now" ("Unexpected
+error: ..."), which is saved and notified like any other answer.
 
 ## 5. Data and integration design
 
@@ -483,6 +500,7 @@ sequenceDiagram
     participant PD as ParkingDetector
     participant M as Pivot mediator
     participant N as INotifier
+    participant PR as PlatformRelay
     G->>S: fix every ~1 s or 5 m
     S->>W: Observe(fix)
     W->>PD: Observe(fix)
@@ -491,13 +509,21 @@ sequenceDiagram
     end
     PD-->>W: Parked (drove, then 2 min still)
     W->>M: Send(HandleParkedCommand), own scope from the root provider
-    M->>M: decide spot, nearest free spot (not free, known zone), save pt.car
-    M->>N: NotifyAsync(icon + headline, explanation, tariff, nearest spot)
+    M->>M: decide spot (a failure becomes can't verify), save pt.car
+    alt app not on screen
+        M->>M: nearest free spot (not free, known zone)
+        M->>N: NotifyAsync(icon + headline, explanation, tariff, nearest spot)
+    else app on screen (IAppVisibility)
+        M-->>W: ParkedOutcome(OnScreen)
+        W-->>PR: ParkedOnScreen, PlatformRelay shows a toast and checks the place
+    end
 ```
 
-The service starts when parking alerts are on and the location is allowed all the time, and stops when either is not true
-(`ParkingAlertCoordinator`); it keeps running when the app goes to the background. When the app is on screen the alert is sent
-as well; the car is saved either way and the screen reads it again when the user comes back.
+The service starts when parking alerts are on and the location is allowed all the time, and stops when either is not
+true (`ParkingAlertCoordinator`); it keeps running when the app goes to the background. As in the first version, the car
+is saved either way, but when the app is on screen (`IAppVisibility`: the window is active) no notification is sent:
+`PlatformRelay` shows the toast `🚗 Parked: <headline>`, reads the saved car again and, unless the user is followed
+already, checks the place.
 
 ### 5.5 Persisted data
 
@@ -561,15 +587,16 @@ Emulator test changes:
   It depends on Android and Play services, so it has no unit test; this emulator test is its coverage.
 - The on-screen check reads `.hero-title` and `.hero-sub`, which the Razor markup keeps.
 - New checks (done in stage 5b): no .NET unhandled exception in logcat and the Blazor error UI hidden.
-- Parking alerts (stage 6a, to be proven by its first CI run). The setup grants `POST_NOTIFICATIONS` with `pm grant` and allows
-  exact alarms with `appops set be.parkingtracker.app SCHEDULE_EXACT_ALARM allow`. `ptTest.platformStatus()` also returns
-  `service`, `notifications` and `exactAlarms`; `ptTest.startTimer(minutes)` starts a timer below the 5-minute minimum of the
-  form. The test checks: the foreground service is running (`dumpsys activity services be.parkingtracker.app` lists
-  `ParkingTrackerLocationService` with `isForeground=true`) and its notice is shown; a background parking alert (drive the
-  emulator GPS with `adb emu geo fix <lon> <lat> 0 10 <knots>` steps 2 s and about 24 m apart, above 20 km/h, along Avenue Louise
-  to number 216, press Home, wait up to 4 minutes, read `dumpsys notification --noredact` for the title "Free for you here"),
-  then that the saved car shows as the car chip; and the timer (a 1-minute timer, Home, wait up to 2.5 minutes for the text
-  "Your parking time is over."). The `emulator-test` job allows 40 minutes, which these checks (about 8 minutes) do not exceed.
+- Parking alerts (stage 6a, to be proven by its first CI run). The setup grants `POST_NOTIFICATIONS` with `pm grant` and
+  allows exact alarms with `appops set be.parkingtracker.app SCHEDULE_EXACT_ALARM allow`. `ptTest.platformStatus()` also
+  returns `service`, `notifications` and `exactAlarms`; `ptTest.startTimer(minutes)` starts a timer below the 5-minute
+  minimum of the form. The test checks: the foreground service is running (`dumpsys activity services
+  be.parkingtracker.app` lists `ParkingTrackerLocationService` with `isForeground=true`) and its notice is shown; a
+  background parking alert (drive the emulator GPS with `adb emu geo fix <lon> <lat> 0 10 <knots>` steps 2 s and about
+  24 m apart, above 20 km/h, along Avenue Louise to number 216, press Home, wait up to 4 minutes, read `dumpsys
+  notification --noredact` for the title "Free for you here"), then that the saved car shows as the car chip; and the
+  timer (a 1-minute timer, Home, wait up to 2.5 minutes for the text "Your parking time is over."). The `emulator-test`
+  job allows 40 minutes, which these checks (about 8 minutes) do not exceed.
 - Upgrade job: build the Capacitor app from the last Capacitor commit with `webContentsDebuggingEnabled` and a
   throwaway key, build the MAUI test APK with the same key, install the first, store a card through CDP in
   `https://localhost`, install the second with `install -r`, check `ptTest.getCard()` and the welcome dialog.
@@ -647,10 +674,11 @@ separate pull requests into `chore/maui-migration` (or separate reviewed commits
    settings store, the composition root, the test hooks, the E2E project and `maui-android.yml`. CI builds the APKs on
    the branch (push and `workflow_dispatch`, no release). Done when the emulator test's answer and screen checks pass
    on the new app.
-6. **Platform services, OCR, migration.** ADR-0002, ADR-0003, ADR-0004. Stage 6a (parking alerts, notifications and timer;
-   written, to be proven by its first CI run): the foreground service, `INotifier`, `IAlarmScheduler`, the car dialog switch and
-   timer, and the emulator checks above. Stages 6b (OCR) and 6c (migration of saved data) follow. Done when the emulator test's
-   background parking alert and timer checks pass and the upgrade test shows the card kept.
+6. **Platform services, OCR, migration.** ADR-0002, ADR-0003, ADR-0004. Stage 6a (parking alerts, notifications and
+   timer; written, to be proven by its first CI run): the foreground service, `INotifier`, `IAlarmScheduler`, the boot
+   receiver, the car dialog switch and timer, and the emulator checks above. Stages 6b (OCR) and 6c (migration of saved
+   data) follow. Done when the emulator test's background parking alert and timer checks pass and the upgrade test shows
+   the card kept.
 7. **CI and cut-over.** Final `android.yml` (version and certificate guards, test-hooks build, release on `main`
    only); delete `android/`, `capacitor.config.json`, `package.json`, `www` build, `sw.js`, `manifest.webmanifest`,
    `tools/dev-server.mjs`, `tools/build-web.mjs`, root JavaScript and data scripts; update `README.md` (install,

@@ -1,6 +1,10 @@
 using NSubstitute;
 using ParkingTracker.Application.Features.ParkingDetection.Abstractions;
 using ParkingTracker.Domain.Features.Cars.ValueObjects;
+using ParkingTracker.Domain.Features.PaidHours.ValueObjects;
+using ParkingTracker.Domain.Features.Shared.ValueObjects;
+using ParkingTracker.Domain.Features.SpotDecisions.ValueObjects;
+using ParkingTracker.Domain.Features.Zones.ValueObjects;
 using ParkingTracker.ViewModels.Features.Car;
 using ParkingTracker.ViewModels.Tests.Features.Shared.TestDoubles;
 
@@ -11,8 +15,8 @@ namespace ParkingTracker.ViewModels.Tests.Features.Car;
 /// Date        : 11-2026
 /// Purpose     : Unit tests for the parking alerts switch and the parking timer of <see cref="CarViewModel"/>: the switch is saved and
 ///              starts or stops the service, the timer asks for the notification permission, replaces and schedules the reminders,
-///              falls back to inexact alarms with a pointer to the system screen, stops and is forgotten with the car, and its texts
-///              follow the clock.
+///              falls back to inexact alarms with a pointer to the system screen, stops and is forgotten with the car, its texts
+///              follow the clock, and the form starts with the maximum stay of the zone when it is known.
 /// </summary>
 public sealed class CarViewModelTimerTests
 {
@@ -252,6 +256,72 @@ public sealed class CarViewModelTimerTests
 		ui.Clock.Advance(TimeSpan.FromSeconds(30));
 
 		changes.Should().Be(1);
+	}
+	#endregion
+
+	#region Default Length Tests
+	/// <summary>
+	/// Verifies that opening the dialog sets the form to the maximum stay of the zone of the last answer, as the first version did.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Open_ZoneWithMaximumStay_ShouldStartTheFormWithIt()
+	{
+		using var ui = new UiFixture();
+		ui.AnswerChecks(InZoneWithMaximumStay(90));
+		await ui.Spot.HandleMapClickAsync(UiFixture.Here);
+
+		ui.Car.Open();
+
+		ui.Car.Minutes.Should().Be(90);
+	}
+
+	/// <summary>
+	/// Verifies that the form keeps its length when the zone has no maximum stay.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Open_ZoneWithoutMaximumStay_ShouldKeepTheDefaultLength()
+	{
+		using var ui = new UiFixture();
+		ui.AnswerChecks(InZoneWithMaximumStay(null));
+		await ui.Spot.HandleMapClickAsync(UiFixture.Here);
+
+		ui.Car.Open();
+
+		ui.Car.Minutes.Should().Be(CarViewModel.DefaultMinutes);
+	}
+
+	/// <summary>
+	/// Verifies that a running timer keeps the form as it is, so that the maximum stay does not overwrite what the user chose.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Open_TimerRuns_ShouldNotOverwriteTheForm()
+	{
+		using var ui = new UiFixture(settings => settings.GetTimerAsync().Returns(new ParkingTimer(UiFixture.Start.AddMinutes(30), 30)));
+		ui.AnswerChecks(InZoneWithMaximumStay(90));
+		await ui.Spot.HandleMapClickAsync(UiFixture.Here);
+		await ui.Car.LoadAsync();
+		ui.Car.SetMinutes(45);
+
+		ui.Car.Open();
+
+		ui.Car.Minutes.Should().Be(45);
+	}
+	#endregion
+
+	#region Private Helpers
+	/// <summary>
+	/// Builds a decision in a zone whose rule has the given maximum stay.
+	/// </summary>
+	/// <param name="maximumStay">The maximum stay in minutes, or <see langword="null"/>.</param>
+	/// <returns>The decision.</returns>
+	private static SpotDecision InZoneWithMaximumStay(int? maximumStay)
+	{
+		var surface = new ZoneSurface("1", "Avenue Louise", "Louizalaan", "IXELLES", 1, null, new SurfaceShape([]));
+		var rule = new ParkingRule(ZoneType.Payable, "rule", new HashSet<DayOfWeek>(), null, null, false, null, null, maximumStay, null);
+		return SpotDecision.Create(Verdict.Pay, "Paid.", new ZoneReading(surface, rule, null));
 	}
 	#endregion
 }

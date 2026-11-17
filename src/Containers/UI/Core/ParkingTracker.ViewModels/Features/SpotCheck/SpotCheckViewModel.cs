@@ -166,6 +166,12 @@ public sealed class SpotCheckViewModel : ViewModelBase, IDisposable
 	public string LastHeadline => checker.LastHeadline;
 
 	/// <summary>
+	/// Gets the maximum stay in minutes of the zone of the last answer, or <see langword="null"/> when none is known; the car dialog
+	/// offers it as the length of the parking timer.
+	/// </summary>
+	public int? LastMaxStayMinutes => checker.LastMaxStayMinutes;
+
+	/// <summary>
 	/// Gets the chips under the status block.
 	/// </summary>
 	public IReadOnlyList<StatusChip> Chips => checker.Chips;
@@ -335,6 +341,19 @@ public sealed class SpotCheckViewModel : ViewModelBase, IDisposable
 		{
 			FitRequested?.Invoke(this, new ValueEventArgs<MapFitRequest>(new MapFitRequest(from, best.Point)));
 		}
+	}
+
+	/// <summary>
+	/// Checks the place where the background service found the user parked, as the first version did when it did not notify
+	/// because the app was on screen. While the user is followed the screen already shows the answer for the position, so nothing
+	/// is checked then.
+	/// </summary>
+	/// <param name="point">Where the car stands.</param>
+	/// <param name="accuracyMetres">The accuracy of the position in metres, or <see langword="null"/>.</param>
+	/// <returns>A task that completes when the check ended.</returns>
+	public Task CheckParkedPlaceAsync(GeoPoint point, double? accuracyMetres)
+	{
+		return IsTracking ? Task.CompletedTask : checker.RunAsync(point, CheckSource.Me, accuracyMetres);
 	}
 
 	/// <summary>

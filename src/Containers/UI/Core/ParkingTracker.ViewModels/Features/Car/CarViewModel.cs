@@ -96,8 +96,17 @@ public sealed class CarViewModel : ViewModelBase, IDisposable
 	/// <param name="alarms">Schedules and cancels the reminders of the timer.</param>
 	/// <param name="notifier">Asks for the permission to show notifications.</param>
 	/// <param name="alertCoordinator">Starts and stops the background service that follows the alerts switch.</param>
+	/// <exception cref="ArgumentNullException">Thrown when an argument is <see langword="null"/>.</exception>
 	public CarViewModel(ISettingsStore settings, ILinkLauncher launcher, SpotCheckViewModel spot, ToastViewModel toast, TimeProvider clock, IAlarmScheduler alarms, INotifier notifier, IParkingAlertCoordinator alertCoordinator)
 	{
+		ArgumentNullException.ThrowIfNull(settings);
+		ArgumentNullException.ThrowIfNull(launcher);
+		ArgumentNullException.ThrowIfNull(spot);
+		ArgumentNullException.ThrowIfNull(toast);
+		ArgumentNullException.ThrowIfNull(clock);
+		ArgumentNullException.ThrowIfNull(alarms);
+		ArgumentNullException.ThrowIfNull(notifier);
+		ArgumentNullException.ThrowIfNull(alertCoordinator);
 		this.settings = settings;
 		this.launcher = launcher;
 		this.spot = spot;
@@ -206,10 +215,16 @@ public sealed class CarViewModel : ViewModelBase, IDisposable
 	}
 
 	/// <summary>
-	/// Opens the dialog.
+	/// Opens the dialog. While no timer runs and the last answer knows the maximum stay of the zone, the timer form starts with that
+	/// length, as the first version did, so that one tap on start covers the time the zone allows.
 	/// </summary>
 	public void Open()
 	{
+		if (Timer is null && spot.LastMaxStayMinutes is { } maximum)
+		{
+			Minutes = maximum;
+		}
+
 		IsOpen = true;
 		NotifyChanged();
 	}

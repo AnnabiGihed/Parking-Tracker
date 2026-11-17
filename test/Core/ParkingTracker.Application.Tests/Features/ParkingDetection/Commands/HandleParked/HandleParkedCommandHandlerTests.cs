@@ -19,7 +19,7 @@ namespace ParkingTracker.Application.Tests.Features.ParkingDetection.Commands.Ha
 /// Date        : 11-2026
 /// Purpose     : Unit tests for <see cref="HandleParkedCommandHandler"/>: the car is saved with the headline, one notification is sent
 ///              with the texts of the first version, the nearest free spot is added only when parking is not free in a known zone,
-///              and a failed decision sends nothing.
+///              a failed decision still saves the car and says "can't verify", and with the app on screen nothing is sent.
 /// </summary>
 public sealed class HandleParkedCommandHandlerTests
 {
@@ -40,7 +40,8 @@ public sealed class HandleParkedCommandHandlerTests
 	/// <param name="Sender">The mediator substitute, which answers the decision and the search.</param>
 	/// <param name="Settings">The settings substitute.</param>
 	/// <param name="Notifier">The notifier substitute.</param>
-	private sealed record Setup(HandleParkedCommandHandler Handler, ISender Sender, ISettingsStore Settings, INotifier Notifier);
+	/// <param name="Visibility">The substitute that says whether the app is on screen; it says no.</param>
+	private sealed record Setup(HandleParkedCommandHandler Handler, ISender Sender, ISettingsStore Settings, INotifier Notifier, IAppVisibility Visibility);
 
 	/// <summary>
 	/// Builds the handler and makes the decision query answer with the given decision.
@@ -54,7 +55,8 @@ public sealed class HandleParkedCommandHandlerTests
 		sender.Send(Arg.Any<FindFreeSpotsQuery>(), Arg.Any<CancellationToken>()).Returns(Result.Success<IReadOnlyList<FreeSpot>>([]));
 		var settings = Substitute.For<ISettingsStore>();
 		var notifier = Substitute.For<INotifier>();
-		return new Setup(new HandleParkedCommandHandler(sender, settings, notifier, new FixedClock()), sender, settings, notifier);
+		var visibility = Substitute.For<IAppVisibility>();
+		return new Setup(new HandleParkedCommandHandler(sender, settings, notifier, visibility, new FixedClock()), sender, settings, notifier, visibility);
 	}
 
 	/// <summary>
@@ -83,6 +85,7 @@ public sealed class HandleParkedCommandHandlerTests
 		var result = await setup.Handler.Handle(new HandleParkedCommand(Place.Latitude, Place.Longitude, 8), CancellationToken.None);
 
 		result.IsSuccess.Should().BeTrue();
+		result.Value.Should().Be(new ParkedOutcome("Free for you here", ParkedDelivery.Notified));
 		await setup.Settings.Received(1).SaveCarAsync(new ParkedCar(Place, new FixedClock().GetLocalNow(), "Free for you here", string.Empty));
 		await setup.Notifier.Received(1).NotifyAsync("✅ Free for you here", "Detail.", Arg.Any<CancellationToken>());
 		await setup.Sender.DidNotReceive().Send(Arg.Any<FindFreeSpotsQuery>(), Arg.Any<CancellationToken>());
@@ -161,21 +164,42 @@ public sealed class HandleParkedCommandHandlerTests
 	}
 
 	/// <summary>
-	/// Verifies that a failed decision fails the command and saves and notifies nothing.
+	/// Verifies that a failed decision still saves the car and sends the "can't verify" alert of the first version, and the
+	/// command succeeds: the user is told that the spot could not be checked.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
-	public async Task Handle_DecisionFails_ShouldFailWithoutSavingOrNotifying()
+	public async Task Handle_DecisionFails_ShouldStillSaveTheCarAndNotifyCantVerify()
 	{
 		var setup = Build(SpotDecision.CantVerify("x"));
 		setup.Sender.Send(Arg.Any<DecideSpotQuery>(), Arg.Any<CancellationToken>()).Returns(Result.Failure<SpotDecision>(AreaQueryStubs.Down));
 
 		var result = await setup.Handler.Handle(new HandleParkedCommand(Place.Latitude, Place.Longitude, 8), CancellationToken.None);
 
-		result.IsFailure.Should().BeTrue();
-		result.Error.Should().Be(AreaQueryStubs.Down);
-		await setup.Settings.DidNotReceiveWithAnyArgs().SaveCarAsync(default!);
+		result.IsSuccess.Should().BeTrue();
+		result.Value.Headline.Should().Be("Can't verify right now");
+		await setup.Settings.Received(1).SaveCarAsync(new ParkedCar(Place, new FixedClock().GetLocalNow(), "Can't verify right now", string.Empty));
+		await setup.Notifier.Received(1).NotifyAsync("ℹ️ Can't verify right now", $"Unexpected error: {AreaQueryStubs.Down.Message}", Arg.Any<CancellationToken>());
+		await setup.Sender.DidNotReceive().Send(Arg.Any<FindFreeSpotsQuery>(), Arg.Any<CancellationToken>());
+	}
+
+	/// <summary>
+	/// Verifies that with the app on screen the car is saved, no notification is sent and no free spot is searched, and that the
+	/// outcome tells the caller to show the message and check the place itself.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Handle_AppOnScreen_ShouldSaveTheCarAndSendNoNotification()
+	{
+		var setup = Build(InZone(Verdict.Pay, "1 euro per hour"));
+		setup.Visibility.IsVisible.Returns(true);
+
+		var result = await setup.Handler.Handle(new HandleParkedCommand(Place.Latitude, Place.Longitude, 8), CancellationToken.None);
+
+		result.Value.Should().Be(new ParkedOutcome("Paid parking", ParkedDelivery.OnScreen));
+		await setup.Settings.Received(1).SaveCarAsync(new ParkedCar(Place, new FixedClock().GetLocalNow(), "Paid parking", string.Empty));
 		await setup.Notifier.DidNotReceiveWithAnyArgs().NotifyAsync(default!, default!, default);
+		await setup.Sender.DidNotReceive().Send(Arg.Any<FindFreeSpotsQuery>(), Arg.Any<CancellationToken>());
 	}
 	#endregion
 }

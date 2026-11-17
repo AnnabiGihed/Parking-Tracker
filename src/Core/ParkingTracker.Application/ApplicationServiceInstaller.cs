@@ -14,8 +14,9 @@ namespace ParkingTracker.Application;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : Registers the Application layer: the parking watcher and alert coordinator, the Pivot mediator with every query and command handler of this
-///              assembly, the FluentValidation validators of this assembly and the validation pipeline behavior, called from the composition root.
+/// Purpose     : Registers the Application layer: the parking watcher, alert coordinator and timer restorer, the Pivot mediator with
+///              every query and command handler of this assembly, the FluentValidation validators of this assembly and the
+///              validation pipeline behavior, called from the composition root.
 /// </summary>
 public sealed class ApplicationServiceInstaller : BaseServiceInstaller, IServiceInstaller
 {
@@ -39,9 +40,11 @@ public sealed class ApplicationServiceInstaller : BaseServiceInstaller, IService
 		services.AddTransient<IDecisionStepRunner, DecisionStepRunner>();
 		services.AddTransient<IAreaStatusProvider, AreaStatusProvider>();
 
-		// One instance each: the watcher holds the detector of the background service, the coordinator is stateless.
+		// One instance each: the watcher holds the detector of the background service, the coordinator and the restorer are
+		// stateless; the host reaches all three from the root provider, outside the scope of the web view.
 		services.AddSingleton<ParkingWatcher>();
 		services.AddSingleton<IParkingAlertCoordinator, ParkingAlertCoordinator>();
+		services.AddSingleton<TimerRestorer>();
 
 		if (includeConventionBasedRegistration)
 		{
