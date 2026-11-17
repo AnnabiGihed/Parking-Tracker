@@ -28,6 +28,7 @@ public static class TestHookScript
 		("freeSpots", "FreeSpots"),
 		("officialList", "OfficialList"),
 		("platformStatus", "PlatformStatus"),
+		("screenState", "ScreenState"),
 	];
 	#endregion
 

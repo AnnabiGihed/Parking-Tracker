@@ -227,13 +227,19 @@ public sealed class SpotChecker : IDisposable
 	}
 
 	/// <summary>
-	/// Shows a busy chip with a text, for example while the first position is awaited.
+	/// Shows a busy chip with a text, for example while the first position is awaited. Nothing changes when a check started since
+	/// the history was forgotten: a fix that arrived meanwhile has its own busy chip or answer, which this one must not overwrite.
 	/// </summary>
 	/// <param name="text">What the user is waiting for.</param>
 	public void ShowBusy(string text)
 	{
 		lock (gate)
 		{
+			if (lastCheck is not null)
+			{
+				return;
+			}
+
 			chips = [SpotStatusPresenter.Busy(text)];
 		}
 

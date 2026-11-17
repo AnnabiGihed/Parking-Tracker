@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Devices.Sensors;
 using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
@@ -15,7 +16,7 @@ namespace ParkingTracker.App.Features.SpotDecisions;
 ///              Background tracking with the app off screen is a later stage (ADR-0002). When the request is refused or listening
 ///              fails, the tracker stops and says why through <see cref="ErrorOccurred"/>.
 /// </summary>
-public sealed class GeolocationTracker : ILocationTracker
+public sealed partial class GeolocationTracker : ILocationTracker
 {
 	#region Constants
 	/// <summary>
@@ -31,6 +32,11 @@ public sealed class GeolocationTracker : ILocationTracker
 
 	#region Fields
 	/// <summary>
+	/// The log, where the start, a failure and the first fix of a start go, so that a run without a position can be explained.
+	/// </summary>
+	private readonly ILogger<GeolocationTracker> logger;
+
+	/// <summary>
 	/// Guards <see cref="running"/> and <see cref="generation"/>.
 	/// </summary>
 	private readonly Lock gate = new();
@@ -44,6 +50,23 @@ public sealed class GeolocationTracker : ILocationTracker
 	/// Counts the starts and the stops, so that a start that finishes after a stop knows it was replaced and leaves nothing behind.
 	/// </summary>
 	private int generation;
+
+	/// <summary>
+	/// Whether the first fix of the current start was logged; 0 or 1, changed with <see cref="Interlocked"/> because fixes arrive on any thread.
+	/// </summary>
+	private int firstFixLogged;
+	#endregion
+
+	#region Constructors
+	/// <summary>
+	/// Initializes a new instance of the <see cref="GeolocationTracker"/> class.
+	/// </summary>
+	/// <param name="logger">The log, where the start, a failure and the first fix of a start go.</param>
+	public GeolocationTracker(ILogger<GeolocationTracker> logger)
+	{
+		ArgumentNullException.ThrowIfNull(logger);
+		this.logger = logger;
+	}
 	#endregion
 
 	#region Properties
@@ -88,6 +111,9 @@ public sealed class GeolocationTracker : ILocationTracker
 			attempt = ++generation;
 		}
 
+		Volatile.Write(ref firstFixLogged, 0);
+		LogStartRequested(logger);
+
 		Geolocation.Default.LocationChanged += OnLocationChanged;
 		Geolocation.Default.ListeningFailed += OnListeningFailed;
 		try
@@ -102,6 +128,8 @@ public sealed class GeolocationTracker : ILocationTracker
 				Fail("location could not be started", attempt);
 				return;
 			}
+
+			LogStarted(logger);
 
 			// The platform is listening now: a cancel or a stop that came meanwhile must not leave it on without handlers.
 			cancellationToken.ThrowIfCancellationRequested();
@@ -161,6 +189,11 @@ public sealed class GeolocationTracker : ILocationTracker
 	private void OnLocationChanged(object? sender, GeolocationLocationChangedEventArgs e)
 	{
 		var location = e.Location;
+		if (Interlocked.Exchange(ref firstFixLogged, 1) == 0)
+		{
+			LogFirstFix(logger, location.Accuracy ?? UnknownAccuracyMetres, Math.Round((TimeProvider.System.GetUtcNow() - location.Timestamp).TotalSeconds, 1));
+		}
+
 		var fix = new GpsFix(
 			new GeoPoint(location.Latitude, location.Longitude),
 			location.Accuracy ?? UnknownAccuracyMetres,
@@ -198,6 +231,7 @@ public sealed class GeolocationTracker : ILocationTracker
 			generation++;
 		}
 
+		LogFailed(logger, message);
 		Unsubscribe();
 		ErrorOccurred?.Invoke(this, new LocationErrorEventArgs(message));
 	}
@@ -266,5 +300,38 @@ public sealed class GeolocationTracker : ILocationTracker
 		Geolocation.Default.LocationChanged -= OnLocationChanged;
 		Geolocation.Default.ListeningFailed -= OnListeningFailed;
 	}
+	#endregion
+
+	#region Logging
+	/// <summary>
+	/// Logs that a start of the location listening was requested.
+	/// </summary>
+	/// <param name="logger">The log.</param>
+	[LoggerMessage(Level = LogLevel.Information, Message = "Location listening start requested")]
+	private static partial void LogStartRequested(ILogger logger);
+
+	/// <summary>
+	/// Logs that the platform accepted the start of the location listening.
+	/// </summary>
+	/// <param name="logger">The log.</param>
+	[LoggerMessage(Level = LogLevel.Information, Message = "Location listening started")]
+	private static partial void LogStarted(ILogger logger);
+
+	/// <summary>
+	/// Logs that the location listening failed or was refused, with the message the screen shows.
+	/// </summary>
+	/// <param name="logger">The log.</param>
+	/// <param name="message">What went wrong.</param>
+	[LoggerMessage(Level = LogLevel.Information, Message = "Location listening failed: {Message}")]
+	private static partial void LogFailed(ILogger logger, string message);
+
+	/// <summary>
+	/// Logs the first fix after a start, with its age by the clock of the device: a large age explains why the screen drops it as stale.
+	/// </summary>
+	/// <param name="logger">The log.</param>
+	/// <param name="accuracyMetres">The accuracy of the fix in metres.</param>
+	/// <param name="ageSeconds">Seconds between the time stamp of the fix and now.</param>
+	[LoggerMessage(Level = LogLevel.Information, Message = "First location fix received: accuracy {AccuracyMetres} m, age {AgeSeconds} s")]
+	private static partial void LogFirstFix(ILogger logger, double accuracyMetres, double ageSeconds);
 	#endregion
 }

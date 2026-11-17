@@ -208,6 +208,66 @@ public sealed class TestHookServiceTests
 	}
 	#endregion
 
+	#region Screen State Tests
+	/// <summary>
+	/// Verifies that before any fix the state says so: not followed, no position, nothing busy.
+	/// </summary>
+	[Fact]
+	public void ScreenState_NoFix_ShouldHaveNoPosition()
+	{
+		using var ui = new UiFixture();
+		var hooks = Create(ui);
+
+		var state = hooks.ScreenState();
+
+		state.Me.Should().BeNull();
+		state.Tracking.Should().BeFalse();
+		state.Busy.Should().BeFalse();
+	}
+
+	/// <summary>
+	/// Verifies that a fix is reported with its place, accuracy and age by the clock of the device, and that following and the
+	/// headline of the answer are reported too.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task ScreenState_FixWhileFollowing_ShouldReportPositionAgeAndAnswer()
+	{
+		using var ui = new UiFixture();
+		ui.AnswerChecks(SpotDecision.Create(Verdict.Pay, "Paid here."));
+		var hooks = Create(ui);
+		await ui.Spot.StartTrackingAsync();
+		ui.RaiseFix(ui.FixNow(accuracy: 5));
+		ui.Clock.Advance(TimeSpan.FromSeconds(2));
+
+		var state = hooks.ScreenState();
+
+		state.Tracking.Should().BeTrue();
+		state.Me.Should().Be(new MyPositionAnswer(UiFixture.Here.Latitude, UiFixture.Here.Longitude, 5, 2));
+		state.Title.Should().Be(ui.Spot.Status.Title);
+		state.Sub.Should().Be("Paid here.");
+		state.Busy.Should().BeFalse();
+	}
+
+	/// <summary>
+	/// Verifies that a check that has not ended is reported as busy.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task ScreenState_CheckRunning_ShouldBeBusy()
+	{
+		using var ui = new UiFixture();
+		var pending = new TaskCompletionSource<Result<SpotDecision>>();
+		ui.Sender.Send(Arg.Any<DecideSpotQuery>(), Arg.Any<CancellationToken>()).Returns(pending.Task);
+		var hooks = Create(ui);
+		await ui.Spot.StartTrackingAsync();
+		ui.RaiseFix(ui.FixNow());
+
+		hooks.ScreenState().Busy.Should().BeTrue();
+		pending.SetResult(Result.Success(SpotDecision.Create(Verdict.Free, "x")));
+	}
+	#endregion
+
 	#region Guard Tests
 	/// <summary>
 	/// Verifies that a missing dependency is rejected when the hooks are built.
@@ -217,17 +277,21 @@ public sealed class TestHookServiceTests
 	{
 		using var ui = new UiFixture();
 
-		var noSender = () => new TestHookService(null!, ui.Settings, ui.Card, ui.Permissions, ui.Network); // null on purpose: proves the guard clause rejects it
-		var noSettings = () => new TestHookService(ui.Sender, null!, ui.Card, ui.Permissions, ui.Network); // null on purpose: proves the guard clause rejects it
-		var noCard = () => new TestHookService(ui.Sender, ui.Settings, null!, ui.Permissions, ui.Network); // null on purpose: proves the guard clause rejects it
-		var noPermissions = () => new TestHookService(ui.Sender, ui.Settings, ui.Card, null!, ui.Network); // null on purpose: proves the guard clause rejects it
-		var noNetwork = () => new TestHookService(ui.Sender, ui.Settings, ui.Card, ui.Permissions, null!); // null on purpose: proves the guard clause rejects it
+		var noSender = () => new TestHookService(null!, ui.Settings, ui.Card, ui.Permissions, ui.Network, ui.Spot, ui.Clock); // null on purpose: proves the guard clause rejects it
+		var noSettings = () => new TestHookService(ui.Sender, null!, ui.Card, ui.Permissions, ui.Network, ui.Spot, ui.Clock); // null on purpose: proves the guard clause rejects it
+		var noCard = () => new TestHookService(ui.Sender, ui.Settings, null!, ui.Permissions, ui.Network, ui.Spot, ui.Clock); // null on purpose: proves the guard clause rejects it
+		var noPermissions = () => new TestHookService(ui.Sender, ui.Settings, ui.Card, null!, ui.Network, ui.Spot, ui.Clock); // null on purpose: proves the guard clause rejects it
+		var noNetwork = () => new TestHookService(ui.Sender, ui.Settings, ui.Card, ui.Permissions, null!, ui.Spot, ui.Clock); // null on purpose: proves the guard clause rejects it
+		var noSpot = () => new TestHookService(ui.Sender, ui.Settings, ui.Card, ui.Permissions, ui.Network, null!, ui.Clock); // null on purpose: proves the guard clause rejects it
+		var noClock = () => new TestHookService(ui.Sender, ui.Settings, ui.Card, ui.Permissions, ui.Network, ui.Spot, null!); // null on purpose: proves the guard clause rejects it
 
 		noSender.Should().Throw<ArgumentNullException>();
 		noSettings.Should().Throw<ArgumentNullException>();
 		noCard.Should().Throw<ArgumentNullException>();
 		noPermissions.Should().Throw<ArgumentNullException>();
 		noNetwork.Should().Throw<ArgumentNullException>();
+		noSpot.Should().Throw<ArgumentNullException>();
+		noClock.Should().Throw<ArgumentNullException>();
 	}
 	#endregion
 
@@ -237,6 +301,6 @@ public sealed class TestHookServiceTests
 	/// </summary>
 	/// <param name="ui">The fixture.</param>
 	/// <returns>The hooks.</returns>
-	private static TestHookService Create(UiFixture ui) => new(ui.Sender, ui.Settings, ui.Card, ui.Permissions, ui.Network);
+	private static TestHookService Create(UiFixture ui) => new(ui.Sender, ui.Settings, ui.Card, ui.Permissions, ui.Network, ui.Spot, ui.Clock);
 	#endregion
 }

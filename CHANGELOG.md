@@ -31,4 +31,7 @@ The .NET migration is in progress and is not part of any release yet: the publis
   `Directory.Build.props`, and fixed the findings they raised.
 - Added the `.NET quality gate` GitHub workflow: restore, format check, Release build and unit tests on every push and
   pull request into `main`.
+- Made the emulator test explain a missing position: a `ptTest.screenState()` hook, a log of the start, failures and first fix
+  of the location tracker, a fix re-sent during the wait, and a "finding your position" chip that no longer overwrites the
+  chips of a check that a fix already started.
 - Added `CONTRIBUTING.md` and this changelog.

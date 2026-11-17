@@ -5,6 +5,7 @@ using ParkingTracker.Application.Features.SpotDecisions.Queries.DecideSpot;
 using ParkingTracker.Application.Features.SpotDecisions.Queries.FindFreeSpots;
 using ParkingTracker.ViewModels.Features.Card;
 using ParkingTracker.ViewModels.Features.Shared.Settings;
+using ParkingTracker.ViewModels.Features.SpotCheck;
 using Pivot.Framework.Application.Abstractions.Messaging;
 
 namespace ParkingTracker.ViewModels.Features.Shared.TestHooks;
@@ -45,6 +46,16 @@ public sealed class TestHookService
 	/// The connection status of the device.
 	/// </summary>
 	private readonly INetworkStatus network;
+
+	/// <summary>
+	/// The main screen, whose state the test reads when a check fails.
+	/// </summary>
+	private readonly SpotCheckViewModel spot;
+
+	/// <summary>
+	/// Clock for the age of the last fix.
+	/// </summary>
+	private readonly TimeProvider clock;
 	#endregion
 
 	#region Constructors
@@ -56,14 +67,20 @@ public sealed class TestHookService
 	/// <param name="card">The card view model, whose line is shown again after the card changed.</param>
 	/// <param name="permissions">The location permissions of the device.</param>
 	/// <param name="network">The connection status of the device.</param>
+	/// <param name="spot">The main screen, whose state the test reads when a check fails.</param>
+	/// <param name="clock">Clock for the age of the last fix.</param>
 	/// <exception cref="ArgumentNullException">Thrown when an argument is <see langword="null"/>.</exception>
-	public TestHookService(ISender sender, ISettingsStore settings, CardViewModel card, ILocationPermissions permissions, INetworkStatus network)
+	public TestHookService(ISender sender, ISettingsStore settings, CardViewModel card, ILocationPermissions permissions, INetworkStatus network, SpotCheckViewModel spot, TimeProvider clock)
 	{
 		ArgumentNullException.ThrowIfNull(sender);
 		ArgumentNullException.ThrowIfNull(settings);
 		ArgumentNullException.ThrowIfNull(card);
 		ArgumentNullException.ThrowIfNull(permissions);
 		ArgumentNullException.ThrowIfNull(network);
+		ArgumentNullException.ThrowIfNull(spot);
+		ArgumentNullException.ThrowIfNull(clock);
+		this.spot = spot;
+		this.clock = clock;
 		this.sender = sender;
 		this.settings = settings;
 		this.card = card;
@@ -165,6 +182,24 @@ public sealed class TestHookService
 			status.Foreground.ToString().ToLowerInvariant(),
 			status.Background.ToString().ToLowerInvariant(),
 			network.IsOnline);
+	}
+
+	/// <summary>
+	/// Reads what the main screen holds: whether the position is followed, the last accepted fix and its age, the headline and the
+	/// explanation of the status block, and whether it is busy.
+	/// </summary>
+	/// <returns>The state of the screen.</returns>
+	public ScreenStateAnswer ScreenState()
+	{
+		var me = spot.Me is { } position
+			? new MyPositionAnswer(
+				position.Fix.Point.Latitude,
+				position.Fix.Point.Longitude,
+				position.Fix.AccuracyMetres,
+				Math.Round((clock.GetUtcNow() - position.Fix.Time).TotalSeconds, 1))
+			: null;
+		var busy = spot.IsChecking || spot.Chips.Any(chip => chip.Kind == ChipKind.Busy);
+		return new ScreenStateAnswer(spot.IsTracking, me, spot.Status.Title, spot.Status.Detail, busy);
 	}
 	#endregion
 }

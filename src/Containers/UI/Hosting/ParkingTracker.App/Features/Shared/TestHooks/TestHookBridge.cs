@@ -82,6 +82,13 @@ public sealed class TestHookBridge
 	/// <returns>The platform state.</returns>
 	[JSInvokable("PlatformStatus")]
 	public Task<PlatformAnswer> PlatformStatus() => hooks.PlatformStatusAsync();
+
+	/// <summary>
+	/// Reads what the main screen holds: tracking, position, headline and busy state.
+	/// </summary>
+	/// <returns>The state of the screen.</returns>
+	[JSInvokable("ScreenState")]
+	public ScreenStateAnswer ScreenState() => hooks.ScreenState();
 	#endregion
 }
 #endif

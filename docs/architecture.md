@@ -514,6 +514,9 @@ Emulator test changes:
 - `localStorage` seeding becomes `ptTest.setCard(json)`; `window.PT.decide` becomes `ptTest.decide(lat, lon, acc)`;
   `liveFreeSpots` becomes `ptTest.freeSpots(...)`; the plugin check becomes `ptTest.platformStatus()` (service,
   notification permission, foreground and background location).
+- `ptTest.screenState()` returns `{ tracking, me: { lat, lon, acc, ageSeconds } | null, title, sub, busy }`; the test prints it
+  after `setCard` and in the detail of a failed GPS or screen check, and re-sends the emulator fix every 2 seconds while it
+  waits for the position. `GeolocationTracker` logs the start, a failure and the first fix (with its age).
 - The on-screen check reads `.hero-title` and `.hero-sub`, which the Razor markup keeps.
 - New checks (done in stage 5b): no .NET unhandled exception in logcat and the Blazor error UI hidden. Still to come in
   stage 6: a background parking alert: drive the

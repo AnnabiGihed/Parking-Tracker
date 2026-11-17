@@ -249,6 +249,70 @@ public sealed class SpotCheckViewModelTests
 	}
 	#endregion
 
+	#region Card Announcement Tests
+	/// <summary>
+	/// Verifies that a card announced before the first fix does not get in the way: the fix that follows still shows the position
+	/// and the answer.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task RecheckAsync_CardAnnouncedBeforeFirstFix_ShouldStillShowPositionAndAnswerForTheFix()
+	{
+		using var ui = new UiFixture();
+		ui.AnswerChecks(SpotDecision.Create(Verdict.Free, "Free here."));
+		await ui.Spot.StartTrackingAsync();
+
+		await ui.Spot.RecheckAsync();
+		ui.RaiseFix(ui.FixNow(accuracy: 5));
+
+		ui.Spot.Me.Should().NotBeNull();
+		ui.Spot.Chips.Select(chip => chip.Text).Should().Contain("My position ±5 m");
+		ui.Spot.Status.Title.Should().NotBeEmpty();
+		ui.Spot.IsChecking.Should().BeFalse();
+	}
+
+	/// <summary>
+	/// Verifies that a card announced while the check of a fix is still running replaces it by a newer check, and that the newer
+	/// answer is the one that is shown, with the position.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task RecheckAsync_CardAnnouncedWhileFixIsChecked_ShouldShowTheNewerAnswer()
+	{
+		using var ui = new UiFixture();
+		var pending = HoldChecks(ui);
+		await ui.Spot.StartTrackingAsync();
+		ui.RaiseFix(ui.FixNow(accuracy: 5));
+		ui.AnswerChecks(SpotDecision.Create(Verdict.Free, "Free with the new card."));
+
+		await ui.Spot.RecheckAsync();
+		pending.SetResult(Result.Success(SpotDecision.Create(Verdict.Pay, "Paid, no card yet.")));
+
+		ui.Spot.Status.Detail.Should().Be("Free with the new card.");
+		ui.Spot.Chips.Select(chip => chip.Text).Should().Contain("My position ±5 m");
+		ui.Spot.IsChecking.Should().BeFalse();
+	}
+
+	/// <summary>
+	/// Verifies that the "finding your position" chip of a start that read no position yet does not overwrite the chips of a check
+	/// that a fix started meanwhile.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task ShowBusy_CheckStartedMeanwhile_ShouldKeepTheChipsOfThatCheck()
+	{
+		using var ui = new UiFixture();
+		ui.AnswerChecks(SpotDecision.Create(Verdict.Free, "Free here."));
+		using var checker = new SpotChecker(ui.Sender, ui.Clock, ui.Toast, ui.Nearest, ui.Card, () => { });
+		checker.ForgetHistory();
+		await checker.RunAsync(UiFixture.Here, CheckSource.Me, 5);
+
+		checker.ShowBusy("Finding your position…");
+
+		checker.Chips.Select(chip => chip.Text).Should().Contain("My position ±5 m").And.NotContain("Finding your position…");
+	}
+	#endregion
+
 	#region Stale Answer Tests
 	/// <summary>
 	/// Verifies that a check that finishes after the lost-signal answer does not bring back an old "free" answer.

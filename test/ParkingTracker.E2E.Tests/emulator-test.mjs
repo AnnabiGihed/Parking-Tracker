@@ -5,7 +5,7 @@
 // Output: emulator-report/ (report.json, summary.md, screenshot-*.png, logcat.txt, crash.txt) and exit code 1 on failure.
 //
 // The test APK is the Release build made with -p:EnableTestHooks=true: its web view can be inspected through the Chrome
-// DevTools Protocol, and window.ptTest (setCard, getCard, decide, freeSpots, officialList, platformStatus) calls the
+// DevTools Protocol, and window.ptTest (setCard, getCard, decide, freeSpots, officialList, platformStatus, screenState) calls the
 // app's own C# code. See docs/architecture.md section 6.3.
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync, appendFileSync } from 'node:fs';
@@ -89,11 +89,19 @@ async function cdp() {
   await send('Runtime.enable');
   await send('Page.enable').catch(() => {});
 }
-const waitFor = async (expr, ms = 60000) => {
+// Evaluates expr until it is truthy. `each` (optional) runs every `everyMs` while waiting, for example to send the emulator a GPS fix again.
+const waitFor = async (expr, ms = 60000, each = null, everyMs = 2000) => {
   const end = Date.now() + ms;
-  while (Date.now() < end) { try { const v = await evaluate(expr); if (v) return v; } catch { /* page reloading */ } await sleep(1000); }
+  let lastEach = 0;
+  while (Date.now() < end) {
+    if (each && Date.now() - lastEach >= everyMs) { each(); lastEach = Date.now(); }
+    try { const v = await evaluate(expr); if (v) return v; } catch { /* page reloading */ }
+    await sleep(1000);
+  }
   return null;
 };
+// What the main screen holds (tracking, last fix and its age, headline, busy), for the detail of a failed check.
+const screenState = async () => { try { return JSON.stringify(await evaluate('ptTest.screenState()')); } catch (e) { return `screenState failed: ${e.message}`; } };
 const blazorErrorUiHidden = `(() => { const e = document.querySelector('#blazor-error-ui'); return !!e && getComputedStyle(e).display === 'none'; })()`;
 
 // ---------- the test ----------
@@ -124,6 +132,7 @@ async function main() {
   await evaluate(`ptTest.setCard(${JSON.stringify(JSON.stringify(TEST_CARD))}).then(() => true)`);
   const saved = JSON.parse((await evaluate('ptTest.getCard()')) || 'null');
   check('Test card saved and read back', saved?.sector === 'louise' && saved?.municipality === 'bruxelles' && saved?.plate === TEST_CARD.plate, JSON.stringify(saved));
+  console.log(`screen state after setCard: ${await screenState()}`);
 
   stepTo('platform status');
   const platform = await evaluate('ptTest.platformStatus()');
@@ -146,14 +155,18 @@ async function main() {
   }
 
   stepTo('GPS on screen');
+  // The emulator only delivers a fix when it is sent, so fixes are also re-sent during the wait for the position.
   // Real GPS path: the emulator's GPS is set to Avenue Louise 216; the screen must show the answer.
   for (let i = 0; i < 12; i++) { geo(HOME); await sleep(1500); }
-  const gps = await waitFor('/My position/.test(document.body.innerText) && document.body.innerText.match(/My position[^\\n]*/)[0]', 60000);
+  const gps = await waitFor('/My position/.test(document.body.innerText) && document.body.innerText.match(/My position[^\\n]*/)[0]', 60000, () => geo(HOME), 2000);
   report.gps = gps || null;
-  check('GPS position received in the app', !!gps, gps || 'no position');
-  const screen = await waitFor(`(() => { const t = document.querySelector('.hero-title')?.innerText; return t && !/where do you want|checking/i.test(t) ? t + ' | ' + (document.querySelector('.hero-sub')?.innerText || '') : null; })()`, 60000);
+  const gpsState = await screenState();
+  report.gpsScreenState = gpsState;
+  check('GPS position received in the app', !!gps, gps || `no position; screen state: ${gpsState}`);
+  const screen = await waitFor(`(() => { const t = document.querySelector('.hero-title')?.innerText; return t && !/where do you want|checking/i.test(t) ? t + ' | ' + (document.querySelector('.hero-sub')?.innerText || '') : null; })()`, 60000, () => geo(HOME), 2000);
   report.screen = screen;
-  check('Screen shows an answer for my position', !!screen && /^Free for you here/.test(screen), screen || 'nothing shown');
+  const screenOk = !!screen && /^Free for you here/.test(screen);
+  check('Screen shows an answer for my position', screenOk, screenOk ? screen : `${screen || 'nothing shown'}; screen state: ${await screenState()}`);
   screenshot('avenue-louise-216');
 
   stepTo('free spots');
