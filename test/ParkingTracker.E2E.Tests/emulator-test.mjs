@@ -5,7 +5,7 @@
 // Output: emulator-report/ (report.json, summary.md, screenshot-*.png, logcat.txt, crash.txt) and exit code 1 on failure.
 //
 // The test APK is the Release build made with -p:EnableTestHooks=true: its web view can be inspected through the Chrome
-// DevTools Protocol, and window.ptTest (setCard, getCard, decide, freeSpots, officialList, platformStatus, screenState, startTimer)
+// DevTools Protocol, and window.ptTest (setCard, getCard, decide, freeSpots, officialList, platformStatus, screenState, startTimer, parseCardText)
 // calls the app's own C# code. It also checks the parking alerts of ADR-0002: the foreground service, a parking alert while the app is
 // in the background and a timer reminder. See docs/architecture.md section 6.3.
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -156,6 +156,13 @@ async function main() {
   const saved = JSON.parse((await evaluate('ptTest.getCard()')) || 'null');
   check('Test card saved and read back', saved?.sector === 'louise' && saved?.municipality === 'bruxelles' && saved?.plate === TEST_CARD.plate, JSON.stringify(saved));
   console.log(`screen state after setCard: ${await screenState()}`);
+
+  stepTo('parse a card text');
+  // The camera cannot be driven on a CI emulator, so the scan is checked from the recognised text on: the same parser the scan uses.
+  const cardText = ['VILLE DE BRUXELLES', 'CARTE DE STATIONNEMENT', 'N\u00b0 8012 - 345 - 678', 'Secteur LOUISE', 'Plaque 1ABC234', 'Valable du 01/03/2026 \u2013 28/02/2027', 'BXL_LIM_IXL_LOUISE'].join('\n');
+  const parsedCard = await evaluate(`ptTest.parseCardText(${JSON.stringify(cardText)})`);
+  check('Card text parsed into the card fields', parsedCard?.number === 'B012-345-678' && parsedCard?.plate === '1ABC234' && parsedCard?.from === '2026-03-01' && parsedCard?.to === '2027-02-28'
+    && parsedCard?.municipality === 'bruxelles' && parsedCard?.sector === 'louise' && parsedCard?.tolerances?.[0] === 'BXL_LIM_IXL_LOUISE', JSON.stringify(parsedCard));
 
   stepTo('platform status');
   const platform = await evaluate('ptTest.platformStatus()');

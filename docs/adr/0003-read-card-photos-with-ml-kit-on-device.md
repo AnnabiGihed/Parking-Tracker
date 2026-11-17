@@ -1,6 +1,6 @@
 # ADR-0003: Read parking-card photos with ML Kit text recognition on the device
 
-- Status: Accepted
+- Status: Accepted; implemented in stage 6b, to be proven on a phone
 - Date: 2026-11-16
 - Deciders: Gihed Annabi
 
@@ -21,7 +21,7 @@ In the MAUI app (ADR-0001) the page runs in a `BlazorWebView`. Options:
 ## Decision
 
 We take or pick the photo with `MediaPicker` (`CapturePhotoAsync` / `PickPhotoAsync`) and recognise it with ML Kit's
-bundled Latin text recogniser behind an `ICardTextRecognizer` port. `parseCardText` moves to
+bundled Latin text recogniser behind an `ICardTextReader` port (which takes or picks the photo and returns its text). `parseCardText` moves to
 `ParkingTracker.Application` as `CardTextParser`, unit-tested with recorded OCR text, and keeps the same rules (number
 pattern with `8`/`O` fixes, date range, plate, municipality and sector names, tolerance codes). The form is still
 filled for the user to check; nothing is saved without "Save".

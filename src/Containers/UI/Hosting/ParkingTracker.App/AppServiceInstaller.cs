@@ -3,9 +3,11 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Maui.Devices;
+using ParkingTracker.App.Features.Cards;
 using ParkingTracker.App.Features.ParkingDetection;
 using ParkingTracker.App.Features.Shared;
 using ParkingTracker.App.Features.SpotDecisions;
+using ParkingTracker.Application.Features.Cards.Abstractions;
 using ParkingTracker.Application.Features.ParkingDetection.Abstractions;
 using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
@@ -21,7 +23,7 @@ namespace ParkingTracker.App;
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
 /// Purpose     : Registers what only the phone can provide: the implementations of the device ports of the Application layer
-///              (position, permissions, links, connection, saved settings, notifications, alarms, the background service of the
+///              (position, permissions, links, card photo text, connection, saved settings, notifications, alarms, the background service of the
 ///              parking alerts, whether the app is on screen) and the helpers that join phone events to the view models. They are
 ///              registered by hand, not by convention, because each one is tied to the platform.
 /// </summary>
@@ -44,6 +46,7 @@ public sealed class AppServiceInstaller : IServiceInstaller
 		services.AddSingleton<ILocationTracker, FusedLocationTracker>();
 		services.AddSingleton<ILocationPermissions, MauiLocationPermissions>();
 		services.AddSingleton<ILinkLauncher, MauiLinkLauncher>();
+		services.AddSingleton<ICardTextReader, MlKitCardTextReader>();
 
 		// Parking alerts (ADR-0002): notifications, exact alarms for the timer and the foreground service. Singletons, because the
 		// service and the receivers live outside the scope of the web view and reach them from the root provider.

@@ -36,6 +36,7 @@ public sealed class UiServiceInstaller : IServiceInstaller
 		services.AddScoped<SpotCheckViewModel>();
 		services.AddScoped<SearchViewModel>();
 		services.AddScoped<CarViewModel>();
+		services.AddScoped<ParkedOnScreenResponder>();
 		services.AddScoped<MapLayersViewModel>();
 	}
 	#endregion

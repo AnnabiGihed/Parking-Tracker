@@ -1,3 +1,5 @@
+using System.Globalization;
+using ParkingTracker.Application.Features.Cards.Queries.ParseCardText;
 using ParkingTracker.Application.Features.ParkingDetection.Abstractions;
 using ParkingTracker.Application.Features.Sectors.Queries.GetOfficialListStatus;
 using ParkingTracker.Application.Features.Shared.Abstractions;
@@ -18,7 +20,8 @@ namespace ParkingTracker.ViewModels.Features.Shared.TestHooks;
 /// Date        : 11-2026
 /// Purpose     : What the emulator test (<c>test/ParkingTracker.E2E.Tests</c>) asks of the running app: save a card, read it back,
 ///              decide a place, search free spots, read the official-list check and the permission, network, background service,
-///              notification and exact-alarm state, and start a parking timer of any length (the form allows 5 minutes at least). It goes through
+///              notification and exact-alarm state, and start a parking timer of any length (the form allows 5 minutes at least), and read the card fields of a text as the
+///              scan does after the photo was recognised (the camera cannot be driven in CI). It goes through
 ///              the same ports and queries as the screens, so the test proves the real path. The class is plain C#, so unit tests cover
 ///              it; the host registers it and exposes it to the web view as <c>window.ptTest</c> only in a build made with
 ///              <c>-p:EnableTestHooks=true</c>. A failure is thrown, which the test sees as a rejected promise.
@@ -235,6 +238,31 @@ public sealed class TestHookService
 	{
 		ArgumentOutOfRangeException.ThrowIfLessThan(minutes, 1);
 		return car.ApplyTimerAsync(new ParkingTimer(clock.GetLocalNow().AddMinutes(minutes), minutes));
+	}
+
+	/// <summary>
+	/// Reads the card fields in a text, as the scan of a photo does once the text was recognised.
+	/// </summary>
+	/// <param name="text">The text, for example what text recognition returns for a card.</param>
+	/// <returns>The fields that were found; the others are <see langword="null"/>.</returns>
+	/// <exception cref="InvalidOperationException">Thrown when the query failed.</exception>
+	public async Task<CardTextAnswer> ParseCardTextAsync(string text)
+	{
+		var result = await sender.Send(new ParseCardTextQuery(text), CancellationToken.None).ConfigureAwait(false);
+		if (result.IsFailure)
+		{
+			throw new InvalidOperationException(result.Error.Message);
+		}
+
+		var parsed = result.Value;
+		return new CardTextAnswer(
+			parsed.Number,
+			parsed.Plate,
+			parsed.ValidFrom?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+			parsed.ValidTo?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+			parsed.MunicipalityId,
+			parsed.SectorId,
+			parsed.Tolerances);
 	}
 
 	/// <summary>

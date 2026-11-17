@@ -9,8 +9,9 @@ namespace ParkingTracker.Shared.Features.Card.Components;
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
 /// Purpose     : The card dialog where the user enters the residents' card by hand: municipality, the City sector with its tolerance
-///              codes or the areas printed on the card, the validity dates, the plate and the number. It saves through the
-///              <see cref="CardViewModel"/>, which writes the card to the settings store. Scanning a photo is a later stage.
+///              codes or the areas printed on the card, the validity dates, the plate and the number. "Scan my card" asks the
+///              <see cref="CardViewModel"/> to read a photo and shows its status line. It saves through the
+///              <see cref="CardViewModel"/>, which writes the card to the settings store.
 /// </summary>
 public sealed partial class CardDialog : ViewModelComponent<CardViewModel>
 {
@@ -27,6 +28,12 @@ public sealed partial class CardDialog : ViewModelComponent<CardViewModel>
 	/// </summary>
 	/// <param name="e">The change; its value is the identifier of the sector.</param>
 	private void OnSectorChanged(ChangeEventArgs e) => ViewModel.SelectSector(e.Value?.ToString() ?? string.Empty);
+
+	/// <summary>
+	/// Handles "Scan my card".
+	/// </summary>
+	/// <returns>A task that completes when the form was filled or the failure was shown.</returns>
+	private Task OnScanAsync() => ViewModel.ScanAsync();
 
 	/// <summary>
 	/// Handles "Save card".

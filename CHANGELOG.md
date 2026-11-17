@@ -32,6 +32,13 @@ The .NET migration is in progress and is not part of any release yet: the publis
   with the nearest free spot, the alerts switch and the timer (30 min, 1 h, 2 h, 3 h or minutes, reminders 10 minutes
   before the end and at the end, exact alarms when allowed) in the car dialog, notification and exact-alarm
   permissions, and emulator checks for the service, a background alert and a timer reminder. Nothing is released yet.
+- Added the card photo scan to the .NET app (ADR-0003): "Scan my card" in the card dialog takes a photo with the camera
+  (or picks one when the camera is refused), reads its text with ML Kit on the phone and fills only the fields it
+  found, with the same card number, dates, plate, municipality, sector and tolerance-code rules as before and the same
+  "please double-check" line. The photo never leaves the phone and is deleted after reading. The emulator test checks
+  the parsing of a sample card text. Nothing is released yet.
+- Split the on-screen parking reaction out of the host relay into a tested view model class and renamed
+  `AppVisibility.Set` to `MarkVisible` and `MarkHidden`.
 - Added the Meziantou analyzers, the StyleCop documentation settings (`stylecop.json`) and the target framework in
   `Directory.Build.props`, and fixed the findings they raised.
 - Added the `.NET quality gate` GitHub workflow: restore, format check, Release build and unit tests on every push and

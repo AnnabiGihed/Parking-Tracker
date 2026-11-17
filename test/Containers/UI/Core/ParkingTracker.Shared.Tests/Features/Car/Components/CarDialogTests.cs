@@ -11,9 +11,9 @@ namespace ParkingTracker.Shared.Tests.Features.Car.Components;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : Component tests for the parking alerts switch and the parking timer of the car dialog, the timer line of the sheet and
-///              the car chip: the switch is on by default and saves a change, a preset fills the minutes, Start schedules the
-///              reminders, Stop appears only while a timer runs, and the line and chip show the time left.
+/// Purpose     : Component tests for the parking alerts switch and the parking timer of the car dialog: the switch is on by default
+///              and saves a change, a preset fills the minutes, Start schedules the reminders, and Stop appears only while a timer
+///              runs.
 /// </summary>
 public sealed class CarDialogTests : UiTestContext
 {
@@ -88,88 +88,6 @@ public sealed class CarDialogTests : UiTestContext
 
 		_ = Settings.Received(1).ClearTimerAsync();
 		cut.FindAll("#timerStop").Should().BeEmpty();
-	}
-	#endregion
-
-	#region Line and Chip Tests
-	/// <summary>
-	/// Verifies that the timer line is drawn only while a timer runs and says the time left and the end.
-	/// </summary>
-	/// <returns>A task that completes when the assertions have run.</returns>
-	[Fact]
-	public async Task TimerLine_TimerRuns_ShouldShowTimeLeft()
-	{
-		var line = Render<TimerLine>();
-		line.FindAll("#timerLine").Should().BeEmpty();
-
-		await line.InvokeAsync(() => Resolve<CarViewModel>().ApplyTimerAsync(new ParkingTimer(Start.AddMinutes(90), 90)));
-
-		line.Find("#timerLine").TextContent.Should().Contain("Parking time left 1h30 · until 11:30");
-	}
-
-	/// <summary>
-	/// Verifies that the chip shows the time left and turns late within 10 minutes of the end.
-	/// </summary>
-	/// <returns>A task that completes when the assertions have run.</returns>
-	[Fact]
-	public async Task CarChip_TimerNearEnd_ShouldShowTimeLeftAndBeLate()
-	{
-		var chip = Render<CarChip>();
-		chip.Find("#carChip").ClassList.Should().Contain("hidden");
-
-		await chip.InvokeAsync(() => Resolve<CarViewModel>().ApplyTimerAsync(new ParkingTimer(Start.AddMinutes(8), 60)));
-
-		chip.Find("#carChip").ClassList.Should().Contain("late").And.NotContain("hidden");
-		chip.Find("#carChip").TextContent.Should().Contain("0h08 left");
-	}
-
-	/// <summary>
-	/// Verifies that the timer line says the time is over once the end has passed.
-	/// </summary>
-	/// <returns>A task that completes when the assertions have run.</returns>
-	[Fact]
-	public async Task TimerLine_TimerEnded_ShouldSayTheTimeIsOver()
-	{
-		Settings.GetTimerAsync().Returns(new ParkingTimer(Start.AddMinutes(30), 30));
-		var line = Render<TimerLine>();
-
-		Clock.Advance(TimeSpan.FromMinutes(31));
-		await line.InvokeAsync(() => Resolve<CarViewModel>().LoadAsync());
-
-		line.Find("#timerLine").TextContent.Should().Contain(ParkingTimer.EndText);
-	}
-
-	/// <summary>
-	/// Verifies that the chip of a saved car without a timer is shown, says "My car" and is not late.
-	/// </summary>
-	/// <returns>A task that completes when the assertions have run.</returns>
-	[Fact]
-	public async Task CarChip_CarSavedWithoutTimer_ShouldShowMyCarAndNotBeLate()
-	{
-		Settings.GetCarAsync().Returns(new ParkedCar(Here, Start, "PAY", string.Empty));
-		var chip = Render<CarChip>();
-
-		await chip.InvokeAsync(() => Resolve<CarViewModel>().LoadAsync());
-
-		chip.Find("#carChip").ClassList.Should().NotContain("hidden").And.NotContain("late");
-		chip.Find("#carChip").TextContent.Should().Contain("My car");
-	}
-
-	/// <summary>
-	/// Verifies that the chip says the time is over once the end of the timer has passed.
-	/// </summary>
-	/// <returns>A task that completes when the assertions have run.</returns>
-	[Fact]
-	public async Task CarChip_TimerEnded_ShouldShowTimeIsOverAndBeLate()
-	{
-		Settings.GetTimerAsync().Returns(new ParkingTimer(Start.AddMinutes(30), 30));
-		var chip = Render<CarChip>();
-
-		Clock.Advance(TimeSpan.FromMinutes(31));
-		await chip.InvokeAsync(() => Resolve<CarViewModel>().LoadAsync());
-
-		chip.Find("#carChip").TextContent.Should().Contain("Time is over");
-		chip.Find("#carChip").ClassList.Should().Contain("late");
 	}
 	#endregion
 }

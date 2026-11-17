@@ -1,4 +1,6 @@
 using NSubstitute;
+using ParkingTracker.Application.Features.Cards.Queries.ParseCardText;
+using ParkingTracker.Application.Features.Cards.Services;
 using ParkingTracker.Application.Features.ParkingDetection.Abstractions;
 using ParkingTracker.Application.Features.Sectors.Queries.GetOfficialListStatus;
 using ParkingTracker.Application.Features.Shared.Abstractions;
@@ -319,6 +321,40 @@ public sealed class TestHookServiceTests
 
 		hooks.ScreenState().Busy.Should().BeTrue();
 		pending.SetResult(Result.Success(SpotDecision.Create(Verdict.Free, "x")));
+	}
+	#endregion
+
+	#region Card Text Tests
+	/// <summary>
+	/// Verifies that the fields of a text are returned with the dates as the first version wrote them.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task ParseCardTextAsync_TextWithFields_ShouldReturnThemAsPlainData()
+	{
+		using var ui = new UiFixture();
+		ui.Sender.Send(Arg.Any<ParseCardTextQuery>(), Arg.Any<CancellationToken>())
+			.Returns(Result.Success(new ParsedCard("B012-345-678", "1ABC234", new DateOnly(2026, 3, 1), new DateOnly(2027, 2, 28), "bruxelles", "louise", ["IXL_LOUISE"])));
+
+		var answer = await Create(ui).ParseCardTextAsync("text");
+
+		answer.Should().Be(new CardTextAnswer("B012-345-678", "1ABC234", "2026-03-01", "2027-02-28", "bruxelles", "louise", answer.Tolerances));
+		answer.Tolerances.Should().Equal("IXL_LOUISE");
+	}
+
+	/// <summary>
+	/// Verifies that a failed query is thrown.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task ParseCardTextAsync_QueryFails_ShouldThrow()
+	{
+		using var ui = new UiFixture();
+		ui.Sender.Send(Arg.Any<ParseCardTextQuery>(), Arg.Any<CancellationToken>()).Returns(Result.Failure<ParsedCard>(new Error("ReferenceData.Missing", "no data")));
+
+		var act = () => Create(ui).ParseCardTextAsync("text");
+
+		await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("no data");
 	}
 	#endregion
 

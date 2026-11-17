@@ -1,4 +1,7 @@
 using System.Globalization;
+using ParkingTracker.Application.Features.Cards.Abstractions;
+using ParkingTracker.Application.Features.Cards.Queries.ReadCard;
+using ParkingTracker.Application.Features.Cards.Services;
 using ParkingTracker.Application.Features.Sectors.Queries.GetMailles;
 using ParkingTracker.Application.Features.Sectors.Queries.GetOfficialListStatus;
 using ParkingTracker.Application.Features.Shared.Abstractions;
@@ -15,8 +18,9 @@ namespace ParkingTracker.ViewModels.Features.Card;
 /// Date        : 11-2026
 /// Purpose     : The residents' card: the line in the bottom sheet and the dialog where the user enters the card by hand. The
 ///              dialog adapts to the municipality (a City sector with tolerance codes, or the areas printed on the card), loads
-///              the list of areas through the Application and saves the card through the settings store. The scan of a photo is
-///              a later stage and is not part of this form.
+///              the list of areas through the Application and saves the card through the settings store. "Scan my card" reads a photo
+///              through the Application and fills only the fields it found, then asks the user to check them; nothing is saved
+///              until "Save card".
 /// </summary>
 public sealed class CardViewModel : ViewModelBase
 {
@@ -193,6 +197,16 @@ public sealed class CardViewModel : ViewModelBase
 	public string MailleError { get; private set; } = string.Empty;
 
 	/// <summary>
+	/// Gets a value indicating whether a photo of the card is being read.
+	/// </summary>
+	public bool IsScanning { get; private set; }
+
+	/// <summary>
+	/// Gets the line under the scan button: what the scan is doing or found, or empty.
+	/// </summary>
+	public string ScanStatus { get; private set; } = string.Empty;
+
+	/// <summary>
 	/// Gets what is wrong with the form after a failed save; empty when nothing is.
 	/// </summary>
 	public string FormError { get; private set; } = string.Empty;
@@ -233,9 +247,52 @@ public sealed class CardViewModel : ViewModelBase
 		MunicipalityId = saved?.Municipality ?? DefaultMunicipalityId;
 		Select(SelectedMunicipality?.Kind == MunicipalityKind.Streets ? saved?.Sector ?? DefaultSectorId : null, saved?.Tolerances, saved?.Mailles, saved?.Lims);
 		FormError = string.Empty;
+		ScanStatus = string.Empty;
 		IsOpen = true;
 		NotifyChanged();
 		await LoadMaillesAsync(cancellationToken).ConfigureAwait(false);
+	}
+
+	/// <summary>
+	/// Lets the user take or pick a photo of the card and fills the form with the fields read from it. Only the fields that were
+	/// found are changed. A user who leaves the camera without a photo is not told anything; every other failure is shown in
+	/// <see cref="ScanStatus"/>. A second call while a scan runs does nothing.
+	/// </summary>
+	/// <param name="cancellationToken">Cancels the reading.</param>
+	/// <returns>A task that completes when the form was filled or the failure was shown.</returns>
+	public async Task ScanAsync(CancellationToken cancellationToken = default)
+	{
+		if (IsScanning)
+		{
+			return;
+		}
+
+		IsScanning = true;
+		ScanStatus = "Reading the card…";
+		NotifyChanged();
+		try
+		{
+			var result = await sender.Send(new ReadCardQuery(), cancellationToken).ConfigureAwait(false);
+			if (result.IsSuccess)
+			{
+				await ApplyScanAsync(result.Value, cancellationToken).ConfigureAwait(false);
+			}
+			else
+			{
+				ScanStatus = string.Equals(result.Error.Code, CardScanErrors.CancelledCode, StringComparison.Ordinal)
+					? string.Empty
+					: "Scan failed: " + result.Error.Message;
+			}
+		}
+		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+		{
+			ScanStatus = string.Empty;
+		}
+		finally
+		{
+			IsScanning = false;
+			NotifyChanged();
+		}
 	}
 
 	/// <summary>
@@ -372,6 +429,38 @@ public sealed class CardViewModel : ViewModelBase
 	#endregion
 
 	#region Private Helpers
+	/// <summary>
+	/// Puts the fields found on a photo into the form and says what was filled. A new municipality, sector or tolerance code shows
+	/// the sector part of the form again as the first version did: the sector defaults to the first one, the tolerance codes
+	/// already ticked are kept next to the new ones, and the areas of another municipality start unticked.
+	/// </summary>
+	/// <param name="card">The fields that were found.</param>
+	/// <param name="cancellationToken">Cancels the loading of the areas.</param>
+	/// <returns>A task that completes when the areas, if the municipality needs them, were loaded.</returns>
+	private async Task ApplyScanAsync(ParsedCard card, CancellationToken cancellationToken)
+	{
+		Number = card.Number ?? Number;
+		Plate = card.Plate ?? Plate;
+		ValidFrom = card.ValidFrom?.ToString(DateInputFormat, CultureInfo.InvariantCulture) ?? ValidFrom;
+		ValidTo = card.ValidTo?.ToString(DateInputFormat, CultureInfo.InvariantCulture) ?? ValidTo;
+		var found = card.FoundFields;
+		ScanStatus = found.Count > 0
+			? $"Filled: {string.Join(", ", found)}. Please double-check."
+			: "Could not read the card — please type the fields.";
+		if (card.MunicipalityId is null && card.SectorId is null && card.Tolerances.Count == 0)
+		{
+			NotifyChanged();
+			return;
+		}
+
+		MunicipalityId = card.MunicipalityId ?? MunicipalityId;
+		var tolerances = SelectedTolerances.Concat(card.Tolerances).ToList();
+		Select(SelectedMunicipality?.Kind == MunicipalityKind.Streets ? card.SectorId ?? DefaultSectorId : null, tolerances, null, null);
+		SelectedTolerances.IntersectWith(Tolerances.Select(tolerance => tolerance.Code));
+		NotifyChanged();
+		await LoadMaillesAsync(cancellationToken).ConfigureAwait(false);
+	}
+
 	/// <summary>
 	/// Sets the sector and the ticked codes of the form.
 	/// </summary>

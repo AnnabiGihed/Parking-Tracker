@@ -41,9 +41,9 @@ public sealed class HostApplication : Microsoft.Maui.Controls.Application
 	protected override Window CreateWindow(IActivationState? activationState)
 	{
 		var window = new Window(new MainPage());
-		window.Activated += (_, _) => visibility.Set(true);
-		window.Deactivated += (_, _) => visibility.Set(false);
-		window.Stopped += (_, _) => visibility.Set(false);
+		window.Activated += (_, _) => visibility.MarkVisible();
+		window.Deactivated += (_, _) => visibility.MarkHidden();
+		window.Stopped += (_, _) => visibility.MarkHidden();
 		window.Resumed += (_, _) => resumeNotifier.NotifyResumed();
 		return window;
 	}

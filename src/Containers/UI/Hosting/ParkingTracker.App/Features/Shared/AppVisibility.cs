@@ -25,12 +25,19 @@ public sealed class AppVisibility : IAppVisibility
 
 	#region Public Methods
 	/// <summary>
-	/// Records that the window became active or inactive.
+	/// Records that the window became active: the app is in front of the user.
 	/// </summary>
-	/// <param name="isVisible">Whether the app is in front of the user now.</param>
-	public void Set(bool isVisible)
+	public void MarkVisible()
 	{
-		visible = isVisible;
+		visible = true;
+	}
+
+	/// <summary>
+	/// Records that the window became inactive or stopped: the app is no longer in front of the user.
+	/// </summary>
+	public void MarkHidden()
+	{
+		visible = false;
 	}
 	#endregion
 }

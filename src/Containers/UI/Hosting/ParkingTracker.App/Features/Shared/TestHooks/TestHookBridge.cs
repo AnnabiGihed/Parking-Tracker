@@ -92,6 +92,14 @@ public sealed class TestHookBridge
 	public Task<bool> StartTimer(int minutes) => hooks.StartTimerAsync(minutes);
 
 	/// <summary>
+	/// Reads the card fields in a text, as the scan does after the photo was recognised.
+	/// </summary>
+	/// <param name="text">The text to read.</param>
+	/// <returns>The fields that were found.</returns>
+	[JSInvokable("ParseCardText")]
+	public Task<CardTextAnswer> ParseCardText(string text) => hooks.ParseCardTextAsync(text);
+
+	/// <summary>
 	/// Reads what the main screen holds: tracking, position, headline and busy state.
 	/// </summary>
 	/// <returns>The state of the screen.</returns>

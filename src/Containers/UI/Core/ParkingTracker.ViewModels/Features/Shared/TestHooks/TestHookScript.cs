@@ -30,6 +30,7 @@ public static class TestHookScript
 		("platformStatus", "PlatformStatus"),
 		("screenState", "ScreenState"),
 		("startTimer", "StartTimer"),
+		("parseCardText", "ParseCardText"),
 	];
 	#endregion
 

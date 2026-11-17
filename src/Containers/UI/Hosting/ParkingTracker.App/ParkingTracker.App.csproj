@@ -47,6 +47,8 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" />
     <PackageReference Include="Microsoft.Extensions.Logging.Debug" />
     <PackageReference Include="Xamarin.GooglePlayServices.Location" />
+    <!-- Card photo text recognition on the device (ADR-0003). -->
+    <PackageReference Include="Xamarin.Google.MLKit.TextRecognition" />
     <!-- Aligned with the AndroidX versions Play services Location brings, see Directory.Packages.props. -->
     <PackageReference Include="Xamarin.AndroidX.Collection.Ktx" />
     <PackageReference Include="Xamarin.AndroidX.Fragment.Ktx" />

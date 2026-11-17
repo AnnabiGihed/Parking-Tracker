@@ -328,6 +328,7 @@ APIs; the view models and the tests only see the interfaces.
 | `INotifier` | `ParkingDetection/Abstractions` | Asks for the notification permission (Android 13+) and shows one parking alert (title, body; a tap opens the app) | host, `NotificationCompat`, channel `parking_alerts` |
 | `IAlarmScheduler` | `ParkingDetection/Abstractions` | Schedules the timer reminders (10 minutes before the end and at the end; ids 4101 and 4102), cancels them, says whether exact alarms are allowed and opens the system screen for them | host, `AlarmManager`: `SetExactAndAllowWhileIdle` when `CanScheduleExactAlarms()`, else `SetAndAllowWhileIdle` (result `AlarmPrecision.Inexact`) |
 | `IParkingWatchService` | `ParkingDetection/Abstractions` | Starts and stops the background service that follows the position for the parking alerts | host, foreground service of type `location` |
+| `ICardTextReader` | `Cards/Abstractions` | Takes or picks a photo of the card and returns the text on it (`Result<string>`); the user leaving the camera is the failure code `CardScan.Cancelled`, a refused camera and picker `CardScan.Unavailable`, a photo that cannot be read `CardScan.Failed` | host, MAUI `MediaPicker` and ML Kit text recognition (Latin, on the device) |
 | `IAppVisibility` | `ParkingDetection/Abstractions` | Says whether the app is on screen, so that a parking alert becomes a message and a check instead of a notification | host, the window events (`Activated`, `Deactivated`, `Stopped`) |
 
 `ISettingsStore` keeps the values of the first version of the app (`pt.card`, `pt.car`, `pt.timer`, `pt.bgAlerts`,
@@ -362,6 +363,21 @@ the module's functions.
 `Lifecycle.LiveData`, `Lifecycle.LiveData.Core.Ktx`, `Lifecycle.Process`) to the versions that Google Play services Location
 lifts their base libraries to; otherwise restore fails with NU1608. Check these pins again whenever MAUI or Play services
 Location is upgraded, and remove the ones the new versions no longer need.
+
+The card scan (ADR-0003) works in three steps. `ReadCardQuery` (Application, `Cards/Queries/ReadCard`) asks
+`ICardTextReader` for the text of a photo and passes it to `CardTextParser`, a port of `parseCardText` of the first
+version (same patterns and heuristics: number with `8` and `O` repairs, validity range, plate, municipality and City
+sector by French or Dutch name, tolerance codes; every pattern has a one-second match timeout), which returns a
+`ParsedCard` with only the fields it found. `CardViewModel.ScanAsync` fills just those fields, shows "Filled: ...
+Please double-check." or "Could not read the card - please type the fields." and stays silent when the user walked
+away; nothing is saved until "Save card". `MlKitCardTextReader` (host, `Features/Cards`) asks for the camera permission
+when the user taps the button, captures with `MediaPicker.CapturePhotoAsync` and falls back to `PickPhotoAsync` when
+the camera is unsupported or refused, copies the photo to a private cache file, recognises it with
+`Xamarin.Google.MLKit.TextRecognition` 116.0.1.9 and deletes the copy and the picker's temporary file whatever the
+outcome: no image leaves the phone. The manifest declares `CAMERA` (and an optional camera feature) and the
+`IMAGE_CAPTURE` and `GET_CONTENT` queries; MAUI Essentials brings the file provider the camera writes to. The camera
+and the recognition cannot be driven on a CI emulator, so the emulator test checks the parsing through
+`ptTest.parseCardText`; the rest needs a check with a real card on a phone.
 
 The parking alerts (ADR-0002) add this to the host, in `Features/ParkingDetection/`:
 
@@ -676,9 +692,10 @@ separate pull requests into `chore/maui-migration` (or separate reviewed commits
    on the new app.
 6. **Platform services, OCR, migration.** ADR-0002, ADR-0003, ADR-0004. Stage 6a (parking alerts, notifications and
    timer; written, to be proven by its first CI run): the foreground service, `INotifier`, `IAlarmScheduler`, the boot
-   receiver, the car dialog switch and timer, and the emulator checks above. Stages 6b (OCR) and 6c (migration of saved
-   data) follow. Done when the emulator test's background parking alert and timer checks pass and the upgrade test shows
-   the card kept.
+   receiver, the car dialog switch and timer, and the emulator checks above. Stage 6b (card photo scan; written, to be
+   proven by its first CI run and a check with a real card on a phone): `ICardTextReader`, `CardTextParser`,
+   `MlKitCardTextReader` and the scan button of the card dialog. Stage 6c (migration of saved data) follows. Done when
+   the emulator test's background parking alert and timer checks pass and the upgrade test shows the card kept.
 7. **CI and cut-over.** Final `android.yml` (version and certificate guards, test-hooks build, release on `main`
    only); delete `android/`, `capacitor.config.json`, `package.json`, `www` build, `sw.js`, `manifest.webmanifest`,
    `tools/dev-server.mjs`, `tools/build-web.mjs`, root JavaScript and data scripts; update `README.md` (install,

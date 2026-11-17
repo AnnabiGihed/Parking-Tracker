@@ -34,11 +34,24 @@
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
   <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+  <!--
+    Card photo scan (ADR-0003): the camera permission is asked when the user taps "Scan my card"; without a camera the photo picker
+    is used. The photo is read on the device and deleted. MAUI declares its own file provider for the camera's output.
+  -->
+  <uses-permission android:name="android.permission.CAMERA" />
+  <uses-feature android:name="android.hardware.camera" android:required="false" />
   <!-- Short pulses when the position becomes covered or not covered. -->
   <uses-permission android:name="android.permission.VIBRATE" />
 
-  <!-- Android 11+: allow opening Waze, Google Maps, payment pages and e-mail links. -->
+  <!-- Android 11+: allow opening Waze, Google Maps, payment pages and e-mail links, and see the camera and photo picker apps. -->
   <queries>
+    <intent>
+      <action android:name="android.media.action.IMAGE_CAPTURE" />
+    </intent>
+    <intent>
+      <action android:name="android.intent.action.GET_CONTENT" />
+      <data android:mimeType="image/*" />
+    </intent>
     <intent>
       <action android:name="android.intent.action.VIEW" />
       <data android:scheme="https" />

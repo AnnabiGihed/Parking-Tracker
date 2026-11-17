@@ -7,6 +7,11 @@
             <h2>My parking card</h2>
             <button type="button" class="icon-btn" aria-label="Close" @onclick="OnClose"><Icon Name="close" /></button>
         </div>
+        <button type="button" id="scanBtn" class="scan" disabled="@ViewModel.IsScanning" @onclick="OnScanAsync">
+            <Icon Name="camera" />
+            <span><b>Scan my card</b><small>Take a photo, we fill in the fields</small></span>
+        </button>
+        <div id="scanStatus" class="muted small" role="status">@ViewModel.ScanStatus</div>
         <div class="field">
             <label for="muniSelect">Municipality that issued the card</label>
             <select name="municipality" id="muniSelect" value="@ViewModel.MunicipalityId" @onchange="OnMunicipalityChangedAsync">

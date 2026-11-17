@@ -1,5 +1,7 @@
 using Bunit;
 using NSubstitute;
+using ParkingTracker.Application.Features.Cards.Queries.ReadCard;
+using ParkingTracker.Application.Features.Cards.Services;
 using ParkingTracker.Application.Features.Sectors.Queries.GetMailles;
 using ParkingTracker.Domain.Features.Cards.ValueObjects;
 using ParkingTracker.Domain.Features.Zones.ValueObjects;
@@ -14,7 +16,7 @@ namespace ParkingTracker.Shared.Tests.Features.Card.Components;
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
 /// Purpose     : Component tests for the card line, the card button and the card dialog: the dialog saves a typed card through the
-///              settings store, shows the areas of a municipality with areas, has no scan section, and the card line warns before expiry.
+///              settings store, shows the areas of a municipality with areas, has the scan button and fills the fields it found, and the card line warns before expiry.
 /// </summary>
 public sealed class CardDialogTests : UiTestContext
 {
@@ -99,17 +101,37 @@ public sealed class CardDialogTests : UiTestContext
 	}
 
 	/// <summary>
-	/// Verifies that the dialog has no card photo scan, which is a later stage.
+	/// Verifies that the dialog shows the scan button and an empty status line, and keeps its closing note.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
-	public async Task Render_Open_ShouldHaveNoScanSection()
+	public async Task Render_Open_ShouldShowTheScanButton()
 	{
 		var cut = Render<CardDialog>();
 		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
 
-		cut.FindAll(".scan, #scanInput").Should().BeEmpty();
+		cut.Find("#scanBtn").TextContent.Should().Contain("Scan my card");
+		cut.Find("#scanStatus").TextContent.Should().BeEmpty();
 		cut.Markup.Should().Contain("Stored only on this phone.");
+	}
+
+	/// <summary>
+	/// Verifies that the scan button fills the fields that were read and shows the line that asks the user to check them.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Scan_FieldsRead_ShouldFillTheFormAndAskToCheck()
+	{
+		Sender.Send(Arg.Any<ReadCardQuery>(), Arg.Any<CancellationToken>())
+			.Returns(Result.Success(new ParsedCard("B012-345-678", "1ABC234", null, null, null, null, [])));
+		var cut = Render<CardDialog>();
+		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
+
+		await cut.Find("#scanBtn").ClickAsync();
+
+		cut.Find("#cardNumber").GetAttribute("value").Should().Be("B012-345-678");
+		cut.Find("#cardPlate").GetAttribute("value").Should().Be("1ABC234");
+		cut.Find("#scanStatus").TextContent.Should().Be("Filled: number, plate. Please double-check.");
 	}
 	#endregion
 

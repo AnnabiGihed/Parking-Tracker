@@ -1,4 +1,7 @@
 using NSubstitute;
+using ParkingTracker.Application.Features.Cards.Abstractions;
+using ParkingTracker.Application.Features.Cards.Queries.ReadCard;
+using ParkingTracker.Application.Features.Cards.Services;
 using ParkingTracker.Application.Features.Sectors.Queries.GetMailles;
 using ParkingTracker.Application.Features.Sectors.Queries.GetOfficialListStatus;
 using ParkingTracker.Domain.Features.Cards.ValueObjects;
@@ -15,7 +18,8 @@ namespace ParkingTracker.ViewModels.Tests.Features.Card;
 /// Date        : 11-2026
 /// Purpose     : Unit tests for <see cref="CardViewModel"/>: the form starts from the saved card or the defaults, saving writes the
 ///              normalised card through the settings store, the areas of a municipality are loaded once, and the official-list
-///              status is read again only when it is stale.
+///              status is read again only when it is stale. Scanning a photo fills only the fields that were found and says so, stays quiet when
+///              the user walks away, and shows any other failure.
 /// </summary>
 public sealed class CardViewModelTests
 {
@@ -105,6 +109,160 @@ public sealed class CardViewModelTests
 		ui.Card.FormError.Should().Be("Enter the dates the card is valid from and until.");
 		_ = ui.Settings.DidNotReceiveWithAnyArgs().SaveCardAsync(default!);
 		ui.Card.IsOpen.Should().BeTrue();
+	}
+	#endregion
+
+	#region Scan Tests
+	/// <summary>
+	/// Verifies that a scan fills the fields it found, keeps the others and says which were filled.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Scan_FieldsFound_ShouldFillOnlyThemAndAskToCheck()
+	{
+		using var ui = new UiFixture();
+		await ui.Card.OpenAsync();
+		ui.Card.Plate = "1OLD000";
+		ui.Sender.Send(Arg.Any<ReadCardQuery>(), Arg.Any<CancellationToken>())
+			.Returns(Result.Success(new ParsedCard("B012-345-678", null, new DateOnly(2026, 3, 1), new DateOnly(2027, 2, 28), null, null, [])));
+
+		await ui.Card.ScanAsync();
+
+		ui.Card.Number.Should().Be("B012-345-678");
+		ui.Card.Plate.Should().Be("1OLD000");
+		ui.Card.ValidFrom.Should().Be("2026-03-01");
+		ui.Card.ValidTo.Should().Be("2027-02-28");
+		ui.Card.ScanStatus.Should().Be("Filled: number, from, to. Please double-check.");
+		ui.Card.IsScanning.Should().BeFalse();
+	}
+
+	/// <summary>
+	/// Verifies that a found municipality and tolerance code are applied to the form, and that the codes already ticked are kept.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Scan_MunicipalityAndTolerance_ShouldSelectThem()
+	{
+		using var ui = new UiFixture();
+		await ui.Card.OpenAsync();
+		ui.Sender.Send(Arg.Any<ReadCardQuery>(), Arg.Any<CancellationToken>())
+			.Returns(Result.Success(new ParsedCard(null, null, null, null, "bruxelles", "louise", ["IXL_LOUISE"])));
+
+		await ui.Card.ScanAsync();
+
+		ui.Card.MunicipalityId.Should().Be("bruxelles");
+		ui.Card.SectorId.Should().Be("louise");
+		ui.Card.SelectedTolerances.Should().Equal("IXL_LOUISE");
+		ui.Card.ScanStatus.Should().Be("Filled: municipality, sector, tolerances. Please double-check.");
+	}
+
+	/// <summary>
+	/// Verifies that a found municipality with areas loads its areas.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Scan_MunicipalityWithAreas_ShouldLoadTheAreas()
+	{
+		using var ui = new UiFixture();
+		await ui.Card.OpenAsync();
+		ui.Sender.Send(Arg.Any<ReadCardQuery>(), Arg.Any<CancellationToken>())
+			.Returns(Result.Success(new ParsedCard(null, null, null, null, "ixelles", null, [])));
+		ui.Sender.Send(Arg.Any<GetMaillesQuery>(), Arg.Any<CancellationToken>())
+			.Returns(Result.Success(new GetMaillesResponse([new MailleOption("IXLR_2", "Ixelles 2")], [])));
+
+		await ui.Card.ScanAsync();
+
+		ui.Card.MunicipalityId.Should().Be("ixelles");
+		ui.Card.SectorId.Should().BeNull();
+		ui.Card.MailleState.Should().Be(MailleLoadState.Loaded);
+	}
+
+	/// <summary>
+	/// Verifies that a photo without any field asks the user to type them and changes nothing.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Scan_NothingFound_ShouldAskToTypeTheFields()
+	{
+		using var ui = new UiFixture();
+		await ui.Card.OpenAsync();
+		ui.Card.Number = "keep";
+		ui.Sender.Send(Arg.Any<ReadCardQuery>(), Arg.Any<CancellationToken>())
+			.Returns(Result.Success(new ParsedCard(null, null, null, null, null, null, [])));
+
+		await ui.Card.ScanAsync();
+
+		ui.Card.ScanStatus.Should().Be("Could not read the card — please type the fields.");
+		ui.Card.Number.Should().Be("keep");
+	}
+
+	/// <summary>
+	/// Verifies that a user who leaves the camera sees no message.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Scan_UserCancelled_ShouldShowNothing()
+	{
+		using var ui = new UiFixture();
+		ui.Sender.Send(Arg.Any<ReadCardQuery>(), Arg.Any<CancellationToken>()).Returns(Result.Failure<ParsedCard>(CardScanErrors.Cancelled()));
+
+		await ui.Card.ScanAsync();
+
+		ui.Card.ScanStatus.Should().BeEmpty();
+		ui.Card.IsScanning.Should().BeFalse();
+	}
+
+	/// <summary>
+	/// Verifies that another failure is shown to the user.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Scan_Failed_ShouldShowTheReason()
+	{
+		using var ui = new UiFixture();
+		ui.Sender.Send(Arg.Any<ReadCardQuery>(), Arg.Any<CancellationToken>()).Returns(Result.Failure<ParsedCard>(CardScanErrors.Unavailable("Camera access was refused.")));
+
+		await ui.Card.ScanAsync();
+
+		ui.Card.ScanStatus.Should().Be("Scan failed: Camera access was refused.");
+	}
+
+	/// <summary>
+	/// Verifies that the scan is marked as running while it reads, and that a second call meanwhile is ignored.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Scan_WhileScanning_ShouldIgnoreASecondCall()
+	{
+		using var ui = new UiFixture();
+		var pending = new TaskCompletionSource<Result<ParsedCard>>();
+		ui.Sender.Send(Arg.Any<ReadCardQuery>(), Arg.Any<CancellationToken>()).Returns(pending.Task);
+
+		var first = ui.Card.ScanAsync();
+		await ui.Card.ScanAsync();
+		ui.Card.IsScanning.Should().BeTrue();
+		ui.Card.ScanStatus.Should().Be("Reading the card…");
+		pending.SetResult(Result.Success(new ParsedCard(null, null, null, null, null, null, [])));
+		await first;
+
+		await ui.Sender.Received(1).Send(Arg.Any<ReadCardQuery>(), Arg.Any<CancellationToken>());
+		ui.Card.IsScanning.Should().BeFalse();
+	}
+
+	/// <summary>
+	/// Verifies that opening the dialog clears the line of an earlier scan.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Open_AfterAScan_ShouldClearTheScanStatus()
+	{
+		using var ui = new UiFixture();
+		ui.Sender.Send(Arg.Any<ReadCardQuery>(), Arg.Any<CancellationToken>()).Returns(Result.Failure<ParsedCard>(CardScanErrors.Failed("boom")));
+		await ui.Card.ScanAsync();
+
+		await ui.Card.OpenAsync();
+
+		ui.Card.ScanStatus.Should().BeEmpty();
 	}
 	#endregion
 

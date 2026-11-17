@@ -194,6 +194,9 @@ button, input, select { font: inherit; color: inherit; }
 .scan { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1.5px dashed var(--brand); border-radius: 14px; cursor: pointer; color: var(--fg); }
 .scan > span:first-child { color: var(--brand); }
 .scan small { display: block; color: var(--muted); font-size: 12.5px; }
+button.scan { width: 100%; margin-bottom: 8px; background: transparent; text-align: left; }
+.scan .ic { flex: none; width: 24px; height: 24px; color: var(--brand); }
+.scan:disabled { opacity: .6; cursor: progress; }
 .check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; background: var(--surface-2); padding: 10px 12px; border-radius: 12px; }
 .check input { margin-top: 2px; width: 18px; height: 18px; flex: none; accent-color: var(--brand); }
 .check small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }

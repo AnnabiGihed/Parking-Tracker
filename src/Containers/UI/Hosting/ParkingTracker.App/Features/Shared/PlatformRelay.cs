@@ -94,10 +94,10 @@ public sealed partial class PlatformRelay : ComponentBase, IDisposable
 	public ParkingWatcher Watcher { get; set; } = null!;
 
 	/// <summary>
-	/// Gets or sets the messages of the screen.
+	/// Gets or sets the reaction of the screen to a parking found while the app is on screen.
 	/// </summary>
 	[Inject]
-	public ToastViewModel Toast { get; set; } = null!;
+	public ParkedOnScreenResponder ParkedResponder { get; set; } = null!;
 
 	/// <summary>
 	/// Gets or sets the clock that times the wait before the notification question.
@@ -200,9 +200,7 @@ public sealed partial class PlatformRelay : ComponentBase, IDisposable
 	{
 		try
 		{
-			Toast.Show($"🚗 Parked: {e.Headline}");
-			await Car.LoadAsync().ConfigureAwait(false);
-			await Spot.CheckParkedPlaceAsync(e.Point, e.AccuracyMetres).ConfigureAwait(false);
+			await ParkedResponder.RespondAsync(e).ConfigureAwait(false);
 		}
 		catch (Exception exception)
 		{
