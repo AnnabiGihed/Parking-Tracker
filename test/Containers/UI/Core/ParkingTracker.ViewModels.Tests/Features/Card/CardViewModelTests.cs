@@ -250,6 +250,40 @@ public sealed class CardViewModelTests
 	}
 
 	/// <summary>
+	/// Verifies that an unexpected exception of the scan is shown as a failure and the scan is not left running.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Scan_UnexpectedException_ShouldShowTheFailureAndStopScanning()
+	{
+		using var ui = new UiFixture();
+		ui.Sender.Send(Arg.Any<ReadCardQuery>(), Arg.Any<CancellationToken>()).Returns<Task<Result<ParsedCard>>>(_ => throw new InvalidOperationException("boom"));
+
+		await ui.Card.ScanAsync();
+
+		ui.Card.ScanStatus.Should().Be("Scan failed: boom");
+		ui.Card.IsScanning.Should().BeFalse();
+	}
+
+	/// <summary>
+	/// Verifies that a scan that found a tolerance code but no sector keeps the sector the user chose.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Scan_NoSectorFound_ShouldKeepTheChosenSector()
+	{
+		using var ui = new UiFixture();
+		await ui.Card.OpenAsync();
+		ui.Card.SelectSector("chosen");
+		ui.Sender.Send(Arg.Any<ReadCardQuery>(), Arg.Any<CancellationToken>())
+			.Returns(Result.Success(new ParsedCard("B012-345-678", null, null, null, "bruxelles", null, [])));
+
+		await ui.Card.ScanAsync();
+
+		ui.Card.SectorId.Should().Be("chosen");
+	}
+
+	/// <summary>
 	/// Verifies that opening the dialog clears the line of an earlier scan.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>

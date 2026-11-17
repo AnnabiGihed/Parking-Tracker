@@ -288,6 +288,10 @@ public sealed class CardViewModel : ViewModelBase
 		{
 			ScanStatus = string.Empty;
 		}
+		catch (Exception exception) when (exception is not OperationCanceledException)
+		{
+			ScanStatus = "Scan failed: " + exception.Message;
+		}
 		finally
 		{
 			IsScanning = false;
@@ -431,7 +435,7 @@ public sealed class CardViewModel : ViewModelBase
 	#region Private Helpers
 	/// <summary>
 	/// Puts the fields found on a photo into the form and says what was filled. A new municipality, sector or tolerance code shows
-	/// the sector part of the form again as the first version did: the sector defaults to the first one, the tolerance codes
+	/// the sector part of the form again as the first version did: the sector the user chose is kept when the scan found none (the first one when there was none), the tolerance codes
 	/// already ticked are kept next to the new ones, and the areas of another municipality start unticked.
 	/// </summary>
 	/// <param name="card">The fields that were found.</param>
@@ -455,7 +459,7 @@ public sealed class CardViewModel : ViewModelBase
 
 		MunicipalityId = card.MunicipalityId ?? MunicipalityId;
 		var tolerances = SelectedTolerances.Concat(card.Tolerances).ToList();
-		Select(SelectedMunicipality?.Kind == MunicipalityKind.Streets ? card.SectorId ?? DefaultSectorId : null, tolerances, null, null);
+		Select(SelectedMunicipality?.Kind == MunicipalityKind.Streets ? card.SectorId ?? SectorId ?? DefaultSectorId : null, tolerances, null, null);
 		SelectedTolerances.IntersectWith(Tolerances.Select(tolerance => tolerance.Code));
 		NotifyChanged();
 		await LoadMaillesAsync(cancellationToken).ConfigureAwait(false);

@@ -32,30 +32,42 @@ public sealed record ParsedCard(
 		get
 		{
 			var found = new List<string>();
-			AddWhen(found, Number is not null, "number");
-			AddWhen(found, ValidFrom is not null, "from");
-			AddWhen(found, ValidTo is not null, "to");
-			AddWhen(found, Plate is not null, "plate");
-			AddWhen(found, MunicipalityId is not null, "municipality");
-			AddWhen(found, SectorId is not null, "sector");
-			AddWhen(found, Tolerances.Count > 0, "tolerances");
-			return found;
-		}
-	}
-	#endregion
+			if (Number is not null)
+			{
+				found.Add("number");
+			}
 
-	#region Private Helpers
-	/// <summary>
-	/// Adds a field name when the field was found.
-	/// </summary>
-	/// <param name="names">The list to add to.</param>
-	/// <param name="isFound">Whether the field was found.</param>
-	/// <param name="name">The name of the field.</param>
-	private static void AddWhen(List<string> names, bool isFound, string name)
-	{
-		if (isFound)
-		{
-			names.Add(name);
+			if (ValidFrom is not null)
+			{
+				found.Add("from");
+			}
+
+			if (ValidTo is not null)
+			{
+				found.Add("to");
+			}
+
+			if (Plate is not null)
+			{
+				found.Add("plate");
+			}
+
+			if (MunicipalityId is not null)
+			{
+				found.Add("municipality");
+			}
+
+			if (SectorId is not null)
+			{
+				found.Add("sector");
+			}
+
+			if (Tolerances.Count > 0)
+			{
+				found.Add("tolerances");
+			}
+
+			return found;
 		}
 	}
 	#endregion

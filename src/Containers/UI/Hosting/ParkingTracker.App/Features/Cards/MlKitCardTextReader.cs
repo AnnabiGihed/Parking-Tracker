@@ -18,7 +18,9 @@ namespace ParkingTracker.App.Features.Cards;
 ///              <c>MediaPicker.CapturePhotoAsync</c>), or picks one with <c>PickPhotoAsync</c> when the camera is not supported
 ///              or its permission is refused, and Google ML Kit recognises the text in the Latin script on the device. The photo
 ///              never leaves the phone: it is copied to a private cache file for the recognition, and that copy and the picker's own
-///              temporary file are deleted afterwards, whatever the outcome. Leaving the camera or the picker without a photo is the
+///              temporary file are deleted afterwards, whatever the outcome (the copy once ML Kit has stopped using it); copies left
+///              by an earlier run that was killed are swept at the start of a scan. A recognition that takes longer than
+///              <see cref="RecognitionTimeout"/>, or any other failure, is <see cref="CardScanErrors.FailedCode"/>. Leaving the camera or the picker without a photo is the
 ///              failure <see cref="CardScanErrors.CancelledCode"/>.
 /// </summary>
 /// <remarks>
@@ -37,6 +39,13 @@ public sealed partial class MlKitCardTextReader : ICardTextReader
 	/// The prefix of the private cache file that holds the photo while it is read.
 	/// </summary>
 	private const string CacheFilePrefix = "card-scan-";
+	#endregion
+
+	#region Static Instances
+	/// <summary>
+	/// The longest the recognition may take before the scan is given up as failed.
+	/// </summary>
+	private static readonly TimeSpan RecognitionTimeout = TimeSpan.FromSeconds(30);
 	#endregion
 
 	#region Fields
@@ -63,6 +72,7 @@ public sealed partial class MlKitCardTextReader : ICardTextReader
 	/// <inheritdoc />
 	public async Task<Result<string>> ReadTextAsync(CancellationToken cancellationToken)
 	{
+		SweepStaleCopies();
 		FileResult? photo;
 		try
 		{
@@ -72,6 +82,11 @@ public sealed partial class MlKitCardTextReader : ICardTextReader
 		{
 			LogNoPhotoSource(logger, exception);
 			return Result.Failure<string>(CardScanErrors.Unavailable("The camera and the photo picker cannot be used. Check the permissions of the app, or type the fields."));
+		}
+		catch (Exception exception) when (exception is not OperationCanceledException)
+		{
+			LogRecognitionFailed(logger, exception);
+			return Result.Failure<string>(CardScanErrors.Failed(exception.Message));
 		}
 
 		if (photo is null)
@@ -88,11 +103,10 @@ public sealed partial class MlKitCardTextReader : ICardTextReader
 		catch (Exception exception) when (exception is not OperationCanceledException)
 		{
 			LogRecognitionFailed(logger, exception);
-			return Result.Failure<string>(CardScanErrors.Failed("The photo could not be read."));
+			return Result.Failure<string>(CardScanErrors.Failed(exception is TimeoutException ? "Reading the photo took too long." : "The photo could not be read."));
 		}
 		finally
 		{
-			DeleteQuietly(copy);
 			DeleteQuietly(photo.FullPath);
 		}
 	}
@@ -135,43 +149,123 @@ public sealed partial class MlKitCardTextReader : ICardTextReader
 	/// <param name="photo">The photo from the camera or the picker.</param>
 	/// <param name="path">The cache file to write.</param>
 	/// <param name="cancellationToken">Cancels the copy.</param>
-	/// <returns>A task that completes when the file is written.</returns>
+	/// <returns>A task that completes when the file is written; a partly written file is deleted when the copy fails.</returns>
 	private static async Task CopyAsync(FileResult photo, string path, CancellationToken cancellationToken)
 	{
-		var source = await photo.OpenReadAsync().ConfigureAwait(false);
-		await using (source.ConfigureAwait(false))
+		try
 		{
-			var target = File.Create(path);
-			await using (target.ConfigureAwait(false))
+			var source = await photo.OpenReadAsync().ConfigureAwait(false);
+			await using (source.ConfigureAwait(false))
 			{
-				await source.CopyToAsync(target, cancellationToken).ConfigureAwait(false);
+				var target = File.Create(path);
+				await using (target.ConfigureAwait(false))
+				{
+					await source.CopyToAsync(target, cancellationToken).ConfigureAwait(false);
+				}
 			}
+		}
+		catch
+		{
+			DeleteQuietly(path);
+			throw;
 		}
 	}
 
 	/// <summary>
-	/// Recognises the Latin text of a photo with the bundled ML Kit model, on the device.
+	/// Recognises the Latin text of a photo with the bundled ML Kit model, on the device. The recognizer, the image and the listener
+	/// stay alive until the ML Kit task has completed, even when the wait is cancelled or times out, and the photo file is deleted
+	/// only after that.
 	/// </summary>
-	/// <param name="path">The photo file.</param>
+	/// <param name="path">The photo file, which this method deletes once ML Kit is done with it.</param>
 	/// <param name="cancellationToken">Stops waiting for the answer; ML Kit itself cannot be interrupted.</param>
 	/// <returns>A task with the text, one line per line on the card; empty when the photo holds no text.</returns>
+	/// <exception cref="TimeoutException">Thrown when the recognition took longer than <see cref="RecognitionTimeout"/>.</exception>
 	private static async Task<string> RecognizeAsync(string path, CancellationToken cancellationToken)
 	{
-		using var recognizer = TextRecognition.GetClient(TextRecognizerOptions.DefaultOptions);
-		var uri = AndroidUri.FromFile(new Java.IO.File(path)) ?? throw new InvalidOperationException("The photo file has no address.");
-		using var image = InputImage.FromFilePath(Platform.AppContext, uri);
-		using var listener = new RecognitionListener();
-		recognizer.Process(image).AddOnSuccessListener(listener).AddOnFailureListener(listener);
-		return await listener.Completion.WaitAsync(cancellationToken).ConfigureAwait(false);
+		TextRecognizer? recognizer = null;
+		InputImage? image = null;
+		RecognitionListener? listener = null;
+		try
+		{
+			recognizer = TextRecognition.GetClient(TextRecognizerOptions.DefaultOptions);
+			var uri = AndroidUri.FromFile(new Java.IO.File(path)) ?? throw new InvalidOperationException("The photo file has no address.");
+			image = InputImage.FromFilePath(Platform.AppContext, uri);
+			listener = new RecognitionListener();
+			recognizer.Process(image).AddOnSuccessListener(listener).AddOnFailureListener(listener);
+		}
+		catch
+		{
+			Release(recognizer, image, listener, path);
+			throw;
+		}
+
+		var completion = listener.Completion;
+		_ = completion.ContinueWith(
+			finished =>
+			{
+				_ = finished.Exception;
+				Release(recognizer, image, listener, path);
+			},
+			CancellationToken.None,
+			TaskContinuationOptions.ExecuteSynchronously,
+			TaskScheduler.Default);
+		using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+		timeout.CancelAfter(RecognitionTimeout);
+		try
+		{
+			return await completion.WaitAsync(timeout.Token).ConfigureAwait(false);
+		}
+		catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+		{
+			throw new TimeoutException("The text recognition did not answer in time.");
+		}
 	}
 
 	/// <summary>
-	/// Deletes a temporary photo; a file that is not there or cannot be deleted is left, because there is nothing more to do.
+	/// Disposes what a recognition used and deletes its photo file.
 	/// </summary>
-	/// <param name="path">The file, which may be <see langword="null"/> or outside the cache of the app.</param>
+	/// <param name="recognizer">The ML Kit client, or <see langword="null"/> when it was not created.</param>
+	/// <param name="image">The input image, or <see langword="null"/> when it was not created.</param>
+	/// <param name="listener">The listener, or <see langword="null"/> when it was not created.</param>
+	/// <param name="path">The photo file.</param>
+	private static void Release(TextRecognizer? recognizer, InputImage? image, RecognitionListener? listener, string path)
+	{
+		listener?.Dispose();
+		image?.Dispose();
+		recognizer?.Dispose();
+		DeleteQuietly(path);
+	}
+
+	/// <summary>
+	/// Deletes the photo copies that an earlier scan left behind, for example because the app was killed during it.
+	/// </summary>
+	private static void SweepStaleCopies()
+	{
+		try
+		{
+			foreach (var stale in Directory.EnumerateFiles(FileSystem.CacheDirectory, CacheFilePrefix + "*"))
+			{
+				DeleteQuietly(stale);
+			}
+		}
+		catch (IOException)
+		{
+			// The system clears the cache later.
+		}
+		catch (UnauthorizedAccessException)
+		{
+			// The system clears the cache later.
+		}
+	}
+
+	/// <summary>
+	/// Deletes a temporary photo file this class created or was given; a file that is not there or cannot be deleted is left, because
+	/// there is nothing more to do.
+	/// </summary>
+	/// <param name="path">The file, which may be <see langword="null"/>.</param>
 	private static void DeleteQuietly(string? path)
 	{
-		if (string.IsNullOrEmpty(path) || !path.StartsWith(FileSystem.CacheDirectory, StringComparison.Ordinal))
+		if (string.IsNullOrEmpty(path))
 		{
 			return;
 		}

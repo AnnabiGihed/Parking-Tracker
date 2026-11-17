@@ -373,8 +373,13 @@ Please double-check." or "Could not read the card - please type the fields." and
 away; nothing is saved until "Save card". `MlKitCardTextReader` (host, `Features/Cards`) asks for the camera permission
 when the user taps the button, captures with `MediaPicker.CapturePhotoAsync` and falls back to `PickPhotoAsync` when
 the camera is unsupported or refused, copies the photo to a private cache file, recognises it with
-`Xamarin.Google.MLKit.TextRecognition` 116.0.1.9 and deletes the copy and the picker's temporary file whatever the
-outcome: no image leaves the phone. The manifest declares `CAMERA` (and an optional camera feature) and the
+`Xamarin.Google.MLKit.TextRecognition` 116.0.1.9 (with a 30 second limit, after which the scan fails with
+`CardScan.Failed`) and deletes the copy, once ML Kit has finished with it, and the picker's temporary file whatever the
+outcome; copies left by a killed run are swept at the start of the next scan: no image leaves the phone. Any other
+failure of the camera, the picker or the recognition is `CardScan.Failed` and `CardViewModel.ScanAsync` shows it as
+"Scan failed: ...". Both handlers that read a text (`ReadCardQuery`, `ParseCardTextQuery`) share one step,
+`CardTextReading`, which loads the reference data, runs `CardTextParser` and turns a match timeout into
+`CardScan.Failed`. The manifest declares `CAMERA` (and an optional camera feature) and the
 `IMAGE_CAPTURE` and `GET_CONTENT` queries; MAUI Essentials brings the file provider the camera writes to. The camera
 and the recognition cannot be driven on a CI emulator, so the emulator test checks the parsing through
 `ptTest.parseCardText`; the rest needs a check with a real card on a phone.

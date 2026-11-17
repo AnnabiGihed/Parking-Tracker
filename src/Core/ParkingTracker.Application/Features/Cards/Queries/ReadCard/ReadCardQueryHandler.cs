@@ -1,5 +1,4 @@
 using ParkingTracker.Application.Features.Cards.Abstractions;
-using ParkingTracker.Application.Features.Cards.Queries.ParseCardText;
 using ParkingTracker.Application.Features.Cards.Services;
 using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
 using Pivot.Framework.Application.Abstractions.Messaging.Queries;
@@ -48,7 +47,7 @@ public sealed class ReadCardQueryHandler : IQueryHandler<ReadCardQuery, ParsedCa
 		var text = await reader.ReadTextAsync(cancellationToken).ConfigureAwait(false);
 		return text.IsFailure
 			? Result.Failure<ParsedCard>(text.Error)
-			: ParseCardTextQueryHandler.Read(referenceData, text.Value);
+			: CardTextReading.Read(referenceData, text.Value);
 	}
 	#endregion
 }

@@ -150,12 +150,20 @@ public sealed class CardTextParserTests
 	}
 
 	/// <summary>
-	/// Verifies that a plate without a leading digit is read, and that lower case letters are not a plate.
+	/// Verifies that a plate without a leading digit is read.
 	/// </summary>
 	[Fact]
 	public void Parse_OldPlateOnly_ShouldReadIt()
 	{
 		CardTextParser.Parse("plaque ABC123", Data).Plate.Should().Be("ABC123");
+	}
+
+	/// <summary>
+	/// Verifies that lower case letters are not a plate.
+	/// </summary>
+	[Fact]
+	public void Parse_LowerCasePlate_ShouldNotReadIt()
+	{
 		CardTextParser.Parse("plaque abc123", Data).Plate.Should().BeNull();
 	}
 	#endregion
@@ -220,15 +228,24 @@ public sealed class CardTextParserTests
 	}
 
 	/// <summary>
-	/// Verifies that a missing argument is rejected.
+	/// Verifies that a missing text is rejected.
 	/// </summary>
 	[Fact]
-	public void Parse_NullArguments_ShouldThrow()
+	public void Parse_NullText_ShouldThrow()
 	{
 		var withoutText = () => CardTextParser.Parse(null!, Data);
-		var withoutData = () => CardTextParser.Parse("x", null!);
 
 		withoutText.Should().Throw<ArgumentNullException>();
+	}
+
+	/// <summary>
+	/// Verifies that missing reference data is rejected.
+	/// </summary>
+	[Fact]
+	public void Parse_NullData_ShouldThrow()
+	{
+		var withoutData = () => CardTextParser.Parse("x", null!);
+
 		withoutData.Should().Throw<ArgumentNullException>();
 	}
 	#endregion
