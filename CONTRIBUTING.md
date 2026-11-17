@@ -39,7 +39,8 @@ Review your own pull request against the author self-review checklist before you
 needs:
 
 1. Green checks: the **.NET quality gate** workflow (`.github/workflows/dotnet.yml`: restore, format check, Release
-   build, unit tests) and the **Android APK** workflow (`.github/workflows/android.yml`). The repository owner should
+   build, unit tests) and the **Android APK** workflow (`.github/workflows/android.yml`: build, version and certificate guards,
+   emulator test, upgrade test). The repository owner should
    mark the ".NET quality gate" and Android checks as required in the branch protection of `main`; until then they
    are expected, not enforced.
 2. One approval from the repository owner.
@@ -50,9 +51,10 @@ Pull requests are merged with squash, so the title follows Conventional Commits.
 
 ## Local setup
 
-You need the .NET SDK named in `global.json` (10.0.4xx), Python 3 and, for the data tools, Node 22 and `pdftotext`.
+You need the .NET SDK named in `global.json` (10.0.4xx), Python 3 and, for the data
+tools, `pdftotext`. Node 22 is needed only to run the E2E scripts.
 The Android build needs Android Studio or the Android SDK with JDK 21 and runs in CI; see
-[the Android section of the README](./README.md#android-app).
+[Build and test in the README](./README.md#build-and-test).
 
 The `Pivot.Framework.*` packages come from GitHub Packages, so restore needs a token. Set two environment variables in
 the shell that builds (details in [docs/architecture.md](./docs/architecture.md#41-build-the-net-solution)):
@@ -80,5 +82,6 @@ security advisory on this repository) and give the steps to reproduce.
 ## Releases
 
 Releases are built from `main` by the Android APK workflow, which signs the APK and publishes it on the
-[GitHub Releases page](https://github.com/AnnabiGihed/Parking-Tracker/releases) only when the emulator test passes.
+[GitHub Releases page](https://github.com/AnnabiGihed/Parking-Tracker/releases) only when the emulator test passes and
+the version and certificate guards hold.
 Every release gets its own `## [X.Y.Z] - YYYY-MM-DD` section in `CHANGELOG.md`.

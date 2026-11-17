@@ -3,10 +3,9 @@
 Usage:  python tools/verify_sectors.py
 Needs:  pdftotext (comes with Git for Windows / poppler / xpdf) on the PATH.
 
-Also checks, until the .NET cut-over, that the web copies still shipped (sectors.js, municipalities.js) and the City
-sectors JSON agree with the JSON files the .NET app reads.
+Also checks that the City sectors JSON (city-sectors.json) agrees with tolerance-sectors.json for the Louise sector.
 
-Exit code 0 = every street and every number range matches the official lists and the copies agree.
+Exit code 0 = every street and every number range matches the official lists and the two files agree.
 Exit code 1 = a mismatch; exit code 2 = an input file is missing or unreadable.
 """
 import json
@@ -23,11 +22,7 @@ SECTOR_PDF = BASE + "LOUISE.pdf"
 TOLERANCE_PDF = BASE + "accord%20limitrophe%20Louise%20-%20Ixelles.pdf"
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "src", "Infrastructure", "ParkingTracker.Infrastructure", "Data", "tolerance-sectors.json")
-SECTORS_JS = os.path.join(ROOT, "sectors.js")
-MUNICIPALITIES_JS = os.path.join(ROOT, "municipalities.js")
-MUNICIPALITIES_JSON = os.path.join(os.path.dirname(DATA), "municipalities.json")
 CITY_JSON = os.path.join(os.path.dirname(DATA), "city-sectors.json")
-SECTOR_ROW = re.compile(r"""\[\s*(['"])(.+?)\1,\s*(['"])(.+?)\3,\s*'(.*?)',\s*'(.*?)'\s*\]""")
 END = 10**6  # "à fin" / "tot einde"; the tolerance PDF writes this as 999, 1000 or 10000
 ALIASES = {"rue de tenbosch": "tenbosch"}
 
@@ -172,13 +167,6 @@ def app_tables(louise):
     return table(louise["streets"], True), table(louise["tolerances"][0]["streets"], False)
 
 
-def js_sector_rows():
-    """Raw rows (French, Dutch, odd, even) of the Louise block and of its tolerance block in sectors.js."""
-    base_src, _, tol_src = read_text(SECTORS_JS).partition("tolerances:")
-    rows = lambda src: [(m.group(2), m.group(4), m.group(5), m.group(6)) for m in SECTOR_ROW.finditer(src)]
-    return rows(base_src), rows(tol_src)
-
-
 def json_rows(rows):
     return [tuple(r[:4]) for r in rows]
 
@@ -198,48 +186,13 @@ def compare_rows(label, left_name, left, right_name, right):
     return errors
 
 
-def js_municipalities():
-    """id -> (kind, prefixes, lim) read from municipalities.js, in file order."""
-    src = re.sub(r"note:\s*'(?:[^'\\]|\\.)*'", "", read_text(MUNICIPALITIES_JS))
-    out = {}
-    for entry in re.split(r"\{\s*id:\s*'", src)[1:]:
-        mid = entry.split("'", 1)[0]
-        kind = re.search(r"kind:\s*'(\w+)'", entry)
-        lists = {name: re.search(name + r":\s*\[(.*?)\]", entry) for name in ("prefixes", "lim")}
-        items = lambda m: re.findall(r"'([^']*)'", m.group(1)) if m else []
-        out[mid] = (kind.group(1) if kind else None, items(lists["prefixes"]), items(lists["lim"]))
-    return out
-
-
-def check_municipalities():
-    js = js_municipalities()
-    data = {m["id"]: (m["kind"], m.get("prefixes", []), m.get("lim", [])) for m in read_json(MUNICIPALITIES_JSON)}
-    errors = 0
-    for mid in sorted(set(js) | set(data)):
-        if mid not in js:
-            print(f"  municipalities: only in municipalities.json: {mid}"); errors += 1
-        elif mid not in data:
-            print(f"  municipalities: only in municipalities.js: {mid}"); errors += 1
-        elif js[mid] != data[mid]:
-            print(f"  municipalities: {mid} differs\n     js   kind/prefixes/lim={js[mid]}\n     json kind/prefixes/lim={data[mid]}"); errors += 1
-    if not errors and list(js) != list(data):
-        print("  municipalities: same ids but in a different order in municipalities.js and municipalities.json"); errors += 1
-    print(f"Municipalities js vs json: {len(js)} in js, {len(data)} in json, {errors} problem(s)")
-    return errors
-
-
 def check_copies(louise):
-    """The web copies and the JSON the .NET app reads must say the same until the cut-over."""
-    js_base, js_tol = js_sector_rows()
-    errors = compare_rows("Louise sectors.js vs tolerance-sectors.json", "sectors.js", js_base, "json", json_rows(louise["streets"]))
-    errors += compare_rows("Ixelles tolerance sectors.js vs tolerance-sectors.json", "sectors.js", js_tol,
-                           "json", json_rows(louise["tolerances"][0]["streets"]))
+    """The City sectors JSON and tolerance-sectors.json must say the same about the Louise sector."""
     city = read_json(CITY_JSON).get("louise")
     if city is None:
         fail_input(f"{os.path.relpath(CITY_JSON, ROOT)} has no 'louise' sector")
-    errors += compare_rows("Louise city-sectors.json vs tolerance-sectors.json", "city", json_rows(city["streets"]),
-                           "tolerance", json_rows(louise["streets"]))
-    return errors + check_municipalities()
+    return compare_rows("Louise city-sectors.json vs tolerance-sectors.json", "city", json_rows(city["streets"]),
+                        "tolerance", json_rows(louise["streets"]))
 
 
 def compare(label, official, app):

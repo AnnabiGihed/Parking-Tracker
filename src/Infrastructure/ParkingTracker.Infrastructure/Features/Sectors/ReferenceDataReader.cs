@@ -39,7 +39,7 @@ internal static class ReferenceDataReader
 	/// Reads a sectors file: a JSON object keyed by sector identifier. Rows of a sector's <c>streets</c> read an empty
 	/// cell as the whole side; rows of a tolerance agreement read it as not covered
 	/// (<see cref="SectorStreet.EmptyMeansWholeSide"/>). The sector-level <c>"kind": "streets"</c> property of
-	/// <c>city-sectors.json</c> is deliberately ignored: it only mirrors the web copy and carries no information.
+	/// <c>city-sectors.json</c> is deliberately ignored: it carries no information.
 	/// </summary>
 	/// <param name="json">The file content.</param>
 	/// <param name="resourceName">The file name, used in the failure message.</param>

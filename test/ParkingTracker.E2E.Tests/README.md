@@ -1,8 +1,7 @@
 # Parking Tracker E2E tests
 
 The Android emulator test and the upgrade test of the .NET MAUI app. It replaces the API end-to-end test of a service
-([ADR-0006](../../docs/adr/0006-mobile-client-layout.md)) and ports `tools/emulator-test.mjs`, which stays in place for
-the Capacitor workflow until cut-over.
+([ADR-0006](../../docs/adr/0006-mobile-client-layout.md)) and ports the emulator test of the earlier Capacitor app.
 
 ## Run it
 
@@ -15,7 +14,7 @@ dotnet publish src/Containers/UI/Hosting/ParkingTracker.App/ParkingTracker.App.c
 node test/ParkingTracker.E2E.Tests/emulator-test.mjs path/to/ParkingTracker-test.apk
 ```
 
-The host builds only where the `maui-android` workload is installed; CI does it in `.github/workflows/maui-android.yml`.
+The host builds only where the `maui-android` workload is installed; CI does it in `.github/workflows/android.yml`.
 
 ## What it checks
 
@@ -45,9 +44,9 @@ code is 1 when a check fails.
 `upgrade-test.mjs` proves that the saved data of the Capacitor version survives the update to the MAUI version
 ([ADR-0004](../../docs/adr/0004-migrate-saved-data-from-the-capacitor-webview-once.md), reader of
 [ADR-0008](../../docs/adr/0008-read-capacitor-data-from-leveldb-with-a-web-view-fallback.md)). It needs two APKs of
-the same app id signed with the same key, the MAUI one with the higher versionCode: the Capacitor debug build (web view
+the same app id signed with the same key, the MAUI one with the higher versionCode: the Capacitor debug build of the Git tag `v1.0.11`, the last Capacitor release (web view
 debugging on) and the MAUI test-hooks build. `resign-apk.sh` signs both with a throwaway key and `version-code.sh`
-prints a versionCode; the workflow `maui-android.yml` (job `upgrade-test`) builds, signs and runs everything. Both
+prints a versionCode; the workflow `android.yml` (job `upgrade-test`) builds, signs and runs everything. Both
 scripts need `ANDROID_HOME`, echo each stage and report every failure as an `::error::` line on stderr.
 
 ```bash
@@ -55,9 +54,10 @@ export UPGRADE_KEY_PASSWORD=changeit
 keytool -genkeypair -keystore upgrade.p12 -storetype PKCS12 \
   -storepass "$UPGRADE_KEY_PASSWORD" -keypass "$UPGRADE_KEY_PASSWORD" \
   -alias upgrade -keyalg RSA -keysize 2048 -validity 2 -dname "CN=upgrade test"
-# after npm ci, npm run build and npx cap sync android:
-(cd android && VERSION_CODE=1 ./gradlew assembleDebug)
-bash test/ParkingTracker.E2E.Tests/resign-apk.sh android/app/build/outputs/apk/debug/app-debug.apk \
+# build the Capacitor app from the tag v1.0.11 (needs Node 22 and JDK 21):
+git worktree add ../parking-capacitor v1.0.11
+(cd ../parking-capacitor && npm ci && npm run build && npx cap sync android \n  && cd android && VERSION_CODE=1 ./gradlew assembleDebug)
+bash test/ParkingTracker.E2E.Tests/resign-apk.sh ../parking-capacitor/android/app/build/outputs/apk/debug/app-debug.apk \
   upgrade/capacitor.apk upgrade.p12 upgrade
 bash test/ParkingTracker.E2E.Tests/resign-apk.sh path/to/ParkingTracker-test.apk \
   upgrade/maui-test.apk upgrade.p12 upgrade
@@ -80,5 +80,5 @@ What it checks:
 - No JavaScript error, no unhandled .NET exception in logcat.
 
 The report goes to `upgrade-report/` (`summary.md` with the file list and the reader, `report.json`, `logcat.txt`,
-screenshots); the exit code is 1 when a check fails. The script is needed until the Capacitor code is deleted at
-cut-over.
+screenshots); the exit code is 1 when a check fails. The job runs on branch pushes, pull requests and on demand, and
+is skipped on pushes to `main`.

@@ -1,21 +1,6 @@
-node_modules/
-www/
 signing/
 *.jks
 *.keystore
-
-# Android build output (the android/ project itself is committed)
-android/.gradle/
-android/build/
-android/app/build/
-android/capacitor-cordova-android-plugins/build/
-android/local.properties
-android/app/src/main/assets/public/
-android/app/src/main/assets/capacitor.config.json
-android/app/src/main/assets/capacitor.plugins.json
-android/app/src/main/res/xml/config.xml
-android/capacitor-cordova-android-plugins/
-emulator-report/
 
 # .NET build output
 bin/
@@ -23,3 +8,7 @@ obj/
 artifacts/
 TestResults/
 .vs/
+
+# Emulator and upgrade test reports
+emulator-report/
+upgrade-report/
