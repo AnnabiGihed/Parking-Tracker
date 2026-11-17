@@ -1432,7 +1432,7 @@ API-served data reaches the public only in stage S10, after the licence question
 
 | Stage | Content | Done when |
 | --- | --- | --- |
-| S0 | ADR-0009 to ADR-0025 reviewed and accepted; upstream Pivot issues opened (Hangfire storage callback and expression jobs, policy-based dashboard filter, persistence registration without messaging, SQL Server provider split, a generic OIDC option) | Owner accepts the ADRs |
+| S0 | Done 2026-11-17: ADR-0009 to ADR-0025 accepted; upstream Pivot issues opened: AnnabiGihed/Pivot.Framework#5 (Hangfire storage and expression jobs), #6 (policy-based dashboard filter), #7 (persistence without messaging), #8 (SQL Server provider split), #9 (generic OIDC and user deletion) | Owner accepts the ADRs |
 | S1 | Phone domain: `ResidentCard`, `SavedPlaces`, `ParkingSession` aggregates and bridges, no storage change | Parity, domain and emulator tests green; APK released with no visible change |
 | S2 | Radzen foundation in `ParkingTracker.Shared`, then one dialog per pull request (welcome, card, car, layers, status sheet) | Each pull request: bUnit and emulator tests green, emulator selectors kept |
 | S3 | Budget spike, then device database, field encryption, settings migration, Home and Work places | Upgrade leg green; budget met or fallback ADR written |
