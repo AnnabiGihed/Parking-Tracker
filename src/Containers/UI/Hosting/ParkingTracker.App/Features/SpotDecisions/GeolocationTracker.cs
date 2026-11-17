@@ -118,25 +118,7 @@ public sealed partial class GeolocationTracker : ILocationTracker
 		Geolocation.Default.ListeningFailed += OnListeningFailed;
 		try
 		{
-			cancellationToken.ThrowIfCancellationRequested();
-			var request = new GeolocationListeningRequest(GeolocationAccuracy.Best, Interval);
-
-			// MAUI asks for the permission here when it is missing, which needs the main thread.
-			var started = await MainThread.InvokeOnMainThreadAsync(() => Geolocation.Default.StartListeningForegroundAsync(request)).ConfigureAwait(false);
-			if (!started)
-			{
-				Fail("location could not be started", attempt);
-				return;
-			}
-
-			LogStarted(logger);
-
-			// The platform is listening now: a cancel or a stop that came meanwhile must not leave it on without handlers.
-			cancellationToken.ThrowIfCancellationRequested();
-			if (!IsCurrent(attempt))
-			{
-				await StopListeningWhenIdleAsync().ConfigureAwait(false);
-			}
+			await ListenAsync(attempt, cancellationToken).ConfigureAwait(false);
 		}
 		catch (OperationCanceledException)
 		{
@@ -182,6 +164,35 @@ public sealed partial class GeolocationTracker : ILocationTracker
 
 	#region Private Helpers
 	/// <summary>
+	/// Asks the platform to listen for positions, and stops it again when a stop or a newer start came while it was starting.
+	/// </summary>
+	/// <param name="attempt">The generation of this start.</param>
+	/// <param name="cancellationToken">Cancels the start.</param>
+	/// <returns>A task that completes when the platform listens, or when the start failed and was reported.</returns>
+	private async Task ListenAsync(int attempt, CancellationToken cancellationToken)
+	{
+		cancellationToken.ThrowIfCancellationRequested();
+		var request = new GeolocationListeningRequest(GeolocationAccuracy.Best, Interval);
+
+		// MAUI asks for the permission here when it is missing, which needs the main thread.
+		var started = await MainThread.InvokeOnMainThreadAsync(() => Geolocation.Default.StartListeningForegroundAsync(request)).ConfigureAwait(false);
+		if (!started)
+		{
+			Fail("location could not be started", attempt);
+			return;
+		}
+
+		LogStarted(logger);
+
+		// The platform is listening now: a cancel or a stop that came meanwhile must not leave it on without handlers.
+		cancellationToken.ThrowIfCancellationRequested();
+		if (!IsCurrent(attempt))
+		{
+			await StopListeningWhenIdleAsync().ConfigureAwait(false);
+		}
+	}
+
+	/// <summary>
 	/// Passes a position of the device on as a fix.
 	/// </summary>
 	/// <param name="sender">The geolocation service.</param>
@@ -189,9 +200,10 @@ public sealed partial class GeolocationTracker : ILocationTracker
 	private void OnLocationChanged(object? sender, GeolocationLocationChangedEventArgs e)
 	{
 		var location = e.Location;
-		if (Interlocked.Exchange(ref firstFixLogged, 1) == 0)
+		if (Interlocked.Exchange(ref firstFixLogged, 1) == 0 && logger.IsEnabled(LogLevel.Information))
 		{
-			LogFirstFix(logger, location.Accuracy ?? UnknownAccuracyMetres, Math.Round((TimeProvider.System.GetUtcNow() - location.Timestamp).TotalSeconds, 1));
+			var ageSeconds = Math.Round((TimeProvider.System.GetUtcNow() - location.Timestamp).TotalSeconds, 1);
+			LogFirstFix(logger, location.Accuracy ?? UnknownAccuracyMetres, ageSeconds);
 		}
 
 		var fix = new GpsFix(
