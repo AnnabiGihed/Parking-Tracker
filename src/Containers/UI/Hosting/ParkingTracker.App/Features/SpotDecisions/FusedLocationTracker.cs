@@ -16,10 +16,10 @@ namespace ParkingTracker.App.Features.SpotDecisions;
 /// Purpose     : The <see cref="ILocationTracker"/> of the phone over the fused location provider of Google Play services (ADR-0002) in
 ///              the foreground: high accuracy, a fix about every second and no minimum distance, so that fixes keep coming while the
 ///              phone stands still (the screen reports a lost signal after 15 seconds without one). Fixes and interruptions arrive on the
-///              main looper; a failed start is reported on the thread that started. Background tracking off screen is a later stage. When the permission is missing, Play services
-///              are unavailable or the request fails, the tracker stops and says why through <see cref="ErrorOccurred"/>; a moment
-///              without position (<see cref="LocationAvailability.IsLocationAvailable"/> false) is reported as an interruption and
-///              the updates go on.
+///              main looper; a failed start is reported on the thread that started. Background tracking off screen is a later stage.
+///              When the permission is missing, Play services are unavailable or the request fails, the tracker stops and says why
+///              through <see cref="ErrorOccurred"/>; a moment without position (<see cref="LocationAvailability.IsLocationAvailable"/>
+///              false) is reported as an interruption and the updates go on.
 /// </summary>
 /// <remarks>
 /// This class depends on Android and Google Play services, so it cannot be unit-tested on a PC; the emulator test covers it

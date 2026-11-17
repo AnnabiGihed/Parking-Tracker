@@ -353,6 +353,11 @@ component and `wwwroot/js/map.js`; every component sits in its own folder with a
 Leaflet 1.9.4 files ship inside the class library (`_content/ParkingTracker.Shared/`), and `MapScript` is the typed face of
 the module's functions.
 
+`Directory.Packages.props` pins five AndroidX packages that MAUI brings (`Collection.Ktx`, `Fragment.Ktx`,
+`Lifecycle.LiveData`, `Lifecycle.LiveData.Core.Ktx`, `Lifecycle.Process`) to the versions that Google Play services Location
+lifts their base libraries to; otherwise restore fails with NU1608. Check these pins again whenever MAUI or Play services
+Location is upgraded, and remove the ones the new versions no longer need.
+
 ## 5. Data and integration design
 
 ### 5.1 Domain types
