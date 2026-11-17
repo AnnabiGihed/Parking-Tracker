@@ -13,10 +13,10 @@ name: Android APK
 #                     the first, store a card, install the second over it and check that the card came over (ADR-0004, ADR-0008)
 #   4. release      - publish the signed APK on the Releases page; only on a push to main, only after build and test passed
 # Pull requests never use the release key: they are signed with the debug key and the certificate guard is skipped (the
-# version guard still runs). The branch chore/maui-migration is release-signed but never publishes.
+# version guard still runs).
 on:
   push:
-    branches: [main, chore/maui-migration]
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -42,11 +42,10 @@ jobs:
     timeout-minutes: 45
     env:
       VERSION_CODE: ${{ github.run_number }}
-      # The release key signs only pushes to main, pushes to chore/maui-migration and manual runs. Every pull request, also
-      # from this repository, gets the debug key: a pull request run can execute changed workflow or build code, so it must
-      # not touch the release key. The push to chore/maui-migration stays so that the owner can check a release-signed APK
-      # on the phone before the merge; remove that branch entry after the merge.
-      SIGN_RELEASE: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/chore/maui-migration')) }}
+      # The release key signs only runs of main (pushes and manual runs). Every pull request, also from this repository,
+      # and every other branch gets the debug key: such a run can execute changed workflow or build code, so it must not
+      # touch the release key.
+      SIGN_RELEASE: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
     steps:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

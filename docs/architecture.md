@@ -1,7 +1,8 @@
 # Parking Tracker architecture (.NET MAUI migration proposal)
 
-Status: proposal for branch `chore/maui-migration`, 2026-11-16. The decisions are in [the ADRs](adr/README.md), all
-`Proposed`; this page describes the resulting design and how to get there.
+Status: implemented on branch `chore/maui-migration` (2026-11-16 to 2026-11-17), merged into `main` by its pull
+request. The decisions are in [the ADRs](adr/README.md); this page describes the resulting design and how it was
+built.
 
 ## 1. Scope and inputs
 
@@ -299,14 +300,14 @@ The workflow `.github/workflows/dotnet.yml` does the same in CI: restore with th
 workflow actor and token, `dotnet format --verify-no-changes`, a Release build and the tests.
 
 The host `src/Containers/UI/Hosting/ParkingTracker.App` builds only where the `maui-android` workload is installed,
-which is the CI workflow `.github/workflows/android.yml` (on pushes to `main` and `chore/maui-migration`, on pull
-requests into `main` and on demand; only a push to `main` publishes). It is therefore not in `ParkingTracker.slnx`, so
+which is the CI workflow `.github/workflows/android.yml` (on pushes to `main`, on pull requests into `main` and
+on demand; only a push to `main` publishes). It is therefore not in `ParkingTracker.slnx`, so
 `verify.py` and `dotnet.yml` stay free of Android tooling; on a machine that has the workload, build the host csproj
 directly (`dotnet publish <csproj> -f net10.0-android -c Release`), because a second solution file at the root would be
 picked up by `verify.py`. The workflow restores with the package token, installs the Android SDK packages
 (`InstallAndroidDependencies`), publishes the Release APK twice, plain and with `-p:EnableTestHooks=true`, the first
 signed with the release key (secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
-`ANDROID_KEY_PASSWORD`; only for pushes to `main` and `chore/maui-migration` and for manual runs; every pull request
+`ANDROID_KEY_PASSWORD`; only for runs of `main`, pushes and manual runs; every pull request and every other branch
 uses the debug key instead and skips the certificate guard), the second with the debug key, both with
 `ApplicationVersion` = the run number, then runs the version and certificate guards of section 7, and runs
 `test/ParkingTracker.E2E.Tests/emulator-test.mjs` on an API 34 emulator. The host supports Android 7.0 (API 24) and
