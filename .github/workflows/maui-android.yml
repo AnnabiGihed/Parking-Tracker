@@ -150,6 +150,9 @@ jobs:
     env:
       # The Capacitor build gets the lowest versionCode, so any MAUI build (the run number) is the update.
       CAPACITOR_VERSION_CODE: "1"
+      # The key is throwaway: it lives in the runner's temp directory, is valid for two days and signs nothing that is published, so
+      # a fixed password is fine and no secret is needed.
+      UPGRADE_KEY_PASSWORD: upgrade-test-only
     steps:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -171,11 +174,7 @@ jobs:
           name: maui-apks
           path: apk
 
-      # The key is throwaway: it lives in the runner's temp directory, is valid for two days and signs nothing that is published, so
-      # its password is no secret. It is given to the steps that need it through their own env block, never through GITHUB_ENV.
       - name: Create a throwaway signing key
-        env:
-          UPGRADE_KEY_PASSWORD: upgrade-test-only
         run: |
           keytool -genkeypair -keystore "$RUNNER_TEMP/upgrade.p12" -storetype PKCS12 \
             -storepass "$UPGRADE_KEY_PASSWORD" -keypass "$UPGRADE_KEY_PASSWORD" \
@@ -194,8 +193,6 @@ jobs:
           ./gradlew assembleDebug --no-daemon
 
       - name: Sign both APKs with the throwaway key
-        env:
-          UPGRADE_KEY_PASSWORD: upgrade-test-only
         run: |
           bash test/ParkingTracker.E2E.Tests/resign-apk.sh android/app/build/outputs/apk/debug/app-debug.apk upgrade/capacitor.apk "$RUNNER_TEMP/upgrade.p12" upgrade
           bash test/ParkingTracker.E2E.Tests/resign-apk.sh apk/ParkingTracker-test.apk upgrade/maui-test.apk "$RUNNER_TEMP/upgrade.p12" upgrade

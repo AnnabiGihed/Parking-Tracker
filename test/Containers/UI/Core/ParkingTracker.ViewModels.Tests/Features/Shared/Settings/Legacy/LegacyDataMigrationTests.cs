@@ -477,6 +477,63 @@ public sealed class LegacyDataMigrationTests
 	}
 	#endregion
 
+	#region Late Work Tests
+	/// <summary>
+	/// Verifies that a reader that ignores the cancellation and fails after the time-out does not count a second attempt.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task RunOnceAsync_ReaderFailsAfterTheTimeout_ShouldCountOneAttemptOnly()
+	{
+		var late = await TimeOutWithReaderStuckAsync();
+
+		late.Reading.SetResult(LegacyStorageReading.Failure("late disk error"));
+
+		(await late.Run).Should().Be(LegacyMigrationOutcome.WillRetry);
+		plain.Values["pt.migrationAttempts"].Should().Be("1");
+		plain.Values.Should().NotContainKey("pt.migration");
+	}
+
+	/// <summary>
+	/// Verifies that a successful reading that arrives after the time-out writes no marker and no value.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task RunOnceAsync_ReadingSucceedsAfterTheTimeout_ShouldWriteNothing()
+	{
+		var late = await TimeOutWithReaderStuckAsync();
+
+		late.Reading.SetResult(Success(("pt.card", CardJson), ("pt.car", CarJson)));
+
+		(await late.Run).Should().Be(LegacyMigrationOutcome.WillRetry);
+		plain.Values.Keys.Should().Equal("pt.migrationAttempts");
+		secure.Values.Should().BeEmpty();
+	}
+
+	/// <summary>
+	/// Verifies that a value the user saves while a slow import is waiting for the storage is not overwritten by the late write.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task RunOnceAsync_ValueSavedDuringASlowImport_ShouldNotBeOverwritten()
+	{
+		var slowRead = new TaskCompletionSource<string?>();
+		var storage = Substitute.For<IKeyValueStorage>();
+		storage.ReadAsync(Arg.Any<string>()).Returns((string?)null);
+		storage.ReadAsync("pt.car").Returns(slowRead.Task);
+		Returns(Success(("pt.car", CarJson)));
+		var run = new LegacyDataMigration(reader, new SettingsStore(secure, storage), storage, clock, NullLogger<LegacyDataMigration>.Instance).RunOnceAsync();
+		await WaitUntilAsync(() => storage.ReceivedCalls().Any(call => call.GetArguments().Contains("pt.car")));
+		clock.Advance(LegacyDataMigration.RunTimeout + TimeSpan.FromSeconds(1));
+		(await run).Should().Be(LegacyMigrationOutcome.WillRetry);
+
+		slowRead.SetResult(null);
+
+		await storage.DidNotReceive().WriteAsync("pt.car", Arg.Any<string>());
+		await storage.DidNotReceive().WriteAsync(LegacyDataMigration.MarkerKey, Arg.Any<string>());
+	}
+	#endregion
+
 	#region Constructor Tests
 	/// <summary>
 	/// Verifies that every dependency is required.
@@ -511,6 +568,42 @@ public sealed class LegacyDataMigrationTests
 	private LegacyDataMigration Create()
 	{
 		return new LegacyDataMigration(reader, new SettingsStore(secure, plain), plain, clock, NullLogger<LegacyDataMigration>.Instance);
+	}
+
+	/// <summary>
+	/// Starts a run whose reader ignores its cancellation token and lets the run time out.
+	/// </summary>
+	/// <returns>A task with the run, which has ended by now, and the reading that the stuck reader can still give.</returns>
+	private async Task<(Task<LegacyMigrationOutcome> Run, TaskCompletionSource<LegacyStorageReading> Reading)> TimeOutWithReaderStuckAsync()
+	{
+		var started = new TaskCompletionSource();
+		var reading = new TaskCompletionSource<LegacyStorageReading>(); // no asynchronous continuations: the late work finishes inside SetResult
+		reader.ReadAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+		{
+			started.SetResult();
+			return reading.Task;
+		});
+		var run = Create().RunOnceAsync();
+		await started.Task.ConfigureAwait(false);
+		clock.Advance(LegacyDataMigration.RunTimeout + TimeSpan.FromSeconds(1));
+		await run.ConfigureAwait(false);
+		plain.Values["pt.migrationAttempts"].Should().Be("1");
+		return (run, reading);
+	}
+
+	/// <summary>
+	/// Waits until a condition holds, for at most five seconds of real time.
+	/// </summary>
+	/// <param name="condition">The condition.</param>
+	/// <returns>A task that completes when the condition holds.</returns>
+	private static async Task WaitUntilAsync(Func<bool> condition)
+	{
+		var deadline = DateTime.UtcNow.AddSeconds(5);
+		while (!condition())
+		{
+			DateTime.UtcNow.Should().BeBefore(deadline);
+			await Task.Delay(10).ConfigureAwait(false);
+		}
 	}
 
 	/// <summary>

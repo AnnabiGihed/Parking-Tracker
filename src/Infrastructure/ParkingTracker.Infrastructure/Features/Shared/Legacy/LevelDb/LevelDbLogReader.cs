@@ -53,6 +53,18 @@ internal static partial class LevelDbLogReader
 	private const int BatchHeaderSize = 12;
 	#endregion
 
+	#region Logging
+	/// <summary>
+	/// Logs that a log file was read only up to a record that is cut off or not understood.
+	/// </summary>
+	/// <param name="logger">The log.</param>
+	/// <param name="file">The name of the file.</param>
+	/// <param name="position">The position of the record where the reading stopped.</param>
+	/// <param name="length">The length of the file.</param>
+	[LoggerMessage(Level = LogLevel.Warning, Message = "The old log {File} was read only up to byte {Position} of {Length}: a record is cut off or not understood")]
+	private static partial void LogStoppedEarly(ILogger logger, string file, int position, int length);
+	#endregion
+
 	#region Public Methods
 	/// <summary>
 	/// Reads every write of a log.
@@ -225,17 +237,5 @@ internal static partial class LevelDbLogReader
 		position += length;
 		return result;
 	}
-	#endregion
-
-	#region Logging
-	/// <summary>
-	/// Logs that a log file was read only up to a record that is cut off or not understood.
-	/// </summary>
-	/// <param name="logger">The log.</param>
-	/// <param name="file">The name of the file.</param>
-	/// <param name="position">The position of the record where the reading stopped.</param>
-	/// <param name="length">The length of the file.</param>
-	[LoggerMessage(Level = LogLevel.Warning, Message = "The old log {File} was read only up to byte {Position} of {Length}: a record is cut off or not understood")]
-	private static partial void LogStoppedEarly(ILogger logger, string file, int position, int length);
 	#endregion
 }

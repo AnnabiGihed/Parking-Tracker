@@ -72,6 +72,16 @@ public sealed partial class WebViewLegacyStorageReader : ILegacyStorageReader
 	}
 	#endregion
 
+	#region Logging
+	/// <summary>
+	/// Logs that the hidden web view could not give the old values.
+	/// </summary>
+	/// <param name="logger">The log.</param>
+	/// <param name="exception">What went wrong.</param>
+	[LoggerMessage(Level = LogLevel.Warning, Message = "Reading the old values through a hidden web view failed")]
+	private static partial void LogReadFailed(ILogger logger, Exception exception);
+	#endregion
+
 	#region ILegacyStorageReader Implementation
 	/// <inheritdoc />
 	public async Task<LegacyStorageReading> ReadAsync(CancellationToken cancellationToken)
@@ -98,16 +108,6 @@ public sealed partial class WebViewLegacyStorageReader : ILegacyStorageReader
 			await DestroyAsync(view).ConfigureAwait(false);
 		}
 	}
-	#endregion
-
-	#region Logging
-	/// <summary>
-	/// Logs that the hidden web view could not give the old values.
-	/// </summary>
-	/// <param name="logger">The log.</param>
-	/// <param name="exception">What went wrong.</param>
-	[LoggerMessage(Level = LogLevel.Warning, Message = "Reading the old values through a hidden web view failed")]
-	private static partial void LogReadFailed(ILogger logger, Exception exception);
 	#endregion
 
 	#region Private Helpers

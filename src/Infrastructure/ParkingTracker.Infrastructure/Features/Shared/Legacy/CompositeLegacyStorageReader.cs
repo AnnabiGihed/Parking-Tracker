@@ -51,6 +51,16 @@ public sealed partial class CompositeLegacyStorageReader : ILegacyStorageReader
 	}
 	#endregion
 
+	#region Logging
+	/// <summary>
+	/// Logs that the primary reader failed and the fallback reader is asked.
+	/// </summary>
+	/// <param name="logger">The log.</param>
+	/// <param name="problem">Why the primary reader failed.</param>
+	[LoggerMessage(Level = LogLevel.Warning, Message = "The old storage files could not be read ({Problem}); asking a hidden web view instead")]
+	private static partial void LogFallbackUsed(ILogger logger, string problem);
+	#endregion
+
 	#region ILegacyStorageReader Implementation
 	/// <inheritdoc />
 	public async Task<LegacyStorageReading> ReadAsync(CancellationToken cancellationToken)
@@ -87,15 +97,5 @@ public sealed partial class CompositeLegacyStorageReader : ILegacyStorageReader
 			return LegacyStorageReading.Failure($"{exception.GetType().Name}: {exception.Message}");
 		}
 	}
-	#endregion
-
-	#region Logging
-	/// <summary>
-	/// Logs that the primary reader failed and the fallback reader is asked.
-	/// </summary>
-	/// <param name="logger">The log.</param>
-	/// <param name="problem">Why the primary reader failed.</param>
-	[LoggerMessage(Level = LogLevel.Warning, Message = "The old storage files could not be read ({Problem}); asking a hidden web view instead")]
-	private static partial void LogFallbackUsed(ILogger logger, string problem);
 	#endregion
 }

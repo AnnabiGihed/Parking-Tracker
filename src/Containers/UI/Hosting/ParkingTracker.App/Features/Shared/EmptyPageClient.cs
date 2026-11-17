@@ -80,5 +80,18 @@ internal sealed class EmptyPageClient : WebViewClient
 			answer.TrySetException(new InvalidOperationException($"the hidden web view could not load its page: {error?.Description}"));
 		}
 	}
+
+	/// <summary>
+	/// Handles the end of the renderer process: returning <see langword="true"/> keeps the app alive (the default is to crash it), and
+	/// the read fails so that the migration tries again at the next launch; the caller destroys the web view.
+	/// </summary>
+	/// <param name="view">The web view whose renderer is gone.</param>
+	/// <param name="detail">Why the renderer went away.</param>
+	/// <returns><see langword="true"/>, because the failure is handled.</returns>
+	public override bool OnRenderProcessGone(AndroidWebView? view, RenderProcessGoneDetail? detail)
+	{
+		answer.TrySetException(new InvalidOperationException("the renderer of the hidden web view stopped"));
+		return true;
+	}
 	#endregion
 }

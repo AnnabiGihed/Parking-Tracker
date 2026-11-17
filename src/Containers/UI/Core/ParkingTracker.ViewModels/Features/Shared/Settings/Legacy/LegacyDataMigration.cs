@@ -17,8 +17,8 @@ namespace ParkingTracker.ViewModels.Features.Shared.Settings.Legacy;
 ///              next launch; every failed attempt is counted (a failed read, a value that cannot be saved, an unexpected exception and
 ///              a run that takes longer than <see cref="RunTimeout"/>), and after <see cref="MaxAttempts"/> failures the marker records
 ///              the failure and the user enters the card again. The whole run is bounded by <see cref="RunTimeout"/>, so the screens
-///              that wait for it always get on. A run is shared by every caller of <see cref="RunOnceAsync"/>. The old data is never
-///              deleted.
+///              that wait for it always get on. A run is shared by every caller of <see cref="RunOnceAsync"/>. Work that goes on after the
+///              time-out changes nothing: every side effect first checks that the run is not over. The old data is never deleted.
 /// </summary>
 public sealed partial class LegacyDataMigration
 {
@@ -119,6 +119,12 @@ public sealed partial class LegacyDataMigration
 	/// The run of this process, shared by every caller.
 	/// </summary>
 	private Task<LegacyMigrationOutcome>? run;
+
+	/// <summary>
+	/// Whether the run of this process is over because <see cref="RunTimeout"/> fired; guarded by <see cref="gate"/>. Work that goes on
+	/// in the background after that point must not change anything, because the next launch starts from what the time-out recorded.
+	/// </summary>
+	private bool runOver;
 	#endregion
 
 	#region Constructors
@@ -198,6 +204,14 @@ public sealed partial class LegacyDataMigration
 	private static partial void LogAttemptNotCounted(ILogger logger);
 
 	/// <summary>
+	/// Logs a step of a run that was skipped because the run had already timed out.
+	/// </summary>
+	/// <param name="logger">The log.</param>
+	/// <param name="step">The step that was skipped.</param>
+	[LoggerMessage(Level = LogLevel.Information, Message = "The migration step {Step} was skipped because the run had already timed out")]
+	private static partial void LogLateStepSkipped(ILogger logger, string step);
+
+	/// <summary>
 	/// Logs that the migration finished.
 	/// </summary>
 	/// <param name="logger">The log.</param>
@@ -243,23 +257,62 @@ public sealed partial class LegacyDataMigration
 		}
 		catch (OperationCanceledException)
 		{
+			MarkRunOver();
 			return await RecordTimeoutAsync().ConfigureAwait(false);
 		}
 	}
 
 	/// <summary>
-	/// Counts the time-out as a failed attempt, itself bounded by <see cref="CountTimeout"/>.
+	/// Ends the run: from now on the guarded steps of work that is still going on do nothing.
+	/// </summary>
+	private void MarkRunOver()
+	{
+		lock (gate)
+		{
+			runOver = true;
+		}
+	}
+
+	/// <summary>
+	/// Tells whether the run is over; it is checked right before every side effect.
+	/// </summary>
+	/// <param name="step">The step that is about to happen, for the log.</param>
+	/// <returns><see langword="true"/> when the step must be skipped.</returns>
+	private bool IsRunOver(string step)
+	{
+		bool over;
+		lock (gate)
+		{
+			over = runOver;
+		}
+
+		if (over)
+		{
+			LogLateStepSkipped(logger, step);
+		}
+
+		return over;
+	}
+
+	/// <summary>
+	/// Counts the time-out as the one failed attempt of this launch, itself bounded by <see cref="CountTimeout"/>. It is the only
+	/// writer after the run is over, so it does not use the guarded steps.
 	/// </summary>
 	/// <returns>A task with the outcome of the failed attempt.</returns>
 	private async Task<LegacyMigrationOutcome> RecordTimeoutAsync()
 	{
 		try
 		{
-			return await FailSafelyAsync($"the migration took longer than {RunTimeout.TotalSeconds} seconds").WaitAsync(CountTimeout, clock).ConfigureAwait(false);
+			return await RecordFailureAsync($"the migration took longer than {RunTimeout.TotalSeconds} seconds").WaitAsync(CountTimeout, clock).ConfigureAwait(false);
 		}
 		catch (TimeoutException)
 		{
 			LogAttemptNotCounted(logger);
+			return LegacyMigrationOutcome.WillRetry;
+		}
+		catch (Exception exception) when (exception is not OperationCanceledException)
+		{
+			LogRunFailed(logger, exception);
 			return LegacyMigrationOutcome.WillRetry;
 		}
 	}
@@ -355,6 +408,11 @@ public sealed partial class LegacyDataMigration
 	/// <returns>A task with <see langword="true"/> when the value was copied.</returns>
 	private async Task<bool> ImportValueAsync(string key, string json)
 	{
+		if (IsRunOver(key))
+		{
+			return false;
+		}
+
 		if (!IsUsable(key, json))
 		{
 			LogSkippedUnreadable(logger, key);
@@ -372,6 +430,11 @@ public sealed partial class LegacyDataMigration
 			return false;
 		}
 
+		if (IsRunOver(key))
+		{
+			return false;
+		}
+
 		await plain.WriteAsync(key, json.Trim()).ConfigureAwait(false);
 		return true;
 	}
@@ -386,6 +449,11 @@ public sealed partial class LegacyDataMigration
 		if (await settings.GetCardAsync().ConfigureAwait(false) is not null)
 		{
 			LogSkippedExisting(logger, SettingsJson.CardKey);
+			return false;
+		}
+
+		if (IsRunOver(SettingsJson.CardKey))
+		{
 			return false;
 		}
 
@@ -412,11 +480,23 @@ public sealed partial class LegacyDataMigration
 	}
 
 	/// <summary>
-	/// Records a failed attempt; in the last allowed attempt the marker records the failure so that the user enters the card again.
+	/// Records a failed attempt unless the run is over (a late failure must not count a second time).
 	/// </summary>
 	/// <param name="problem">What went wrong.</param>
 	/// <returns>A task with <see cref="LegacyMigrationOutcome.WillRetry"/> or <see cref="LegacyMigrationOutcome.GaveUp"/>.</returns>
 	private async Task<LegacyMigrationOutcome> FailAsync(string problem)
+	{
+		return IsRunOver("counting the attempt")
+			? LegacyMigrationOutcome.WillRetry
+			: await RecordFailureAsync(problem).ConfigureAwait(false);
+	}
+
+	/// <summary>
+	/// Counts a failed attempt; in the last allowed attempt the marker records the failure so that the user enters the card again.
+	/// </summary>
+	/// <param name="problem">What went wrong.</param>
+	/// <returns>A task with <see cref="LegacyMigrationOutcome.WillRetry"/> or <see cref="LegacyMigrationOutcome.GaveUp"/>.</returns>
+	private async Task<LegacyMigrationOutcome> RecordFailureAsync(string problem)
 	{
 		var attempts = await CountAttemptAsync().ConfigureAwait(false);
 		LogAttemptFailed(logger, problem, attempts, MaxAttempts);
@@ -425,7 +505,7 @@ public sealed partial class LegacyDataMigration
 			return LegacyMigrationOutcome.WillRetry;
 		}
 
-		await WriteMarkerAsync(GaveUpName, LegacyStorageReading.NoReader, []).ConfigureAwait(false);
+		await StoreMarkerAsync(GaveUpName, LegacyStorageReading.NoReader, []).ConfigureAwait(false);
 		return LegacyMigrationOutcome.GaveUp;
 	}
 
@@ -443,13 +523,28 @@ public sealed partial class LegacyDataMigration
 	}
 
 	/// <summary>
+	/// Writes the marker of a finished import unless the run is over.
+	/// </summary>
+	/// <param name="outcome">The outcome name: <c>migrated</c> or <c>nothing</c>.</param>
+	/// <param name="readerName">The name of the reader that found the values.</param>
+	/// <param name="found">The keys that were copied.</param>
+	/// <returns>A task that completes when the marker is saved or skipped.</returns>
+	private async Task WriteMarkerAsync(string outcome, string readerName, IReadOnlyList<string> found)
+	{
+		if (!IsRunOver("writing the marker"))
+		{
+			await StoreMarkerAsync(outcome, readerName, found).ConfigureAwait(false);
+		}
+	}
+
+	/// <summary>
 	/// Writes the marker.
 	/// </summary>
 	/// <param name="outcome">The outcome name: <c>migrated</c>, <c>nothing</c> or <c>gaveUp</c>.</param>
 	/// <param name="readerName">The name of the reader that found the values, or <c>none</c>.</param>
 	/// <param name="found">The keys that were copied.</param>
 	/// <returns>A task that completes when the marker is saved.</returns>
-	private async Task WriteMarkerAsync(string outcome, string readerName, IReadOnlyList<string> found)
+	private async Task StoreMarkerAsync(string outcome, string readerName, IReadOnlyList<string> found)
 	{
 		using var stream = new MemoryStream();
 		using (var writer = new Utf8JsonWriter(stream))

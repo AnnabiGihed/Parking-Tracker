@@ -31,7 +31,7 @@ output="$2"
 keystore="$3"
 alias_name="$4"
 
-[ -n "${UPGRADE_KEY_PASSWORD:-}" ] || fail "UPGRADE_KEY_PASSWORD must be set (step-level env)." 2
+[ -n "${UPGRADE_KEY_PASSWORD:-}" ] || fail "UPGRADE_KEY_PASSWORD must be set (job-level env)." 2
 [ -n "${ANDROID_HOME:-}" ] || fail "ANDROID_HOME must be set." 2
 [ -d "$ANDROID_HOME" ] || fail "ANDROID_HOME '$ANDROID_HOME' is not a directory."
 [ -d "$ANDROID_HOME/build-tools" ] || fail "No build-tools directory in '$ANDROID_HOME'."
