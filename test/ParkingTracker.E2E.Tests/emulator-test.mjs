@@ -32,6 +32,19 @@ const DOTNET_FAILURE = /FATAL UNHANDLED EXCEPTION|Unhandled managed exception|Un
 
 mkdirSync(OUT, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// The live sources (UrbIS, parking.brussels, Brussels Mobility) sometimes time out from the CI runner. The app then
+// answers CAN'T VERIFY, which is correct, but says nothing about the code under test. A step whose answer names a
+// timeout is tried once more after a pause; a second timeout fails the check as before.
+const SOURCE_RETRY_PAUSE_MS = 20000;
+const isSourceTimeout = (text) => /timed out/i.test(String(text ?? ''));
+async function withSourceRetry(name, attempt, timedOut) {
+  let result;
+  try { result = await attempt(); } catch (e) { if (!isSourceTimeout(e?.message)) throw e; result = { error: e.message }; }
+  if (!timedOut(result)) return result;
+  console.log(`RETRY ${name}: a live source timed out; trying once more in ${SOURCE_RETRY_PAUSE_MS / 1000} s`);
+  await sleep(SOURCE_RETRY_PAUSE_MS);
+  return attempt();
+}
 // Arguments go to adb as an array, never through a shell, so that nothing taken from argv is interpreted as shell syntax.
 const ADB = adbPath();
 const adb = (args, opts = {}) => execFileSync(ADB, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim();
@@ -188,7 +201,8 @@ async function main() {
   stepTo('answers');
   // Live answers at known places, through the app's own decision code.
   for (const s of [HOME, CHATELAIN]) {
-    const r = await evaluate(`ptTest.decide(${s.lat}, ${s.lon}, 5)`);
+    const r = await withSourceRetry(`answer at ${s.name}`, () => evaluate(`ptTest.decide(${s.lat}, ${s.lon}, 5)`),
+      (x) => x?.error || isSourceTimeout(x?.detail));
     report.scenarios[s.name] = r;
     check(`Answer at ${s.name}`, s.expect.includes(r?.title), `${r?.title} — ${r?.detail}`);
   }
@@ -202,7 +216,13 @@ async function main() {
   const gpsState = await screenState();
   report.gpsScreenState = gpsState;
   check('GPS position received in the app', !!gps, gps || `no position; screen state: ${gpsState}`);
-  const screen = await waitFor(`(() => { const t = document.querySelector('.hero-title')?.innerText; return t && !/where do you want|checking/i.test(t) ? t + ' | ' + (document.querySelector('.hero-sub')?.innerText || '') : null; })()`, 60000, () => geo(HOME), 2000);
+  const screenAnswer = `(() => { const t = document.querySelector('.hero-title')?.innerText; return t && !/where do you want|checking/i.test(t) ? t + ' | ' + (document.querySelector('.hero-sub')?.innerText || '') : null; })()`;
+  let screen = await waitFor(screenAnswer, 60000, () => geo(HOME), 2000);
+  if (isSourceTimeout(screen)) {
+    // The app checks the position again after 30 s; keep sending fixes until a new answer replaces the timeout.
+    console.log('RETRY screen answer: a live source timed out; waiting for the next check');
+    screen = await waitFor(`(() => { const a = ${screenAnswer}; return a && !/timed out/i.test(a) ? a : null; })()`, 90000, () => geo(HOME), 2000) || screen;
+  }
   report.screen = screen;
   const screenOk = !!screen && /^Free for you here/.test(screen);
   check('Screen shows an answer for my position', screenOk, screenOk ? screen : `${screen || 'nothing shown'}; screen state: ${await screenState()}`);
@@ -210,7 +230,9 @@ async function main() {
 
   stepTo('free spots');
   // Nearest free spot from Place du Châtelain (live search).
-  const spots = await evaluate(`ptTest.freeSpots(${CHATELAIN.lat}, ${CHATELAIN.lon}, 3).then((list) => list.map((s) => s.label + ' ' + Math.round(s.metres) + ' m'))`);
+  const spots = await withSourceRetry('free spots',
+    () => evaluate(`ptTest.freeSpots(${CHATELAIN.lat}, ${CHATELAIN.lon}, 3).then((list) => list.map((s) => s.label + ' ' + Math.round(s.metres) + ' m'))`),
+    (x) => !!x?.error);
   report.freeSpots = spots;
   check('Nearest free spot found from Place du Châtelain', Array.isArray(spots) && spots.length > 0, (spots || []).join(', '));
 
