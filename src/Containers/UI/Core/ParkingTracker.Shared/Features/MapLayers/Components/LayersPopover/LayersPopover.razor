@@ -1,17 +1,35 @@
 @namespace ParkingTracker.Shared.Features.MapLayers.Components
 @inherits ViewModelComponent<MapLayersViewModel>
-<div id="layersPanel" class="popover @(IsOpen ? string.Empty : "hidden")" role="dialog" aria-label="Map layers">
-    <div class="popover-head"><b>Map layers</b><button type="button" class="icon-btn" aria-label="Close" @onclick="OnClose"><Icon Name="close" /></button></div>
-    <label class="switch"><input type="checkbox" data-layer="streets" checked="@ViewModel.Switches.Streets" @onchange='e => OnToggleAsync("streets", e)' /><span class="sw"></span><span><b>Where my card works</b><small>Zoomed out: official zone colours. Closer: green = free with your card, red = pay</small></span></label>
-    <label class="switch"><input type="checkbox" data-layer="spaces" checked="@ViewModel.Switches.Spaces" @onchange='e => OnToggleAsync("spaces", e)' /><span class="sw"></span><span><b>Parking spaces</b><small>Delivery, disabled, taxi, EV… (street level)</small></span></label>
-    <label class="switch"><input type="checkbox" data-layer="works" checked="@ViewModel.Switches.Works" @onchange='e => OnToggleAsync("works", e)' /><span class="sw"></span><span><b>Roadworks &amp; events</b><small>May block parking</small></span></label>
-    <label class="switch"><input type="checkbox" data-layer="carparks" checked="@ViewModel.Switches.CarParks" @onchange='e => OnToggleAsync("carparks", e)' /><span class="sw"></span><span><b>Car parks</b><small>Public underground parkings</small></span></label>
-    <label class="switch"><input type="checkbox" data-layer="chargers" checked="@ViewModel.Switches.Chargers" @onchange='e => OnToggleAsync("chargers", e)' /><span class="sw"></span><span><b>EV charging</b><small>Charging points</small></span></label>
-    <div class="legend-row">
-        <span><i style="background:#16a34a"></i>Free for you</span><span><i style="background:#f59e0b"></i>Check number</span>
-        <span><i style="background:#dc2626"></i>Pay</span><span><i style="background:#7f1d1d"></i>Red zone</span>
-        <span><i style="background:#2563eb"></i>Disc</span><span><i style="background:#0d9488"></i>Free for all</span>
-        <span><i style="background:#2dd4bf"></i>Free right now</span>
-    </div>
-    <p id="layerState" class="muted small">@ViewModel.StatusText</p>
-</div>
+<RadzenStack Gap="0.6rem" id="layersPanel" class="@PanelClass" role="dialog" aria-label="Map layers">
+    <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween" AlignItems="AlignItems.Center" class="popover-head">
+        <RadzenText TextStyle="TextStyle.Subtitle1" TagName="TagName.Div" class="popover-title">Map layers</RadzenText>
+        <RadzenButton ButtonStyle="ButtonStyle.Base" Variant="Variant.Text" class="icon-btn" aria-label="Close" Click="OnClose"><Icon Name="close" /></RadzenButton>
+    </RadzenStack>
+    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.75rem" class="switch">
+        <RadzenSwitch data-layer="streets" aria-label="Where my card works" Value="ViewModel.Switches.Streets" ValueChanged="@(isOn => OnToggleAsync("streets", isOn))" />
+        <span><b>Where my card works</b><small>Zoomed out: official zone colours. Closer: green = free with your card, red = pay</small></span>
+    </RadzenStack>
+    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.75rem" class="switch">
+        <RadzenSwitch data-layer="spaces" aria-label="Parking spaces" Value="ViewModel.Switches.Spaces" ValueChanged="@(isOn => OnToggleAsync("spaces", isOn))" />
+        <span><b>Parking spaces</b><small>Delivery, disabled, taxi, EV… (street level)</small></span>
+    </RadzenStack>
+    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.75rem" class="switch">
+        <RadzenSwitch data-layer="works" aria-label="Roadworks and events" Value="ViewModel.Switches.Works" ValueChanged="@(isOn => OnToggleAsync("works", isOn))" />
+        <span><b>Roadworks &amp; events</b><small>May block parking</small></span>
+    </RadzenStack>
+    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.75rem" class="switch">
+        <RadzenSwitch data-layer="carparks" aria-label="Car parks" Value="ViewModel.Switches.CarParks" ValueChanged="@(isOn => OnToggleAsync("carparks", isOn))" />
+        <span><b>Car parks</b><small>Public underground parkings</small></span>
+    </RadzenStack>
+    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.75rem" class="switch">
+        <RadzenSwitch data-layer="chargers" aria-label="EV charging" Value="ViewModel.Switches.Chargers" ValueChanged="@(isOn => OnToggleAsync("chargers", isOn))" />
+        <span><b>EV charging</b><small>Charging points</small></span>
+    </RadzenStack>
+    <RadzenStack Orientation="Orientation.Horizontal" Wrap="FlexWrap.Wrap" Gap="0.4rem 0.75rem" class="legend-row">
+        <span><i class="lg-free"></i>Free for you</span><span><i class="lg-check"></i>Check number</span>
+        <span><i class="lg-pay"></i>Pay</span><span><i class="lg-red"></i>Red zone</span>
+        <span><i class="lg-disc"></i>Disc</span><span><i class="lg-all"></i>Free for all</span>
+        <span><i class="lg-now"></i>Free right now</span>
+    </RadzenStack>
+    <RadzenText id="layerState" TextStyle="TextStyle.Body2" TagName="TagName.P" class="muted small">@ViewModel.StatusText</RadzenText>
+</RadzenStack>

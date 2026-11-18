@@ -27,13 +27,20 @@ public sealed partial class LayersPopover : ViewModelComponent<MapLayersViewMode
 	public EventCallback OnClose { get; set; }
 	#endregion
 
+	#region Properties
+	/// <summary>
+	/// Gets the classes of the panel: the popover, hidden until it is opened.
+	/// </summary>
+	private string PanelClass => IsOpen ? "popover" : "popover hidden";
+	#endregion
+
 	#region Event Handlers
 	/// <summary>
 	/// Handles a switch.
 	/// </summary>
 	/// <param name="layer">The name of the layer.</param>
-	/// <param name="e">The change; its value says whether the switch is on.</param>
+	/// <param name="isOn">Whether the switch is now on.</param>
 	/// <returns>A task that completes when the layers were loaded.</returns>
-	private Task OnToggleAsync(string layer, ChangeEventArgs e) => ViewModel.SetLayerAsync(layer, e.Value is true);
+	private Task OnToggleAsync(string layer, bool isOn) => ViewModel.SetLayerAsync(layer, isOn);
 	#endregion
 }
