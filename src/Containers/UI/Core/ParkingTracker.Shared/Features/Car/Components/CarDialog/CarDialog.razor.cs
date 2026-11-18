@@ -1,5 +1,3 @@
-using System.Globalization;
-using Microsoft.AspNetCore.Components;
 using ParkingTracker.Shared.Features.Shared.Components;
 using ParkingTracker.ViewModels.Features.Car;
 
@@ -42,9 +40,9 @@ public sealed partial class CarDialog : ViewModelComponent<CarViewModel>
 	/// <summary>
 	/// Handles the parking alerts switch.
 	/// </summary>
-	/// <param name="e">The new state of the checkbox.</param>
+	/// <param name="enabled">The new state of the switch.</param>
 	/// <returns>A task that completes when the switch is saved and the service follows it.</returns>
-	private Task OnAlertsChangedAsync(ChangeEventArgs e) => ViewModel.SetAlertsAsync(e.Value is true);
+	private Task OnAlertsChangedAsync(bool enabled) => ViewModel.SetAlertsAsync(enabled);
 
 	/// <summary>
 	/// Handles a preset button of the timer.
@@ -53,10 +51,10 @@ public sealed partial class CarDialog : ViewModelComponent<CarViewModel>
 	private void OnPreset(int minutes) => ViewModel.SetMinutes(minutes);
 
 	/// <summary>
-	/// Handles an edit of the minutes field; text that is not a number counts as zero, which the timer raises to its minimum.
+	/// Handles an edit of the minutes field; an empty field counts as zero, which the timer raises to its minimum.
 	/// </summary>
-	/// <param name="e">The new text of the field.</param>
-	private void OnMinutesChanged(ChangeEventArgs e) => ViewModel.SetMinutes(int.TryParse(e.Value?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var minutes) ? minutes : 0);
+	/// <param name="minutes">The new value of the field, or <see langword="null"/> when it was emptied.</param>
+	private void OnMinutesChanged(int? minutes) => ViewModel.SetMinutes(minutes ?? 0);
 
 	/// <summary>
 	/// Handles "Start".

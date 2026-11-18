@@ -17,6 +17,8 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
 - The card form is built with Radzen components too: drop-downs for the municipality and sector, check-box lists for
   the areas and tolerance codes, and date pickers. Texts and checks stay the same; the dates now open a calendar and
   show in the format of the phone's language.
+- The car dialog is built with Radzen components: buttons, a switch for the parking alerts, preset buttons and a
+  number field for the timer. Texts and behaviour stay the same; the minutes field now has up and down arrows.
 
 ### Fixed
 
