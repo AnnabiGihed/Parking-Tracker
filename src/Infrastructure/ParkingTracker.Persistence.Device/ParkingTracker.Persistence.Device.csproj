@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\ParkingTracker.Application\ParkingTracker.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ParkingTracker.Persistence.Device.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The device database (ADR-0026); brings SQLitePCLRaw and its native SQLite library. -->
+    <PackageReference Include="sqlite-net-pcl" />
+    <PackageReference Include="Pivot.Framework.Tools.DependencyInjection" />
+  </ItemGroup>
+
+</Project>

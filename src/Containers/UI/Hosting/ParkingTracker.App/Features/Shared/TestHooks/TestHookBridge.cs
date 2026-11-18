@@ -1,5 +1,6 @@
 #if TEST_HOOKS
 using Microsoft.JSInterop;
+using ParkingTracker.ViewModels.Features.Shared.Settings.Database;
 using ParkingTracker.ViewModels.Features.Shared.Settings.Legacy;
 using ParkingTracker.ViewModels.Features.Shared.TestHooks;
 
@@ -24,6 +25,11 @@ public sealed class TestHookBridge
 	/// The migration of the saved data of the previous version.
 	/// </summary>
 	private readonly LegacyDataMigration migration;
+
+	/// <summary>
+	/// The move of the card, car and timer into the device database.
+	/// </summary>
+	private readonly SettingsToDatabaseMigration databaseMigration;
 	#endregion
 
 	#region Constructors
@@ -32,13 +38,16 @@ public sealed class TestHookBridge
 	/// </summary>
 	/// <param name="hooks">The service that does the work.</param>
 	/// <param name="migration">The migration of the saved data of the previous version.</param>
+	/// <param name="databaseMigration">The move of the card, car and timer into the device database.</param>
 	/// <exception cref="ArgumentNullException">Thrown when an argument is <see langword="null"/>.</exception>
-	public TestHookBridge(TestHookService hooks, LegacyDataMigration migration)
+	public TestHookBridge(TestHookService hooks, LegacyDataMigration migration, SettingsToDatabaseMigration databaseMigration)
 	{
 		ArgumentNullException.ThrowIfNull(hooks);
 		ArgumentNullException.ThrowIfNull(migration);
+		ArgumentNullException.ThrowIfNull(databaseMigration);
 		this.hooks = hooks;
 		this.migration = migration;
+		this.databaseMigration = databaseMigration;
 	}
 	#endregion
 
@@ -121,6 +130,13 @@ public sealed class TestHookBridge
 	/// <returns>A task with the JSON of the marker, or <see langword="null"/> when none is saved.</returns>
 	[JSInvokable("Migration")]
 	public Task<string?> Migration() => migration.ReadMarkerAsync();
+
+	/// <summary>
+	/// Reads the marker <c>pt.dbMigration</c> that records the outcome of the move of the card, car and timer into the device database.
+	/// </summary>
+	/// <returns>A task with the JSON of the marker, or <see langword="null"/> while the move has not finished.</returns>
+	[JSInvokable("DbMigration")]
+	public Task<string?> DbMigration() => databaseMigration.ReadMarkerAsync();
 
 	/// <summary>
 	/// Reads what the main screen holds: tracking, position, headline and busy state.

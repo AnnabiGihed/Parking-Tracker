@@ -38,6 +38,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\Core\ParkingTracker.Application\ParkingTracker.Application.csproj" />
     <ProjectReference Include="..\..\..\..\Infrastructure\ParkingTracker.Infrastructure\ParkingTracker.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\..\Infrastructure\ParkingTracker.Persistence.Device\ParkingTracker.Persistence.Device.csproj" />
     <ProjectReference Include="..\..\Core\ParkingTracker.ViewModels\ParkingTracker.ViewModels.csproj" />
     <ProjectReference Include="..\..\Core\ParkingTracker.Shared\ParkingTracker.Shared.csproj" />
   </ItemGroup>

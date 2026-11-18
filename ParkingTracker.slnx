@@ -9,6 +9,7 @@
   </Folder>
   <Folder Name="/src/Infrastructure/">
     <Project Path="src/Infrastructure/ParkingTracker.Infrastructure/ParkingTracker.Infrastructure.csproj" />
+    <Project Path="src/Infrastructure/ParkingTracker.Persistence.Device/ParkingTracker.Persistence.Device.csproj" />
   </Folder>
   <Folder Name="/test/Core/">
     <Project Path="test/Core/ParkingTracker.Domain.Tests/ParkingTracker.Domain.Tests.csproj" />
@@ -20,5 +21,7 @@
   </Folder>
   <Folder Name="/test/Infrastructure/">
     <Project Path="test/Infrastructure/ParkingTracker.Infrastructure.Tests/ParkingTracker.Infrastructure.Tests.csproj" />
+    <Project Path="test/Infrastructure/ParkingTracker.Persistence.Device.Tests/ParkingTracker.Persistence.Device.Tests.csproj" />
+    <Project Path="test/Infrastructure/ParkingTracker.Testing.Device/ParkingTracker.Testing.Device.csproj" />
   </Folder>
 </Solution>

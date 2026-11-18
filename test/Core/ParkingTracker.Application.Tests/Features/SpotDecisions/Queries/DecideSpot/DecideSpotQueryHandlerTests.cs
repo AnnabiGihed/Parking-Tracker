@@ -1,3 +1,4 @@
+using ParkingTracker.Application.Features.Shared.Abstractions;
 using NSubstitute;
 using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Queries.DecideSpot;
@@ -117,6 +118,28 @@ public sealed class DecideSpotQueryHandlerTests
 
 		result.IsFailure.Should().BeTrue();
 		result.Error.Code.Should().Be("ReferenceData.InvalidFormat");
+	}
+
+	/// <summary>
+	/// Verifies that a saved card that cannot be read is answered as "can't verify" with the message that asks for the card, as a
+	/// successful result, and that no source is asked: it is never read as "no card", which would answer from the default area.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Handle_SavedCardUnreadable_ShouldAnswerCantVerifyAndAskForTheCard()
+	{
+		var contexts = Substitute.For<IDecisionContextFactory>();
+		contexts.CreateAsync(Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+			.Returns<Task<Result<DecisionContext>>>(_ => throw new SavedDataUnreadableException(SavedDataUnreadableException.CardMessage, "DeviceData.Key.Lost", isTemporary: false));
+		var runner = Substitute.For<IDecisionStepRunner>();
+		var handler = new DecideSpotQueryHandler(contexts, runner, Substitute.For<INetworkStatus>(), new FixedClock());
+
+		var result = await handler.Handle(new DecideSpotQuery(50.825, 4.3606, 5), CancellationToken.None);
+
+		result.IsSuccess.Should().BeTrue();
+		result.Value.Verdict.Should().Be(Verdict.CantVerify);
+		result.Value.Detail.Should().Be(SavedDataUnreadableException.CardMessage);
+		await runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default, default);
 	}
 	#endregion
 }

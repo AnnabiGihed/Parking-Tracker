@@ -103,6 +103,32 @@ public sealed class ResidentCard : LightweightAggregateRoot<ResidentCardId>
 			? Result.Failure<ResidentCard>(checks.Error, checks.ResultExceptionType)
 			: new ResidentCard(ResidentCardId.New(), code.Value, card);
 	}
+
+	/// <summary>
+	/// Rebuilds a card that was stored before, with its stored identifier and the same checks as <see cref="Create"/>. It raises
+	/// no event: the card existed already.
+	/// </summary>
+	/// <param name="id">The stored identifier of the card.</param>
+	/// <param name="municipality">The municipality of the reference data that the card names.</param>
+	/// <param name="card">The stored values.</param>
+	/// <returns>The card, or the first rule the stored values break.</returns>
+	/// <exception cref="ArgumentNullException">An argument is <see langword="null"/>.</exception>
+	public static Result<ResidentCard> Restore(ResidentCardId id, Municipality municipality, ParkingCard card)
+	{
+		ArgumentNullException.ThrowIfNull(id);
+		ArgumentNullException.ThrowIfNull(municipality);
+		ArgumentNullException.ThrowIfNull(card);
+		var code = ValueObjects.MunicipalityCode.Create(card.Municipality);
+		if (code.IsFailure)
+		{
+			return Result.Failure<ResidentCard>(code.Error, code.ResultExceptionType);
+		}
+
+		var checks = CheckAgainst(municipality, code.Value, card);
+		return checks.IsFailure
+			? Result.Failure<ResidentCard>(checks.Error, checks.ResultExceptionType)
+			: new ResidentCard(id, code.Value, card);
+	}
 	#endregion
 
 	#region Domain Behaviours

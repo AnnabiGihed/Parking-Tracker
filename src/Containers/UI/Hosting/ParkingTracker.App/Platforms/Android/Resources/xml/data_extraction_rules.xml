@@ -1,12 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Android 12 and later: the same exclusion as backup_rules.xml, for cloud backup and for a transfer to a new phone (ADR-0004).
+  Android 12 and later: the same exclusions as backup_rules.xml, for cloud backup and for a transfer to a new phone (ADR-0004,
+  ADR-0026): the encrypted storage with the key of the database fields, the plain preferences with the move marker, the database
+  file and its journal files. See backup_rules.xml for where the file names come from.
 -->
 <data-extraction-rules>
   <cloud-backup>
     <exclude domain="sharedpref" path="be.parkingtracker.app.microsoft.maui.essentials.preferences.xml" />
+    <exclude domain="sharedpref" path="parkingtracker.xml" />
+    <exclude domain="file" path="parkingtracker.db" />
+    <exclude domain="file" path="parkingtracker.db-journal" />
+    <exclude domain="file" path="parkingtracker.db-wal" />
+    <exclude domain="file" path="parkingtracker.db-shm" />
   </cloud-backup>
   <device-transfer>
     <exclude domain="sharedpref" path="be.parkingtracker.app.microsoft.maui.essentials.preferences.xml" />
+    <exclude domain="sharedpref" path="parkingtracker.xml" />
+    <exclude domain="file" path="parkingtracker.db" />
+    <exclude domain="file" path="parkingtracker.db-journal" />
+    <exclude domain="file" path="parkingtracker.db-wal" />
+    <exclude domain="file" path="parkingtracker.db-shm" />
   </device-transfer>
 </data-extraction-rules>

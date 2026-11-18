@@ -208,8 +208,8 @@ public sealed class CarViewModel : ViewModelBase, IDisposable
 	/// <returns>A task that completes when the values were read.</returns>
 	public async Task LoadAsync()
 	{
-		Car = await settings.GetCarAsync().ConfigureAwait(false);
-		Timer = await settings.GetTimerAsync().ConfigureAwait(false);
+		Car = await settings.GetCarOrNoneAsync().ConfigureAwait(false);
+		Timer = await settings.GetTimerOrNoneAsync().ConfigureAwait(false);
 		AlertsEnabled = await settings.GetAlertsEnabledAsync().ConfigureAwait(false);
 		NotifyChanged();
 	}

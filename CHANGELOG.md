@@ -25,6 +25,20 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
   Google Maps buttons, the location banner and the search box. Texts and behaviour stay the same; buttons and spacing
   may look slightly different. This completes the move of the screens to Radzen.
 
+### Security
+
+- The residents' card (number and plate), the parked car's position and the saved places are kept in a local database on
+  the phone, and their personal fields are encrypted one by one with a key that stays on the phone. The database, the
+  key and the app's preferences are excluded from Android backup, so a restore on a new phone asks for the card
+  again. Your saved card, car and timer are moved into the database once when you update; the old copies are kept for
+  this release. This protects the stored values against a copied or backed-up file; it does not protect against someone
+  who unlocks the phone.
+- When the phone's protected storage loses the key of the saved data, the app no longer replaces the key silently and
+  no longer treats the card as missing: the spot check answers "can't verify" with "Your saved card could not be read.
+  Please enter it again.", the card line asks for the card, and entering it again makes a new key and replaces the
+  unreadable data. A card or car that you delete or replace before the one-time move has finished is not brought back
+  by the move at the next launch.
+
 ### Fixed
 
 - The card form refuses a card whose "valid from" date is after its "valid until" date, and a card whose municipality

@@ -22,7 +22,7 @@ The host builds only where the `maui-android` workload is installed; CI does it 
 - Install with `-g`, launch `be.parkingtracker.app/be.parkingtracker.app.MainActivity`, find the
   `webview_devtools_remote_<pid>` socket and talk to the web view over the Chrome DevTools Protocol.
 - `window.ptTest` (setCard, getCard, decide, freeSpots, officialList, platformStatus, screenState, startTimer,
-  parseCardText, getCar, migration) reaches the app's own C# code. The answers at Avenue Louise 216 and Place du
+  parseCardText, getCar, migration, dbMigration) reaches the app's own C# code. The answers at Avenue Louise 216 and Place du
   Châtelain, the official-list check, the permissions and the nearest free spot are compared with the expected values.
 - The card scan (ADR-0003): `ptTest.parseCardText` reads a recognised sample card text (number with a misread `8`,
   validity range with an en dash, plate, sector, tolerance code) with the same parser the scan uses. The camera and the
@@ -79,9 +79,10 @@ What it checks:
   as it does for a real user, then force-stops it again and records the files of the web view storage
   (`run-as be.parkingtracker.app ls -la 'app_webview/Default/Local Storage/leveldb'`) in the report.
 - The MAUI build installs over it with `adb install -r` and a higher versionCode.
-- Through `ptTest.getCard()`, `ptTest.getCar()` and `ptTest.migration()`: the card and the car are the stored ones, the
-  marker `pt.migration` says `migrated`, names the reader that was used (`leveldb` or `webview`) and lists the keys, and
-  the welcome dialog (`#welcomeDialog`) is not shown.
+- Through `ptTest.getCard()`, `ptTest.getCar()`, `ptTest.migration()` and `ptTest.dbMigration()`: the card and the car are
+  the stored ones (read from the device database, ADR-0026), the marker `pt.migration` says `migrated`, names the reader
+  that was used (`leveldb` or `webview`) and lists the keys, the marker `pt.dbMigration` says `migrated` and lists the card
+  and the car, and the welcome dialog (`#welcomeDialog`) is not shown.
 - No JavaScript error, no unhandled .NET exception in logcat.
 
 The report goes to `upgrade-report/` (`summary.md` with the file list and the reader, `report.json`, `logcat.txt`,

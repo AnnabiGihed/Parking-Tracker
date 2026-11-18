@@ -29,5 +29,15 @@ public static class SavedPlacesErrors
 	/// No place of the list has the identifier.
 	/// </summary>
 	public static readonly Error PlaceNotFound = new("SavedPlaces.Place.NotFound", "The saved place was not found.");
+
+	/// <summary>
+	/// Stored places repeat a home, a work place or an identifier.
+	/// </summary>
+	public static readonly Error PlaceDuplicated = new("SavedPlaces.Place.Duplicated", "The stored places repeat a home, a work place or an identifier.");
+
+	/// <summary>
+	/// A stored place has a kind that does not exist.
+	/// </summary>
+	public static readonly Error KindUnknown = new("SavedPlaces.Kind.Unknown", "A stored place has an unknown kind.");
 	#endregion
 }

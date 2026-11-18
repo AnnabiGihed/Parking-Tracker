@@ -24,6 +24,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\src\Containers\UI\Core\ParkingTracker.ViewModels\ParkingTracker.ViewModels.csproj" />
+    <!-- The tests of the settings store, the start-up gate and the move into the database run on the real SQLite file, through the
+         shared test support that brings the public API of the device database with it. -->
+    <ProjectReference Include="..\..\..\..\Infrastructure\ParkingTracker.Testing.Device\ParkingTracker.Testing.Device.csproj" />
   </ItemGroup>
 
 </Project>

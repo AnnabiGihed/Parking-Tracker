@@ -20,6 +20,7 @@ public interface ISettingsStore
 	/// Gets the saved residents' card.
 	/// </summary>
 	/// <returns>A task with the card, or <see langword="null"/> when none is saved.</returns>
+	/// <exception cref="SavedDataUnreadableException">A card is saved but cannot be read; that is not "no card".</exception>
 	Task<ParkingCard?> GetCardAsync();
 
 	/// <summary>
@@ -39,6 +40,7 @@ public interface ISettingsStore
 	/// Gets the saved position of the parked car.
 	/// </summary>
 	/// <returns>A task with the car, or <see langword="null"/> when none is saved.</returns>
+	/// <exception cref="SavedDataUnreadableException">A car is saved but cannot be read.</exception>
 	Task<ParkedCar?> GetCarAsync();
 
 	/// <summary>
@@ -58,6 +60,7 @@ public interface ISettingsStore
 	/// Gets the saved parking timer.
 	/// </summary>
 	/// <returns>A task with the timer, or <see langword="null"/> when none is saved.</returns>
+	/// <exception cref="SavedDataUnreadableException">A session that holds the timer is saved but cannot be read.</exception>
 	Task<ParkingTimer?> GetTimerAsync();
 
 	/// <summary>

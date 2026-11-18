@@ -33,6 +33,7 @@ public static class TestHookScript
 		("parseCardText", "ParseCardText"),
 		("getCar", "GetCar"),
 		("migration", "Migration"),
+		("dbMigration", "DbMigration"),
 	];
 	#endregion
 

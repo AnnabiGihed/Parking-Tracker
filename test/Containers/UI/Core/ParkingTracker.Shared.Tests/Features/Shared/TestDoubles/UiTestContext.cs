@@ -6,6 +6,8 @@ using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
 using ParkingTracker.Application.Features.ParkingDetection.Abstractions;
 using ParkingTracker.Application.Features.ParkingDetection.Services;
+using ParkingTracker.Application.Features.ParkingSessions.Abstractions;
+using ParkingTracker.Application.Features.ResidentCards.Abstractions;
 using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Queries.DecideSpot;
@@ -17,6 +19,7 @@ using ParkingTracker.Domain.Features.Shared.ValueObjects;
 using ParkingTracker.Domain.Features.SpotDecisions.ValueObjects;
 using ParkingTracker.Domain.Features.Zones.ValueObjects;
 using ParkingTracker.ViewModels.Features.Shared.Settings;
+using ParkingTracker.ViewModels.Features.Shared.Settings.Database;
 using ParkingTracker.ViewModels.Features.Shared.Settings.Legacy;
 using Pivot.Framework.Application.Abstractions.Messaging;
 using Pivot.Framework.Domain.Shared;
@@ -73,7 +76,9 @@ public abstract class UiTestContext : BunitContext
 
 		// The migration of the previous version's data has finished before a screen is shown, unless a test says otherwise.
 		LegacyPlain.ReadAsync(LegacyDataMigration.MarkerKey).Returns("{}");
-		Services.AddSingleton(new LegacyDataMigration(LegacyReader, Settings, LegacyPlain, Clock, NullLogger<LegacyDataMigration>.Instance));
+		var legacy = new LegacyDataMigration(LegacyReader, Settings, LegacyPlain, Clock, NullLogger<LegacyDataMigration>.Instance);
+		Services.AddSingleton(legacy);
+		Services.AddSingleton(CreateStartupGate(legacy));
 		var configuration = new ConfigurationBuilder().Build();
 		new global::ParkingTracker.ViewModels.UiServiceInstaller().Install(Services, configuration);
 		new global::ParkingTracker.Shared.UiServiceInstaller().Install(Services, configuration);
@@ -191,6 +196,22 @@ public abstract class UiTestContext : BunitContext
 	#endregion
 
 	#region Private Helpers
+	/// <summary>
+	/// Builds the start-up gate over the given migration of the previous version's data, with a device database that is ready and
+	/// whose move of the saved values has finished, so that only the legacy migration decides when the page opens.
+	/// </summary>
+	/// <param name="legacy">The migration of the previous version's data.</param>
+	/// <returns>The gate.</returns>
+	private StartupGate CreateStartupGate(LegacyDataMigration legacy)
+	{
+		var initializer = Substitute.For<IDeviceDatabaseInitializer>();
+		initializer.InitializeAsync(Arg.Any<CancellationToken>()).Returns(Result.Success());
+		var plain = Substitute.For<IKeyValueStorage>();
+		plain.ReadAsync(SettingsToDatabaseMigration.MarkerKey).Returns("{}");
+		var database = new SettingsToDatabaseMigration(Substitute.For<IKeyValueStorage>(), plain, Substitute.For<IResidentCardRepository>(), Substitute.For<IParkingSessionRepository>(), Substitute.For<IDeviceUnitOfWork>(), ReferenceData, Clock, NullLogger<SettingsToDatabaseMigration>.Instance);
+		return new StartupGate(legacy, initializer, database, NullLogger<StartupGate>.Instance);
+	}
+
 	/// <summary>
 	/// Answers the fire-and-forget calls that the Radzen components make to <c>Radzen.Blazor.js</c> (global functions named
 	/// <c>Radzen.*</c>, for example when a dialog or a tooltip opens). Only those calls are answered: strict mode stays on, so a call

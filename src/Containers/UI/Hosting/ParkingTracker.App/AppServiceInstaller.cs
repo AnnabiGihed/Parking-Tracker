@@ -10,10 +10,16 @@ using ParkingTracker.App.Features.Shared;
 using ParkingTracker.App.Features.SpotDecisions;
 using ParkingTracker.Application.Features.Cards.Abstractions;
 using ParkingTracker.Application.Features.ParkingDetection.Abstractions;
+using ParkingTracker.Application.Features.ParkingSessions.Abstractions;
+using ParkingTracker.Application.Features.ResidentCards.Abstractions;
+using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
 using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
 using ParkingTracker.Infrastructure.Features.Shared.Legacy;
+using ParkingTracker.Persistence.Device;
+using ParkingTracker.Persistence.Device.Features.Shared.Encryption;
 using ParkingTracker.ViewModels.Features.Shared.Settings;
+using ParkingTracker.ViewModels.Features.Shared.Settings.Database;
 using ParkingTracker.ViewModels.Features.Shared.Settings.Legacy;
 using Pivot.Framework.Tools.DependencyInjection.Abstractions;
 #if TEST_HOOKS
@@ -32,6 +38,13 @@ namespace ParkingTracker.App;
 /// </summary>
 public sealed class AppServiceInstaller : IServiceInstaller
 {
+	#region Constants
+	/// <summary>
+	/// The name of the database file in <see cref="FileSystem.AppDataDirectory"/>; the backup rules name the same file.
+	/// </summary>
+	private const string DatabaseFileName = "parkingtracker.db";
+	#endregion
+
 	#region IServiceInstaller Implementation
 	/// <inheritdoc />
 	/// <exception cref="ArgumentNullException">Thrown when <paramref name="services"/> or <paramref name="configuration"/> is <see langword="null"/>.</exception>
@@ -42,10 +55,29 @@ public sealed class AppServiceInstaller : IServiceInstaller
 
 		services.TryAddSingleton(TimeProvider.System);
 
-		// The card goes to the encrypted storage, everything else to the preferences (ADR-0004).
-		services.AddSingleton<ISettingsStore>(provider => new SettingsStore(
+		// The device database (ADR-0026): one file in the private data directory, excluded from backup, with the fields that hold
+		// personal data encrypted by a key that only this phone can read.
+		services.AddSingleton<IDeviceKeyStore, SecureStorageDeviceKeyStore>();
+		services.AddDeviceDatabase(Path.Combine(FileSystem.AppDataDirectory, DatabaseFileName));
+
+		// The key-value store of the settings (ADR-0004): the old card in the encrypted storage, everything else in the preferences.
+		// It still serves the values that stay in the preferences and the copy of the previous version's data, which runs before
+		// the database exists.
+		services.AddSingleton(provider => new SettingsStore(
 			new SecureValueStorage(provider.GetRequiredService<ILogger<SecureValueStorage>>()),
 			new PreferencesValueStorage()));
+
+		// What the screens and handlers read: the card, car and timer from the database, the rest from the key-value store.
+		services.AddSingleton<ISettingsStore>(provider => new DeviceSettingsStore(
+			provider.GetRequiredService<SettingsStore>(),
+			provider.GetRequiredService<IResidentCardRepository>(),
+			provider.GetRequiredService<IParkingSessionRepository>(),
+			provider.GetRequiredService<ISavedPlacesRepository>(),
+			provider.GetRequiredService<IDeviceUnitOfWork>(),
+			provider.GetRequiredService<IDeviceDatabaseInitializer>(),
+			provider.GetRequiredService<IStartupGate>(),
+			provider.GetRequiredService<IReferenceData>(),
+			provider.GetRequiredService<ILogger<DeviceSettingsStore>>()));
 
 		// One run of the copy of the previous version's data (ADR-0004, ADR-0008); the Blazor screens wait for it before they read the
 		// settings. The LevelDB files are read first, and a hidden web view is the fallback when they cannot be parsed.
@@ -54,10 +86,23 @@ public sealed class AppServiceInstaller : IServiceInstaller
 				new LegacyLocalStorageReader(LegacyStorageDirectory(), provider.GetRequiredService<ILogger<LegacyLocalStorageReader>>()),
 				new WebViewLegacyStorageReader(provider.GetRequiredService<TimeProvider>(), provider.GetRequiredService<ILogger<WebViewLegacyStorageReader>>()),
 				provider.GetRequiredService<ILogger<CompositeLegacyStorageReader>>()),
-			provider.GetRequiredService<ISettingsStore>(),
+			provider.GetRequiredService<SettingsStore>(),
 			new PreferencesValueStorage(),
 			provider.GetRequiredService<TimeProvider>(),
 			provider.GetRequiredService<ILogger<LegacyDataMigration>>()));
+
+		// The start-up gate: the copy above, then the schema of the device database, then the move of the card, car and timer into it.
+		services.AddSingleton(provider => new SettingsToDatabaseMigration(
+			new SecureValueStorage(provider.GetRequiredService<ILogger<SecureValueStorage>>()),
+			new PreferencesValueStorage(),
+			provider.GetRequiredService<IResidentCardRepository>(),
+			provider.GetRequiredService<IParkingSessionRepository>(),
+			provider.GetRequiredService<IDeviceUnitOfWork>(),
+			provider.GetRequiredService<IReferenceData>(),
+			provider.GetRequiredService<TimeProvider>(),
+			provider.GetRequiredService<ILogger<SettingsToDatabaseMigration>>()));
+		services.AddSingleton<StartupGate>();
+		services.AddSingleton<IStartupGate>(provider => provider.GetRequiredService<StartupGate>());
 		services.AddSingleton<ILocationTracker, FusedLocationTracker>();
 		services.AddSingleton<ILocationPermissions, MauiLocationPermissions>();
 		services.AddSingleton<ILinkLauncher, MauiLinkLauncher>();

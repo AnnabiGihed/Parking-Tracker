@@ -75,6 +75,28 @@ public sealed class SavedPlace : Entity<SavedPlaceId>
 			? new SavedPlace(SavedPlaceId.New(), kind, label.Trim(), point, addressText?.Trim() ?? string.Empty)
 			: Result.Failure<SavedPlace>(SavedPlacesErrors.PointOutsideBrussels);
 	}
+
+	/// <summary>
+	/// Rebuilds a stored place with its stored identifier and the checks of <see cref="Create"/>; only <see cref="SavedPlaces"/> does so.
+	/// </summary>
+	/// <param name="stored">The stored place.</param>
+	/// <returns>The place, or a failure when the kind is unknown, the label is blank or the point is outside the Brussels box.</returns>
+	internal static Result<SavedPlace> Restore(StoredPlace stored)
+	{
+		if (!Enum.IsDefined(stored.Kind))
+		{
+			return Result.Failure<SavedPlace>(SavedPlacesErrors.KindUnknown);
+		}
+
+		if (string.IsNullOrWhiteSpace(stored.Label))
+		{
+			return Result.Failure<SavedPlace>(SavedPlacesErrors.LabelRequired);
+		}
+
+		return IsInside(SavedPlaces.BrusselsBox, stored.Point)
+			? new SavedPlace(stored.Id, stored.Kind, stored.Label.Trim(), stored.Point, stored.AddressText?.Trim() ?? string.Empty)
+			: Result.Failure<SavedPlace>(SavedPlacesErrors.PointOutsideBrussels);
+	}
 	#endregion
 
 	#region Private Helpers

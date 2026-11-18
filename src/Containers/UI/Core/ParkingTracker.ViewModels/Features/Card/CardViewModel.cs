@@ -242,14 +242,14 @@ public sealed class CardViewModel : ViewModelBase
 	/// <returns>A task that completes when the areas, if the municipality needs them, were loaded.</returns>
 	public async Task OpenAsync(CancellationToken cancellationToken = default)
 	{
-		var saved = await settings.GetCardAsync().ConfigureAwait(false);
+		var (saved, unreadable) = await ReadCardAsync().ConfigureAwait(false);
 		Number = saved?.Number ?? string.Empty;
 		Plate = saved?.Plate ?? string.Empty;
 		ValidFrom = saved?.Period.ValidFrom?.ToString(DateInputFormat, CultureInfo.InvariantCulture) ?? string.Empty;
 		ValidTo = saved?.Period.ValidTo?.ToString(DateInputFormat, CultureInfo.InvariantCulture) ?? string.Empty;
 		MunicipalityId = saved?.Municipality ?? DefaultMunicipalityId;
 		Select(SelectedMunicipality?.Kind == MunicipalityKind.Streets ? saved?.Sector ?? DefaultSectorId : null, saved?.Tolerances, saved?.Mailles, saved?.Lims);
-		FormError = string.Empty;
+		FormError = unreadable ? SavedDataUnreadableException.CardMessage : string.Empty;
 		ScanStatus = string.Empty;
 		IsOpen = true;
 		NotifyChanged();
@@ -372,7 +372,7 @@ public sealed class CardViewModel : ViewModelBase
 			return false;
 		}
 
-		var first = await settings.GetCardAsync().ConfigureAwait(false) is null;
+		var first = await settings.GetCardOrNoneAsync().ConfigureAwait(false) is null;
 		await settings.SaveCardAsync(drafted.Value.ToParkingCard()).ConfigureAwait(false);
 		FormError = string.Empty;
 		IsOpen = false;
@@ -399,7 +399,14 @@ public sealed class CardViewModel : ViewModelBase
 	/// <returns>A task that completes when the line was rebuilt.</returns>
 	public async Task RefreshLineAsync()
 	{
-		var saved = await settings.GetCardAsync().ConfigureAwait(false);
+		var (saved, unreadable) = await ReadCardAsync().ConfigureAwait(false);
+		if (unreadable)
+		{
+			Line = CardLinePresenter.Unreadable();
+			NotifyChanged();
+			return;
+		}
+
 		var municipality = saved is null ? null : Municipalities.FirstOrDefault(m => string.Equals(m.Id, saved.Municipality, StringComparison.Ordinal))
 			?? Municipalities.FirstOrDefault(m => string.Equals(m.Id, DefaultMunicipalityId, StringComparison.Ordinal));
 		var sectorName = Sectors.FirstOrDefault(s => string.Equals(s.Id, saved?.Sector ?? DefaultSectorId, StringComparison.Ordinal))?.Name;
@@ -415,7 +422,7 @@ public sealed class CardViewModel : ViewModelBase
 	/// <returns>A task that completes when the line was rebuilt.</returns>
 	public async Task RefreshListIfStaleAsync(CancellationToken cancellationToken = default)
 	{
-		if (await settings.GetCardAsync().ConfigureAwait(false) is null || !OfficialListStatus.IsStale(officialList, clock.GetUtcNow()))
+		if (await settings.GetCardOrNoneAsync().ConfigureAwait(false) is null || !OfficialListStatus.IsStale(officialList, clock.GetUtcNow()))
 		{
 			return;
 		}
@@ -437,6 +444,22 @@ public sealed class CardViewModel : ViewModelBase
 	#endregion
 
 	#region Private Helpers
+	/// <summary>
+	/// Reads the saved card and tells whether it exists but cannot be read, which is not the same as "no card".
+	/// </summary>
+	/// <returns>A task with the card (or <see langword="null"/>) and whether the saved card cannot be read.</returns>
+	private async Task<(ParkingCard? Card, bool Unreadable)> ReadCardAsync()
+	{
+		try
+		{
+			return (await settings.GetCardAsync().ConfigureAwait(false), false);
+		}
+		catch (SavedDataUnreadableException)
+		{
+			return (null, true);
+		}
+	}
+
 	/// <summary>
 	/// Puts the fields found on a photo into the form and says what was filled. A new municipality, sector or tolerance code shows
 	/// the sector part of the form again as the first version did: the sector the user chose is kept when the scan found none (the first one when there was none), the tolerance codes

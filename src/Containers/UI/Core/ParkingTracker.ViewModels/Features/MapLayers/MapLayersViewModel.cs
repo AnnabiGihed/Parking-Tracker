@@ -193,7 +193,7 @@ public sealed class MapLayersViewModel : ViewModelBase, IDisposable
 	/// <returns>A task that completes when the layers were handed to the screen.</returns>
 	public async Task RefreshAsync()
 	{
-		if (await settings.GetCardAsync().ConfigureAwait(false) is null || view is not var (bounds, zoom))
+		if (await settings.GetCardOrNoneAsync().ConfigureAwait(false) is null || view is not var (bounds, zoom))
 		{
 			return;
 		}

@@ -1087,22 +1087,118 @@ sequenceDiagram
 - Tables: `resident_cards` (municipality, sector, period, mailles, lims and tolerances as JSON columns, card number
   and plate as AES-GCM ciphertext), `saved_places` (kind, label, address text, coordinates as ciphertext),
   `parking_sessions` (coordinates as ciphertext, parked at, headline, timer end and minutes, ended at), `device_owner`
-  (one row) and `schema_version`. There is no outbox table (3.1).
+  (one row) and `schema_version`. There is no outbox table (3.1). The phone holds one card, one list of places and one
+  session, and the schema enforces it: a `slot` column that is always 1 and unique in `resident_cards` and
+  `parking_sessions`, a unique index on `position` and a partial unique index on `kind` for home and work in
+  `saved_places`. Every row carries the identifier of its aggregate (`saved_places` also the identifier of the list).
 - **Repositories.** One per aggregate (`ResidentCard`, `SavedPlaces`, `ParkingSession`): narrow ports in the phone's
   Application project, implementations by hand in `ParkingTracker.Persistence.Device`. They map each aggregate to row
-  types that never leave the project and rehydrate through the aggregates' factory methods, so an invalid row gives a
-  failed `Result`. Queries use sqlite-net's single-table LINQ or hand-written SQL through `QueryAsync`.
-- **Unit of work.** Repositories stage inserts, updates and deletes; `IDeviceUnitOfWork.CommitAsync` applies them in
-  one `RunInTransactionAsync` call (commit when the delegate returns, rollback when it throws) and returns a `Result`.
-  Pivot's `IUnitOfWork`, `IAsyncCommandRepository`, EF Core repositories and outbox are not used on the phone.
-- `FieldCipher` (AES-GCM, random 96-bit nonce per value, key ID prefix for rotation) is called by the row mappers.
-  The key is created on first use and stored in `SecureStorage` under `pt.dbKey`. The database file, its journal files
-  and the key are excluded from Android backup. A missing or unreadable key (a restore on a new phone) leaves those
-  fields empty and the card dialog asks for them again, as today.
+  types that never leave the project and rehydrate through the aggregates' `Restore` factories (stored identifier, same
+  invariants, no domain events), so an invalid row gives a failed `Result`. Queries use sqlite-net's single-table LINQ
+  or hand-written SQL through `QueryAsync`.
+- **Unit of work.** Every operation that changes the database calls `IDeviceUnitOfWork.BeginAsync()` and gets its own
+  `IDeviceChangeScope`. The repositories stage inserts, updates and deletes in the scope they are given;
+  `IDeviceChangeScope.CommitAsync` applies them in one `RunInTransactionAsync` call (commit when the delegate returns,
+  rollback when it throws) and returns a `Result`. There is no shared list of staged changes, so one caller never
+  commits what another staged. A scope holds the one write gate of the database until it is disposed: the settings
+  store, `SettingsToDatabaseMigration` and any background writer are serialised, and the migration plans, writes and
+  reads back inside one scope. Pivot's `IUnitOfWork`, `IAsyncCommandRepository`, EF Core repositories and outbox are not
+  used on the phone.
+- `FieldCipher` (AES-GCM, random 96-bit nonce per value, key ID prefix for rotation) is called by the repositories. The
+  associated data of every value is the key ID plus a `FieldBinding` (table, column, row or aggregate ID), so a
+  ciphertext copied into another column or row, or relabelled with another key ID, fails the tag check. The key is
+  created on first use and stored in `SecureStorage` under `pt.dbKey`. The database file, its journal files, the
+  preferences file of `SecureStorage` and the plain preferences file are excluded from Android backup (see *Backup*).
+  Three different failures are never mixed up: **key unavailable** (the storage threw, or holds something that is not
+  a key; `DeviceDataErrors.KeyUnavailable`) means the data may be fine and only cannot be read now; **key lost**
+  (`DeviceDataErrors.KeyLost`: the storage holds no key, but the database holds encrypted rows) and **key missing or
+  value rejected** (`DeviceDatabase.Key.Missing`, `DeviceDatabase.Cipher.Rejected`) mean these values can never be read
+  (a restore on a new phone, a key that MAUI dropped, a changed or moved value). A field that cannot be decrypted
+  fails the read of the aggregate; it is never dropped silently.
 - `SettingsToDatabaseMigration` runs once, after `LegacyDataMigration`: it reads `pt.card`, `pt.car` and `pt.timer`
   through the existing `SettingsJson` readers, creates `ResidentCard` and `ParkingSession` in one unit of work and
   writes the marker `pt.dbMigration`. It never overwrites a row, keeps the old keys in the release that migrates (a
   later release removes them) and gives up after three failed attempts, like `LegacyDataMigration`.
+- **Implementation notes (S3).**
+  - *Key storage.* The host keeps the 256-bit key in MAUI `SecureStorage` under `pt.dbKey`
+    (`SecureStorageDeviceKeyStore`):
+    a key from the system random generator, created on first use. A key in the Android Keystore itself would need Java
+    interop that the pull request could not verify without a device; `SecureStorage` already wraps its values with a
+    Keystore key, and its preferences file is excluded from backup. The port `IDeviceKeyStore` allows a later move to a
+    Keystore key; the key ID in front of each value keeps old values readable.
+  - *Never replace a key that could not be read.* `IDeviceKeyStore` answers a `Result<DeviceKey>`.
+    Reading a key never creates one: `GetCurrentAsync` answers `DeviceDatabase.Key.Missing` when `SecureStorage.GetAsync`
+    returns `null` without throwing, and `CreateCurrentAsync` makes a key only when `FieldCipher` asks for it. When the
+    storage throws, or holds a value that is not a 256-bit key, the store logs the cause, answers
+    `DeviceDataErrors.KeyUnavailable` and writes nothing, so a transient storage fault cannot orphan every stored field.
+    A new key is returned only after `SetAsync` succeeded. `FieldCipher` also turns an exception of the key store, or a
+    key of the wrong length, into `KeyUnavailable` and logs the cause.
+  - *A key that MAUI dropped is not replaced silently.* MAUI Android answers `null` from `SecureStorage.GetAsync` after
+    it failed to decrypt the entry, and removes the entry. A new key behind existing rows would leave them unreadable
+    without anyone being told. Before `FieldCipher` asks for a key to be created it asks the port
+    `IEncryptedDataProbe` (implemented in `ParkingTracker.Persistence.Device` by `EncryptedDataProbe`: a card with a
+    number or plate, any saved place, any parking session) whether encrypted rows exist. With rows the encryption fails
+    with `DeviceDataErrors.KeyLost` and creates nothing; a probe that cannot read the database is `KeyUnavailable`,
+    never "no rows"; with no row (a first install, or after the removal below) the key is created. The host only keeps
+    the key; it does not know the database.
+  - *Re-entering the card after a lost key.* Reading the card or the car then fails with `DeviceDatabase.Key.Missing`,
+    which is permanent: see the next note. `DeviceSettingsStore.SaveCardAsync` is the only way out: when staging the
+    card fails with `KeyLost`, it stages the removal of the stale rows of the card, the session and the saved places in
+    the same scope (one write gate), commits that, stages the card again (which now creates the key) and commits. A car
+    that is saved meanwhile fails and writes nothing, so a parked car never wipes the card by itself.
+  - *Unreadable is not "no data".* The repositories pass every failure other than `NotStored` on.
+    `DeviceSettingsStore` throws `SavedDataUnreadableException` (an `InvalidOperationException`) from `GetCardAsync`,
+    `GetCarAsync` and `GetTimerAsync`, instead of answering `null`, for a key that cannot be read now
+    (`KeyUnavailable`, `IsTemporary`), a lost or missing key, a rejected ciphertext and an invalid row. The spot check
+    (`DecideSpotQueryHandler`, also the parked-car alert that decides through it) answers **CAN'T VERIFY** with "Your
+    saved card could not be read. Please enter it again." and never FREE; the card line shows "Card not readable" with
+    the add-card link, and the card dialog opens empty with the same text. Screens that only decide what to show (the
+    welcome dialog, the map layers, the alarm restore, the car card) use `GetCardOrNoneAsync` and its siblings, which
+    read an unreadable value as none. A permanent failure is cached for the session, so it is not read and logged on every
+    check, until the user saves a card (or saves or clears the car); a temporary one is retried every time. Writes that
+    have to read first still fail on a temporary failure, so no write replaces what could not be read.
+    `SettingsToDatabaseMigration` waits for the next launch and does **not** count the run as a failed attempt, so a
+    storage fault never makes it give up.
+  - *Deleted data does not come back.* While the marker `pt.dbMigration` is absent (the move has not finished, or will
+    be retried), a save or clear of the card also removes the old `pt.card`, and a save or clear of the car removes the
+    old `pt.car`, after the database change is committed; a timer without a car is never imported. Once the marker
+    exists the old copies stay for the release, as stated above. A failed removal is logged and does not fail the call.
+  - *Identity across loads.* Each phone aggregate has a `Restore` factory (`ResidentCard.Restore`, `ParkingSession.Restore`,
+    `SavedPlaces.Restore` with `StoredPlace`) that rebuilds it from stored state with the stored identifier, checks the
+    same invariants as the behaviours and raises no event. The rows store the aggregate identifier (and the list
+    identifier for places), and the identifier is part of the associated data of the encrypted fields. An empty list of
+    places has no row, so it gets a new list identifier on each load. `ParkingSession.Restore` also refuses a session
+    that ended and still has a timer, as `StartTimer` refuses an ended session.
+  - *One row, never overwritten.* `AddAsync` of the three repositories stages "insert only when the table is empty", so
+    the move can never overwrite newer data; `UpdateAsync` replaces. The unique constraints of the schema are the last
+    line of defence. Step 1 of the schema was changed instead of adding a step 2, because the branch is unmerged and no
+    release contains it; from the first release on step 1 is frozen.
+  - *Nothing stored.* Pivot's `Result<T>` cannot hold `null`: `GetAsync` of the card and session repositories answers the
+    failure `DeviceDataErrors.NotStored` (kind `NotFound`) when nothing is stored.
+  - *Where the settings go.* `DeviceSettingsStore` implements `ISettingsStore` over the repositories, so the view models,
+    handlers and test hooks are unchanged. A timer that the session cannot hold (no car is saved, or the length is outside
+    5 minutes to one day, as the test hook starts one) stays in `pt.timer` of the preferences, as in the first version.
+  - *Start-up gate.* `StartupGate` runs `LegacyDataMigration`, then `DeviceDatabaseInitializer`, then
+    `SettingsToDatabaseMigration`; the screens, the relay and the host application wait for it. The legacy migration still
+    writes to the key-value store, so the database exists only after it. `DeviceSettingsStore` itself waits for the gate
+    (`IStartupGate`) before every read and write, **outside** any scope (the move needs the write gate, so waiting inside
+    a scope would deadlock). Every reader, including the background service, the boot receiver, `HandleParked`,
+    `TimerRestorer` and `ParkingAlertCoordinator`, reads through this store, so an early read starts the gate and
+    waits for the move instead of caching "no card". The gate creates the schema, and the store checks it again on first use.
+  - *Backup.* `backup_rules.xml` and `data_extraction_rules.xml` exclude `parkingtracker.db` and its `-journal`, `-wal`
+    and `-shm` files (domain `file`, the app's files directory, `FileSystem.AppDataDirectory`), the preferences file of
+    `SecureStorage` with the key and the plain preferences file. Checked against the source of .NET MAUI Essentials
+    10.0.130 (Android): `SecureStorage` writes the file named by its `Alias`,
+    `Preferences.GetPrivatePreferencesSharedName("preferences")`, which is
+    `{PackageName}.microsoft.maui.essentials.preferences`, so
+    `be.parkingtracker.app.microsoft.maui.essentials.preferences.xml` (the Tink keyset of `EncryptedSharedPreferences` is
+    a key of the same file). `PreferencesValueStorage` passes the shared name `parkingtracker` to `Preferences`, which
+    `Preferences.android.cs` hands to `Context.GetSharedPreferences` as it is, so the plain file is `parkingtracker.xml`;
+    it holds the migration marker, the old car and timer, the alerts, layers and welcome flags. It is excluded because a
+    restored marker without the excluded database would tell the move that the data was already moved. The price: those
+    preferences are not restored on a new phone either.
+  - *Not done yet.* The `device_owner` table exists (step 1) but has no row type or repository; it comes with the
+    account binding.
 - **Binding to the account.** After the first successful sign-in, `device_owner` stores the SHA-256 hash of the Google
   account ID. Migrated data belongs to the first account that signs in. If a different account signs in later, the app
   asks before it wipes the local data of the previous one. Sign-out keeps the data; erasure (`DELETE /me`) wipes it.
@@ -1450,7 +1546,7 @@ API-served data reaches the public only in stage S10, after the licence question
 | S0 | Done 2026-11-17: ADR-0009 to ADR-0025 accepted; upstream Pivot issues opened: AnnabiGihed/Pivot.Framework#5 (Hangfire storage and expression jobs), #6 (policy-based dashboard filter), #7 (persistence without messaging), #8 (SQL Server provider split), #9 (generic OIDC and user deletion) | Owner accepts the ADRs |
 | S1 | Done 2026-11-17 in code, awaiting the emulator run and the release: `ResidentCard`, `SavedPlaces` and `ParkingSession` aggregates with the `ToParkingCard()` and `ToParkedCar()` bridges; the card dialog builds its card through `ResidentCard`; no storage change | Parity, domain and emulator tests green; APK released; the only visible change is that the card form refuses reversed dates and an unknown municipality |
 | S2 | Radzen foundation in `ParkingTracker.Shared`, then one dialog per pull request (welcome, card, car, layers, status sheet). Progress: foundation (Radzen.Blazor 13.1.0, services, theme file, host page, bUnit interop), the welcome dialog, the card dialog, the car dialog (with the timer line), the layers popover and the status sheet (status block, chips, nearest spot, permission banner, search bar) are done in code, awaiting the emulator run; S2 is done | Each pull request: bUnit and emulator tests green, emulator selectors kept |
-| S3 | Budget spike done 2026-11-18 (see below; EF Core over budget, ADR-0026 chooses sqlite-net-pcl), then device database on sqlite-net-pcl, field encryption, settings migration, Home and Work places; spike code removed | Upgrade leg green; the real device database measured within 8 MB and 300 ms |
+| S3 | Budget spike done 2026-11-18 (see below; EF Core over budget, ADR-0026 chooses sqlite-net-pcl), then device database on sqlite-net-pcl, field encryption, settings migration, Home and Work places; spike code removed. Progress: the device database is done in code, awaiting the CI build, the emulator run and the budget measurement of the real database: `ParkingTracker.Persistence.Device` (schema steps, unit of work, `FieldCipher`, repositories of the three aggregates), the repository ports in `ParkingTracker.Application`, `DeviceSettingsStore` (the card, car and timer now go through the repositories), the start-up gate with `SettingsToDatabaseMigration`, the backup rules and the tests; Home and Work places are the next pull request. The spike code never reached `main` | Upgrade leg green; the real device database measured within 8 MB and 300 ms |
 | S4 | VPS bootstrap, DNS, Caddy, PostgreSQL, backups and a restore test before any real data; back-end skeleton (AppHost, ServiceDefaults, ApiService with health, OpenAPI and Scalar, persistence with migrations, Dockerfiles, `backend.yml`, `pt-deploy`); runbook | `/health/ready` green on the VPS through a deployment from `main`; a forced failed health check rolls back |
 | S5 | Credential Manager spike; session exchange, refresh, sign-out, `/me`, erasure, rate limiting | Authentication tests green; the owner signs in from a debug build against the VPS |
 | S6 | Jobs host: region job, roadworks job and one pilot municipality; `RefreshRun`, snapshots, freshness, admin endpoints, alerts; a shadow job compares API answers with live upstream at sample points for two weeks | API-mode parity green; no verdict difference on fresh data |

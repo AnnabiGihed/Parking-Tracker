@@ -109,6 +109,41 @@ public sealed class ParkingSession : LightweightAggregateRoot<ParkingSessionId>
 		var started = created.Value.StartTimer(timer);
 		return started.IsFailure ? Result.Failure<ParkingSession>(started.Error, started.ResultExceptionType) : created;
 	}
+
+	/// <summary>
+	/// Rebuilds a session that was stored before, with its stored identifier and the rules of the behaviours: the position is on
+	/// Earth, a timer lasts 5 minutes to one day and ends after the parking moment, and a session that ended neither ended before it
+	/// was parked nor still runs a timer. It raises no event: the session existed already.
+	/// </summary>
+	/// <param name="id">The stored identifier of the session.</param>
+	/// <param name="position">Where the car stands.</param>
+	/// <param name="parkedAt">When the position was saved.</param>
+	/// <param name="headline">The headline the app showed; empty when unknown.</param>
+	/// <param name="addressText">Where the car is, in words; empty when unknown.</param>
+	/// <param name="timer">The stored timer, or <see langword="null"/> when none runs.</param>
+	/// <param name="endedAt">When the user left the car, or <see langword="null"/> while the session is open.</param>
+	/// <returns>The session, or the first rule the stored values break.</returns>
+	/// <exception cref="ArgumentNullException">The identifier or a text is <see langword="null"/>.</exception>
+	public static Result<ParkingSession> Restore(ParkingSessionId id, GeoPoint position, DateTimeOffset parkedAt, string headline, string addressText, ParkingTimer? timer, DateTimeOffset? endedAt)
+	{
+		ArgumentNullException.ThrowIfNull(id);
+		ArgumentNullException.ThrowIfNull(headline);
+		ArgumentNullException.ThrowIfNull(addressText);
+		if (!IsOnEarth(position))
+		{
+			return Result.Failure<ParkingSession>(ParkingSessionErrors.PositionInvalid);
+		}
+
+		var check = timer is null ? Result.Success() : CheckTimer(timer, parkedAt);
+		if (check.IsSuccess && endedAt is { } ended)
+		{
+			check = timer is not null ? Result.Failure(ParkingSessionErrors.AlreadyEnded, ResultExceptionType.Conflict) : CheckEnd(ended, parkedAt);
+		}
+
+		return check.IsFailure
+			? Result.Failure<ParkingSession>(check.Error, check.ResultExceptionType)
+			: new ParkingSession(id, position, parkedAt, headline, addressText) { Timer = timer, EndedAt = endedAt };
+	}
 	#endregion
 
 	#region Domain Behaviours
@@ -126,14 +161,10 @@ public sealed class ParkingSession : LightweightAggregateRoot<ParkingSessionId>
 			return Result.Failure(ParkingSessionErrors.AlreadyEnded, ResultExceptionType.Conflict);
 		}
 
-		if (timer.Minutes is < ParkingTimer.MinimumMinutes or > ParkingTimer.MaximumMinutes)
+		var check = CheckTimer(timer, ParkedAt);
+		if (check.IsFailure)
 		{
-			return Result.Failure(ParkingSessionErrors.TimerLengthOutOfRange);
-		}
-
-		if (timer.End <= ParkedAt)
-		{
-			return Result.Failure(ParkingSessionErrors.TimerEndsBeforeParking);
+			return check;
 		}
 
 		Timer = timer;
@@ -167,9 +198,10 @@ public sealed class ParkingSession : LightweightAggregateRoot<ParkingSessionId>
 			return Result.Failure(ParkingSessionErrors.AlreadyEnded, ResultExceptionType.Conflict);
 		}
 
-		if (endedAt < ParkedAt)
+		var check = CheckEnd(endedAt, ParkedAt);
+		if (check.IsFailure)
 		{
-			return Result.Failure(ParkingSessionErrors.EndedBeforeParked);
+			return check;
 		}
 
 		EndedAt = endedAt;
@@ -185,6 +217,33 @@ public sealed class ParkingSession : LightweightAggregateRoot<ParkingSessionId>
 	#endregion
 
 	#region Private Helpers
+	/// <summary>
+	/// Checks that a timer lasts 5 minutes to one day and ends after the parking moment.
+	/// </summary>
+	/// <param name="timer">The timer to check.</param>
+	/// <param name="parkedAt">When the car was parked.</param>
+	/// <returns>Success, or the rule the timer breaks.</returns>
+	private static Result CheckTimer(ParkingTimer timer, DateTimeOffset parkedAt)
+	{
+		if (timer.Minutes is < ParkingTimer.MinimumMinutes or > ParkingTimer.MaximumMinutes)
+		{
+			return Result.Failure(ParkingSessionErrors.TimerLengthOutOfRange);
+		}
+
+		return timer.End <= parkedAt ? Result.Failure(ParkingSessionErrors.TimerEndsBeforeParking) : Result.Success();
+	}
+
+	/// <summary>
+	/// Checks that a session does not end before the car was parked.
+	/// </summary>
+	/// <param name="endedAt">When the user left the car.</param>
+	/// <param name="parkedAt">When the car was parked.</param>
+	/// <returns>Success, or the failure for an end before the parking moment.</returns>
+	private static Result CheckEnd(DateTimeOffset endedAt, DateTimeOffset parkedAt)
+	{
+		return endedAt < parkedAt ? Result.Failure(ParkingSessionErrors.EndedBeforeParked) : Result.Success();
+	}
+
 	/// <summary>
 	/// Tells whether a position is a real place: finite, latitude within ±90 and longitude within ±180.
 	/// </summary>

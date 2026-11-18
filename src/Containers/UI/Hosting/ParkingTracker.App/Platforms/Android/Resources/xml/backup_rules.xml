@@ -1,8 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Android 11 and earlier: keep the encrypted card out of backups (ADR-0004). MAUI SecureStorage keeps its values in this
-  shared-preferences file; its key lives in the Android keystore, which is not backed up, so a restored copy could not be read.
+  Android 11 and earlier: keep the encrypted card, the key of the database fields and the device database out of backups
+  (ADR-0004, ADR-0026). Checked against the source of .NET MAUI Essentials 10.0.130 (Android):
+  - SecureStorage keeps its values, and with them the key of the database fields (pt.dbKey), in the shared-preferences file named
+    by its Alias, Preferences.GetPrivatePreferencesSharedName("preferences"), which is "{PackageName}.microsoft.maui.essentials.preferences"
+    (SecureStorage.android.cs, Preferences.shared.cs); the Tink keyset of EncryptedSharedPreferences is a key of the same file. Its own
+    key lives in the Android keystore, which is not backed up, so a restored copy could not be read.
+  - PreferencesValueStorage uses the shared name "parkingtracker", which Preferences.android.cs passes to Context.GetSharedPreferences
+    as it is, so the file is "parkingtracker.xml". It holds the move marker pt.dbMigration and the old car and timer; a restored
+    marker without the excluded database would hide the data from the move, so the file is excluded too.
+  - The database is in the files directory (FileSystem.AppDataDirectory, Context.FilesDir); its journal, write-ahead log and
+    shared-memory files can hold the same rows, so they are excluded too.
 -->
 <full-backup-content>
   <exclude domain="sharedpref" path="be.parkingtracker.app.microsoft.maui.essentials.preferences.xml" />
+  <exclude domain="sharedpref" path="parkingtracker.xml" />
+  <exclude domain="file" path="parkingtracker.db" />
+  <exclude domain="file" path="parkingtracker.db-journal" />
+  <exclude domain="file" path="parkingtracker.db-wal" />
+  <exclude domain="file" path="parkingtracker.db-shm" />
 </full-backup-content>
