@@ -117,8 +117,8 @@ cross-service transactions this system does not have. D gives no reliable after-
 command handler cannot do. Draining an outbox on the phone needs Pivot's messaging package, which brings
 `RabbitMQ.Client` and Quartz into the APK for nothing.
 
-**Accepted negatives:** device aggregates raise no domain events, so a future sync needs its own design; the outbox
-table that `PivotDbContextBase` creates exists on the phone and stays empty.
+**Accepted negatives:** device aggregates raise no domain events, so a future sync needs its own design; the phone's
+unit of work is a small hand-written one over sqlite-net (3.11), not Pivot's.
 
 ADRs: [0012](adr/0012-drain-the-outbox-in-the-jobs-host-without-a-message-broker.md),
 [0019](adr/0019-model-aggregates-per-bounded-context-and-keep-the-decision-engine-pure.md).
@@ -344,27 +344,28 @@ ADR: [0017](adr/0017-build-a-public-admin-web-app-with-google-sign-in-and-an-all
 
 ### 3.11 On-device database
 
-**Decision:** SQLite through EF Core with `Pivot.Framework.Infrastructure.Persistence.Sqlite`
-(`AddSqliteContext<DeviceDbContext>`), a `DeviceDbContext` on `PivotDbContextBase`, repositories on
-`BaseAsyncCommandRepository` and a `DeviceUnitOfWork`. The card number, the plate and the coordinates of home, work and
-the parked car are encrypted per field with AES-GCM; the 256-bit key is kept in MAUI `SecureStorage` (Android
-Keystore). The database file and the key are excluded from Android backup. Stage S3 opens with a budget spike: if EF
-Core adds more than 8 MB to the APK or more than 300 ms to cold start on the API 34 emulator, the fallback is
-sqlite-net-pcl with a new ADR.
+**Decision:** SQLite through sqlite-net-pcl, with no EF Core and no Pivot persistence package on the phone. One
+hand-written repository per aggregate (`ResidentCard`, `SavedPlaces`, `ParkingSession`) maps the aggregate to row types
+and back; a small device unit of work commits the staged changes in one `RunInTransactionAsync` call and returns a
+`Result`. The schema is versioned in a `schema_version` table and changed by ordered, numbered steps. The card number,
+the plate and the coordinates of home, work and the parked car are encrypted per field with AES-GCM; the 256-bit key
+is kept in MAUI `SecureStorage` (Android Keystore). The database file, its journal files and the key are excluded from
+Android backup. The budget of 8 MB and 300 ms on the API 34 emulator stays.
 
-**Options:** A EF Core and Pivot's SQLite package with field encryption; B sqlite-net-pcl with hand-written
-repositories; C keep `SecureStorage` and `Preferences`; D SQLCipher for the whole file.
+**Options:** A EF Core and Pivot's EF Core persistence with field encryption (ADR-0018); B sqlite-net-pcl with
+hand-written repositories; C keep `SecureStorage` and `Preferences`; D SQLCipher for the whole file.
 
-**Why A:** the same aggregate, repository and unit-of-work contracts as the server, with migrations. B hand-rolls what
-Pivot provides. C has no relational structure for places and sessions and does not meet R5. D needs a licensed or
+**Why B:** ADR-0018 chose A behind a budget gate, and the S3 spike (section 9) measured A at +40.09 MB and +827 ms
+against +2.84 MB and +97 ms for B. B keeps the aggregates, their invariants and `Result`; only persistence differs from
+the server. C has no relational structure for places and sessions and does not meet R5. D needs a licensed or
 community native build per ABI.
 
-**Accepted negatives:** Pivot's EF Core persistence package brings the SQL Server provider and ASP.NET Core HTTP
-abstractions into the APK; `AddEfCoreWritePersistence` lives in the messaging package, so the device registers the
-persistence types through its own installer (recorded deviation); a restored backup on a new phone cannot decrypt the
-fields (the app asks again, as today).
+**Accepted negatives:** hand-written mapping, unit of work and schema steps, each with its own tests; no LINQ provider
+beyond sqlite-net's simple single-table queries; the phone and the server use different repository contracts; a
+restored backup on a new phone cannot decrypt the fields (the app asks again, as today).
 
-ADR: [0018](adr/0018-keep-the-drivers-data-in-an-encrypted-on-device-sqlite-database.md).
+ADRs: [0026](adr/0026-store-the-drivers-data-with-sqlite-net-pcl-on-the-phone.md), superseding
+[0018](adr/0018-keep-the-drivers-data-in-an-encrypted-on-device-sqlite-database.md).
 
 ### 3.12 Phone screens on Radzen
 
@@ -526,7 +527,7 @@ flowchart TB
 
     driver -->|uses| app
     admin -->|uses<br/>HTTPS, browser| caddy
-    app -->|reads/writes<br/>EF Core, SQLite| devdb
+    app -->|reads/writes<br/>sqlite-net, SQLite| devdb
     app -->|gets ID token<br/>Credential Manager| google
     app -->|token exchange, data queries<br/>HTTPS JSON, bearer JWT| caddy
     app -->|fallback when the API cannot answer<br/>HTTPS| upstream
@@ -619,7 +620,7 @@ src/
                                                   the phone's API client, embedded reference data
     ParkingTracker.Persistence.EntityFrameworkCore  new  ParkingDataDbContext, PostgreSQL + PostGIS, migrations,
                                                   migration bundle Dockerfile
-    ParkingTracker.Persistence.Device             new  DeviceDbContext, SQLite, field encryption, migrations
+    ParkingTracker.Persistence.Device             new  sqlite-net repositories and rows, field encryption, schema steps
 test/                                             mirrors src/, one test project per source project, plus:
   ParkingTracker.E2E.Tests                        emulator and upgrade tests (existing), API-mode scenario added
   ParkingTracker.Api.E2E.Tests                    new  API, jobs and admin against Testcontainers PostgreSQL
@@ -642,7 +643,7 @@ All `Pivot.Framework.*` packages stay pinned together at 2.1.0 in `Directory.Pac
 | Contracts | none | none |
 | Infrastructure | `Application` (as today) | `Microsoft.Extensions.Http` |
 | Persistence.EntityFrameworkCore | `Infrastructure.Persistence.PostgreSQL` (brings `.EntityFrameworkCore`) | `Npgsql.EntityFrameworkCore.PostgreSQL.NetTopologySuite` |
-| Persistence.Device | `Infrastructure.Persistence.Sqlite` | none |
+| Persistence.Device | none (Pivot's `Domain` through `ParkingTracker.Domain`) | `sqlite-net-pcl` (brings SQLitePCLRaw 3 and the native SQLite library) |
 | ApiService | `Containers.API`, `Infrastructure.Messaging.EntityFrameworkCore`, `Tools.DependencyInjection` | `Microsoft.AspNetCore.Authentication.JwtBearer`, `Scalar.AspNetCore` |
 | RefreshJobs | `Infrastructure.Messaging.EntityFrameworkCore`, `Tools.DependencyInjection` | `Hangfire.AspNetCore`, `Hangfire.PostgreSql` |
 | AdminWeb | `Tools.DependencyInjection` | `Microsoft.AspNetCore.Authentication.OpenIdConnect`, `Radzen.Blazor`, `Hangfire.AspNetCore`, `Hangfire.PostgreSql` (dashboard only, no server) |
@@ -725,7 +726,7 @@ risk parity for no modelling gain.
 
 | Type | Kind | Rule |
 | --- | --- | --- |
-| `CoverageAreaId`, `RefreshRunId`, `DatasetSnapshotId`, `UserAccountId`, `DeviceSessionId`, `ResidentCardId`, `SavedPlacesId`, `ParkingSessionId` | `StronglyTypedGuidId<T>` | Never `Guid.Empty`; one type per aggregate or entity; an EF value converter each |
+| `CoverageAreaId`, `RefreshRunId`, `DatasetSnapshotId`, `UserAccountId`, `DeviceSessionId`, `ResidentCardId`, `SavedPlacesId`, `ParkingSessionId` | `StronglyTypedGuidId<T>` | Never `Guid.Empty`; one type per aggregate or entity; an EF value converter each on the server, mapped by hand to a row column on the phone (ADR-0026) |
 | `AreaCode` | value object | Lower-case slug from the municipality IDs of the reference data, plus `region`; unique |
 | `SourceKind` | enumeration | Zones, Spaces, Mailles, AddressPoints, Rules, Works, CarParks, Chargers, CityDocuments |
 | `RefreshSchedule` | value object | Cron expression in Europe/Brussels, enabled flag |
@@ -1076,16 +1077,28 @@ sequenceDiagram
 
 ### 5.8 Mobile local database
 
-- `DeviceDbContext` (SQLite file `parkingtracker.db` in the app's private data directory), migrations in
-  `ParkingTracker.Persistence.Device`, applied by `DeviceDatabaseInitializer` inside the existing start-up gate, after
+- One `SQLiteAsyncConnection` (sqlite-net-pcl, ADR-0026) on the SQLite file `parkingtracker.db` in the app's private
+  data directory. `DeviceDatabaseInitializer` brings the schema up to date inside the existing start-up gate, after
   `LegacyDataMigration` (Capacitor to `Preferences`, ADR-0008) and before the sign-in screen.
+- **Schema versioning.** `schema_version` holds one row per applied step (version, applied at). The steps are numbered
+  classes with explicit SQL in `ParkingTracker.Persistence.Device`, applied in order, each in one transaction with its
+  `schema_version` row; step 1 creates the tables below. A released step is never edited. A database newer than the
+  app stops the initializer with a failed `Result`. sqlite-net's `CreateTableAsync` is not used for the schema.
 - Tables: `resident_cards` (municipality, sector, period, mailles, lims and tolerances as JSON columns, card number
   and plate as AES-GCM ciphertext), `saved_places` (kind, label, address text, coordinates as ciphertext),
   `parking_sessions` (coordinates as ciphertext, parked at, headline, timer end and minutes, ended at), `device_owner`
-  (one row) and the framework's outbox table (empty, 3.1).
-- `FieldCipher` (AES-GCM, random 96-bit nonce per value, key ID prefix for rotation) is an EF value converter. The key
-  is created on first use and stored in `SecureStorage` under `pt.dbKey`. A missing or unreadable key (a restore on a
-  new phone) leaves those fields empty and the card dialog asks for them again, as today.
+  (one row) and `schema_version`. There is no outbox table (3.1).
+- **Repositories.** One per aggregate (`ResidentCard`, `SavedPlaces`, `ParkingSession`): narrow ports in the phone's
+  Application project, implementations by hand in `ParkingTracker.Persistence.Device`. They map each aggregate to row
+  types that never leave the project and rehydrate through the aggregates' factory methods, so an invalid row gives a
+  failed `Result`. Queries use sqlite-net's single-table LINQ or hand-written SQL through `QueryAsync`.
+- **Unit of work.** Repositories stage inserts, updates and deletes; `IDeviceUnitOfWork.CommitAsync` applies them in
+  one `RunInTransactionAsync` call (commit when the delegate returns, rollback when it throws) and returns a `Result`.
+  Pivot's `IUnitOfWork`, `IAsyncCommandRepository`, EF Core repositories and outbox are not used on the phone.
+- `FieldCipher` (AES-GCM, random 96-bit nonce per value, key ID prefix for rotation) is called by the row mappers.
+  The key is created on first use and stored in `SecureStorage` under `pt.dbKey`. The database file, its journal files
+  and the key are excluded from Android backup. A missing or unreadable key (a restore on a new phone) leaves those
+  fields empty and the card dialog asks for them again, as today.
 - `SettingsToDatabaseMigration` runs once, after `LegacyDataMigration`: it reads `pt.card`, `pt.car` and `pt.timer`
   through the existing `SettingsJson` readers, creates `ResidentCard` and `ParkingSession` in one unit of work and
   writes the marker `pt.dbMigration`. It never overwrites a row, keeps the old keys in the release that migrates (a
@@ -1260,7 +1273,7 @@ configuration section with its defaults and which keys are secrets, in the stage
 | Authentication | Against a test issuer that replaces Google (test signing key and JWKS): valid token exchanged; wrong audience, expired, replayed nonce and unsigned tokens refused; refresh rotation and reuse revocation; erasure | API tests with `WebApplicationFactory` | PC and CI |
 | API contract and hardening | OpenAPI snapshot unchanged; `503` `parking-data-stale`; `401` without token; `403` for a driver on admin routes; `429` with `Retry-After`; Scalar `200` in Development and `404` in Production; idempotent run-now | API tests | PC and CI |
 | Admin app | Allow-listed account gets in; another account gets `403`; `/jobs` refuses a non-admin; removal from the allow-list takes effect on the next request; security headers present | `ParkingTracker.AdminWeb.Tests` (test authentication handler), bUnit for pages | PC and CI |
-| Device persistence | Migrations on a real SQLite file, encryption round trip, missing key handling, settings-to-database migration, device owner binding | `ParkingTracker.Persistence.Device.Tests` | PC and CI |
+| Device persistence | Schema steps on a real SQLite file (empty and older versions, newer version refused), aggregate-to-row mapping round trip per aggregate, invalid rows give a failed `Result`, unit-of-work rollback, encryption round trip, missing key handling, settings-to-database migration, device owner binding | `ParkingTracker.Persistence.Device.Tests` | PC and CI |
 | UI | Radzen components with bUnit (Radzen interop set up explicitly, `map.js` still strict); sign-in gate in the view models with a stubbed sign-in port | `ParkingTracker.Shared.Tests`, `ParkingTracker.ViewModels.Tests`, `ParkingTracker.Admin.ViewModels.Tests` | PC and CI |
 | Device | Emulator test (existing checks) with a stubbed Google sign-in in the test-hooks build, one API-mode scenario against a fixture-backed fake API, API down, `429`, `5xx` and stale data giving CAN'T VERIFY or the fallback; upgrade leg of 5.8 | `test/ParkingTracker.E2E.Tests` | `android.yml` |
 | Deployment smoke | Images start with a PostgreSQL container on the runner; migrator runs; health is green; anonymous calls to protected endpoints give `401` | `backend.yml` smoke job | CI |
@@ -1403,7 +1416,8 @@ test first.
 
 ## 8. Decision index
 
-All ADRs below have the status `Accepted`; the decider is Gihed Annabi; the date is 2026-11-17.
+The decider of every ADR below is Gihed Annabi. All have the status `Accepted` and the date 2026-11-17, except
+ADR-0018, superseded by ADR-0026, and ADR-0026, dated 2026-11-18.
 
 | ADR | Decision | Rationale |
 | --- | --- | --- |
@@ -1416,7 +1430,7 @@ All ADRs below have the status `Accepted`; the decider is Gihed Annabi; the date
 | [0015](adr/0015-require-sign-in-and-keep-the-drivers-data-on-the-phone.md) | Mandatory sign-in; the driver's data stays on the phone, nothing syncs | D3; data minimisation |
 | [0016](adr/0016-expose-a-rest-api-versioned-by-url-segment-with-scalar-in-development.md) | REST, `/api/v1`, Swashbuckle OpenAPI, Scalar in Development only | One generator, framework controller base |
 | [0017](adr/0017-build-a-public-admin-web-app-with-google-sign-in-and-an-allow-list.md) | Public admin app, Google sign-in, allow-list, hardening, dashboard behind the same policy | D4 |
-| [0018](adr/0018-keep-the-drivers-data-in-an-encrypted-on-device-sqlite-database.md) | Encrypted on-device SQLite through Pivot's SQLite package; supersedes ADR-0008, restating its reading rules | R5 with Pivot's contracts, behind a budget gate |
+| [0018](adr/0018-keep-the-drivers-data-in-an-encrypted-on-device-sqlite-database.md) | Encrypted on-device SQLite through Pivot's SQLite package; supersedes ADR-0008, restating its reading rules. Superseded by ADR-0026 | R5 with Pivot's contracts, behind a budget gate |
 | [0019](adr/0019-model-aggregates-per-bounded-context-and-keep-the-decision-engine-pure.md) | Aggregates per bounded context; the engine stays value objects and pure services | R7 without touching parity |
 | [0020](adr/0020-use-radzen-for-the-phone-screens-and-keep-leaflet-for-the-map.md) | Radzen for the phone screens, Leaflet kept for the map | R8; Radzen has no WMS-capable map |
 | [0021](adr/0021-map-the-canonical-layout-to-two-bounded-contexts.md) | One Domain, two Application projects, two persistence projects; supersedes ADR-0006 | The APK carries no server handlers |
@@ -1424,6 +1438,7 @@ All ADRs below have the status `Accepted`; the decider is Gihed Annabi; the date
 | [0023](adr/0023-deploy-from-github-actions-through-an-ssh-forced-command.md) | GitHub Actions, private GHCR images, SSH forced command, migration bundles, expand and contract | Feedback in CI with a single-purpose key |
 | [0024](adr/0024-fall-back-to-upstream-services-when-the-api-cannot-answer.md) | Upstream fallback and honesty across the network boundary, remotely switchable | A single VPS must not reduce availability; Q1 |
 | [0025](adr/0025-test-the-api-path-with-api-mode-parity-and-testcontainers.md) | API-mode parity and Testcontainers PostgreSQL, no in-memory providers | Proof that the server path changes no verdict |
+| [0026](adr/0026-store-the-drivers-data-with-sqlite-net-pcl-on-the-phone.md) | Device database through sqlite-net-pcl, hand-written repositories per aggregate, `schema_version` steps; supersedes ADR-0018's storage technology, restating its other rules | EF Core missed the S3 budget (+40.09 MB, +827 ms); sqlite-net-pcl met it (+2.84 MB, +97 ms) |
 
 ## 9. Staged plan
 
@@ -1435,7 +1450,7 @@ API-served data reaches the public only in stage S10, after the licence question
 | S0 | Done 2026-11-17: ADR-0009 to ADR-0025 accepted; upstream Pivot issues opened: AnnabiGihed/Pivot.Framework#5 (Hangfire storage and expression jobs), #6 (policy-based dashboard filter), #7 (persistence without messaging), #8 (SQL Server provider split), #9 (generic OIDC and user deletion) | Owner accepts the ADRs |
 | S1 | Done 2026-11-17 in code, awaiting the emulator run and the release: `ResidentCard`, `SavedPlaces` and `ParkingSession` aggregates with the `ToParkingCard()` and `ToParkedCar()` bridges; the card dialog builds its card through `ResidentCard`; no storage change | Parity, domain and emulator tests green; APK released; the only visible change is that the card form refuses reversed dates and an unknown municipality |
 | S2 | Radzen foundation in `ParkingTracker.Shared`, then one dialog per pull request (welcome, card, car, layers, status sheet). Progress: foundation (Radzen.Blazor 13.1.0, services, theme file, host page, bUnit interop), the welcome dialog, the card dialog, the car dialog (with the timer line), the layers popover and the status sheet (status block, chips, nearest spot, permission banner, search bar) are done in code, awaiting the emulator run; S2 is done | Each pull request: bUnit and emulator tests green, emulator selectors kept |
-| S3 | Budget spike, then device database, field encryption, settings migration, Home and Work places | Upgrade leg green; budget met or fallback ADR written |
+| S3 | Budget spike done 2026-11-18 (see below; EF Core over budget, ADR-0026 chooses sqlite-net-pcl), then device database on sqlite-net-pcl, field encryption, settings migration, Home and Work places; spike code removed | Upgrade leg green; the real device database measured within 8 MB and 300 ms |
 | S4 | VPS bootstrap, DNS, Caddy, PostgreSQL, backups and a restore test before any real data; back-end skeleton (AppHost, ServiceDefaults, ApiService with health, OpenAPI and Scalar, persistence with migrations, Dockerfiles, `backend.yml`, `pt-deploy`); runbook | `/health/ready` green on the VPS through a deployment from `main`; a forced failed health check rolls back |
 | S5 | Credential Manager spike; session exchange, refresh, sign-out, `/me`, erasure, rate limiting | Authentication tests green; the owner signs in from a debug build against the VPS |
 | S6 | Jobs host: region job, roadworks job and one pilot municipality; `RefreshRun`, snapshots, freshness, admin endpoints, alerts; a shadow job compares API answers with live upstream at sample points for two weeks | API-mode parity green; no verdict difference on fresh data |
@@ -1444,6 +1459,28 @@ API-served data reaches the public only in stage S10, after the licence question
 | S9 | Phone release with mandatory sign-in and the API adapter behind the data source mode (default `Upstream`); then `ApiWithUpstreamFallback` for the owner only | Emulator scenarios green; one week of owner use without a wrong answer |
 | S10 | `ApiWithUpstreamFallback` for everyone. **Blocked by Q1** | Q1 answered yes; mode switched through `client-config` |
 | S11 | Bundle endpoint, reference data served with versions, decision on retiring the upstream fallback (new ADR) | ADR accepted |
+
+**S3 budget spike (done 2026-11-18).** The `budget-spike.yml` workflow (manual run: Actions, S3 budget spike, or
+`gh workflow run budget-spike.yml --ref <branch>`) builds the Release APK three times, with `-p:IncludeDeviceDatabase=`
+empty (plain), `efcore` (`true` is an alias) and `sqlitenet`, installs the three on the API 34 emulator, starts each
+cold six times with `am start -W -S` (plain, efcore, sqlitenet, then again in the same order; the first start of each
+run discarded, median `TotalTime`, second round reported) and writes the size and start-up differences of both
+variants against plain, compared with the 8 MB and 300 ms budget of ADR-0018, to the job summary and the
+`budget-spike` artifact. The `efcore` variant adds Pivot's EF Core persistence package and
+`Microsoft.EntityFrameworkCore.Sqlite` (Pivot 2.1.0 has no SQLite package, so the SQL Server provider it brings is part
+of the measurement, AnnabiGihed/Pivot.Framework#8); the `sqlitenet` variant adds `sqlite-net-pcl` 1.11.285 only (it
+brings SQLitePCLRaw 3.0.3 and the native SQLite library). Each opens, creates and reads one temporary table at
+start-up (`Features/Shared/DeviceDatabaseSpike/`). Without the switch the app is unchanged.
+
+| Variant | Release APK | Difference | Cold start (median) | Difference | Budget (8 MB, 300 ms) |
+| --- | --- | --- | --- | --- | --- |
+| Plain | 68.88 MB | - | 2003 ms | - | - |
+| `efcore` | 108.97 MB | +40.09 MB | 2830 ms | +827 ms | exceeded |
+| `sqlitenet` | 71.73 MB | +2.84 MB | 2100 ms | +97 ms | met |
+
+EF Core exceeded the budget, so [ADR-0026](adr/0026-store-the-drivers-data-with-sqlite-net-pcl-on-the-phone.md) moves
+the device database to sqlite-net-pcl. The spike code, the `IncludeDeviceDatabase` switch, the EF Core package versions
+and the workflow are removed when the real device database lands, or the workflow is kept as its budget check.
 
 Rollback: back-end stages roll back by redeploying the previous image tag (migrations are additive); the phone goes
 back to upstream data through `client-config` without a release. Stage S9 cannot be rolled back on phones (the
@@ -1462,8 +1499,9 @@ sign-in requirement ships in the APK); a fix is a new release.
 | Credential Manager bindings do not work in MAUI (A6) | medium, high | Spike at the start of S5; fallback: the system browser with Google's authorization code flow and PKCE through an App Link redirect on `<domain>`, handled by a new ADR |
 | Mandatory sign-in loses users or blocks phones without Google Play services | medium, medium | Owner decision D3; the app already needs Play services for location (ADR-0002) |
 | VPS outage or full disk | medium, medium | Upstream fallback, uptime monitor, disk alert, cleanup job |
-| APK size or start-up regression from EF Core and Radzen | medium, medium | Budget gate in S3; upstream Pivot package split |
-| Pivot deviations drift (Hangfire, outbox drain, device registration, authentication) | medium, low | Each deviation has an ADR and an upstream issue; retire when Pivot ships the fix |
+| APK size or start-up regression from the device database and Radzen | low, medium | S3 spike measured EF Core at +40.09 MB and +827 ms, so ADR-0026 uses sqlite-net-pcl (+2.84 MB, +97 ms); the real device database is measured against the same 8 MB and 300 ms budget before S3 ends |
+| Hand-written device mapping, unit of work or schema steps lose or corrupt data | low, high | Round-trip, rollback and schema-step tests on a real SQLite file; released steps never edited; upgrade leg in `android.yml` |
+| Pivot deviations drift (Hangfire, outbox drain, authentication) | medium, low | Each deviation has an ADR and an upstream issue; retire when Pivot ships the fix |
 | `Hangfire.PostgreSql` is a community package | low, medium | Pinned version; jobs survive a storage reset because schedules come from `CoverageArea` |
 | A stale neighbouring area blocks answers near a border | medium, low | Decided by default (conservative); per-area freshness on the admin board |
 | API-mode failure texts differ from upstream texts | certain, low | Parity compares verdicts and non-failure texts |

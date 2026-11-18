@@ -1,6 +1,6 @@
 # ADR-0018: Keep the driver's data in an encrypted on-device SQLite database through Pivot's SQLite package
 
-- Status: Accepted
+- Status: Superseded by ADR-0026
 - Date: 2026-11-17
 - Deciders: Gihed Annabi
 - Supersedes: ADR-0008
