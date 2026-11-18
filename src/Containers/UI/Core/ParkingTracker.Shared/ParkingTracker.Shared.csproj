@@ -7,6 +7,7 @@
   <ItemGroup>
     <!-- A package, not the Microsoft.AspNetCore.App framework: Android has no runtime pack for that framework. -->
     <PackageReference Include="Microsoft.AspNetCore.Components.Web" />
+    <PackageReference Include="Radzen.Blazor" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,5 +1,6 @@
 using Bunit;
 using NSubstitute;
+using Radzen.Blazor;
 using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Shared.Features.Welcome.Components;
 using ParkingTracker.Shared.Tests.Features.Shared.TestDoubles;
@@ -32,6 +33,40 @@ public sealed class WelcomeDialogTests : UiTestContext
 		cut.Markup.Should().Contain("Location: choose “Allow all the time”");
 		cut.Find("#welcomeAlways").TextContent.Should().Be("Allow location all the time");
 		cut.Find("#welcomeStart").TextContent.Should().Be("Add my parking card");
+	}
+
+	/// <summary>
+	/// Verifies that the dialog is built from Radzen components and keeps the selectors that the emulator test reads.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Render_FirstLaunch_ShouldUseRadzenComponentsAndKeepTheEmulatorSelectors()
+	{
+		var cut = Render<WelcomeDialog>();
+
+		await cut.InvokeAsync(() => Resolve<WelcomeViewModel>().StartAsync());
+
+		cut.Find("#welcomeDialog.welcome").Should().NotBeNull();
+		cut.FindComponents<RadzenButton>().Should().HaveCount(2);
+		cut.Find("#welcomeStart").ClassList.Should().Contain("rz-button");
+		cut.Find("h1").TextContent.Should().Be("Park free with your residents' card");
+		cut.FindAll(".benefit-icon").Should().HaveCount(4);
+	}
+
+	/// <summary>
+	/// Verifies that the "Allow location all the time" button is not offered once the permission is given.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Render_AlwaysAllowed_ShouldNotOfferTheAllowAlwaysButton()
+	{
+		Permissions.GetStatusAsync(Arg.Any<CancellationToken>()).Returns(new LocationPermissionStatus(PermissionState.Granted, PermissionState.Granted));
+		var cut = Render<WelcomeDialog>();
+
+		await cut.InvokeAsync(() => Resolve<WelcomeViewModel>().StartAsync());
+
+		cut.FindAll("#welcomeAlways").Should().BeEmpty();
+		cut.Find("#welcomeStart").Should().NotBeNull();
 	}
 
 	/// <summary>

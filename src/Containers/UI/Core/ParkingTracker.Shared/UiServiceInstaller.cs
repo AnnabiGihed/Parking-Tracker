@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ParkingTracker.Shared.Features.MapLayers.Services;
 using Pivot.Framework.Tools.DependencyInjection.Abstractions;
+using Radzen;
 
 namespace ParkingTracker.Shared;
 
@@ -23,6 +24,9 @@ public sealed class UiServiceInstaller : IServiceInstaller
 
 		// One script wrapper per map component: it owns the JavaScript module of that map and is disposed with it.
 		services.AddTransient<MapScript>();
+
+		// The Radzen services (dialog, notification, tooltip, theme) that the Radzen components of the screens and the hosts in the layout use.
+		services.AddRadzenComponents();
 	}
 	#endregion
 }
