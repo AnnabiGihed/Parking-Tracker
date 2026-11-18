@@ -54,7 +54,24 @@ public sealed class AppServiceInstaller : IServiceInstaller
 		ArgumentNullException.ThrowIfNull(configuration);
 
 		services.TryAddSingleton(TimeProvider.System);
+		AddStorage(services);
+		AddStartupGate(services);
+		AddDeviceServices(services);
 
+#if TEST_HOOKS
+		// Scoped like the view models it reads, so that the hooks see the same card line the screen shows.
+		services.AddScoped<TestHookService>();
+#endif
+	}
+	#endregion
+
+	#region Private Helpers
+	/// <summary>
+	/// Registers the device database, the key-value store of the settings and the settings store the screens read.
+	/// </summary>
+	/// <param name="services">The service collection.</param>
+	private static void AddStorage(IServiceCollection services)
+	{
 		// The device database (ADR-0026): one file in the private data directory, excluded from backup, with the fields that hold
 		// personal data encrypted by a key that only this phone can read.
 		services.AddSingleton<IDeviceKeyStore, SecureStorageDeviceKeyStore>();
@@ -78,7 +95,14 @@ public sealed class AppServiceInstaller : IServiceInstaller
 			provider.GetRequiredService<IStartupGate>(),
 			provider.GetRequiredService<IReferenceData>(),
 			provider.GetRequiredService<ILogger<DeviceSettingsStore>>()));
+	}
 
+	/// <summary>
+	/// Registers the start-up gate and the two copies it runs: the previous version's data, then the move into the device database.
+	/// </summary>
+	/// <param name="services">The service collection.</param>
+	private static void AddStartupGate(IServiceCollection services)
+	{
 		// One run of the copy of the previous version's data (ADR-0004, ADR-0008); the Blazor screens wait for it before they read the
 		// settings. The LevelDB files are read first, and a hidden web view is the fallback when they cannot be parsed.
 		services.AddSingleton(provider => new LegacyDataMigration(
@@ -103,6 +127,15 @@ public sealed class AppServiceInstaller : IServiceInstaller
 			provider.GetRequiredService<ILogger<SettingsToDatabaseMigration>>()));
 		services.AddSingleton<StartupGate>();
 		services.AddSingleton<IStartupGate>(provider => provider.GetRequiredService<StartupGate>());
+	}
+
+	/// <summary>
+	/// Registers the services of the phone: location, permissions, links, the card reader, parking alerts, visibility, connection and
+	/// vibration.
+	/// </summary>
+	/// <param name="services">The service collection.</param>
+	private static void AddDeviceServices(IServiceCollection services)
+	{
 		services.AddSingleton<ILocationTracker, FusedLocationTracker>();
 		services.AddSingleton<ILocationPermissions, MauiLocationPermissions>();
 		services.AddSingleton<ILinkLauncher, MauiLinkLauncher>();
@@ -125,15 +158,8 @@ public sealed class AppServiceInstaller : IServiceInstaller
 		services.AddSingleton<AppResumeNotifier>();
 		services.TryAddSingleton<IVibration>(Vibration.Default);
 		services.AddSingleton<CoverageVibrator>();
-
-#if TEST_HOOKS
-		// Scoped like the view models it reads, so that the hooks see the same card line the screen shows.
-		services.AddScoped<TestHookService>();
-#endif
 	}
-	#endregion
 
-	#region Private Helpers
 	/// <summary>
 	/// Finds the <c>Local Storage/leveldb</c> directory of the web view of the Capacitor version: <c>app_webview</c> lies next to the
 	/// <c>files</c> directory that <see cref="FileSystem.AppDataDirectory"/> names.
