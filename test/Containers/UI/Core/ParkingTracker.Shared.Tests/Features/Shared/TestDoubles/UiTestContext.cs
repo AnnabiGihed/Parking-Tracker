@@ -199,6 +199,7 @@ public abstract class UiTestContext : BunitContext
 	private void SetUpRadzenInterop()
 	{
 		JSInterop.SetupVoid(invocation => invocation.Identifier.StartsWith("Radzen.", StringComparison.Ordinal)).SetVoidResult();
+		_ = JSInterop.SetupModule(invocation => invocation.Identifier.StartsWith("Radzen.", StringComparison.Ordinal));
 	}
 
 	/// <summary>

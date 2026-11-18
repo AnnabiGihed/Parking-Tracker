@@ -14,6 +14,9 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
 
 - The welcome screen is built with the Radzen component library, the first screen of the move to Radzen. Its texts
   and colours stay the same; buttons and text spacing may look slightly different.
+- The card form is built with Radzen components too: drop-downs for the municipality and sector, check-box lists for
+  the areas and tolerance codes, and date pickers. Texts and checks stay the same; the dates now open a calendar and
+  show in the format of the phone's language.
 
 ### Fixed
 
