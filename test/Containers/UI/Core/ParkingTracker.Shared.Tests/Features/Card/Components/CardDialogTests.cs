@@ -1,5 +1,6 @@
 using Bunit;
 using NSubstitute;
+using Radzen.Blazor;
 using ParkingTracker.Application.Features.Cards.Queries.ReadCard;
 using ParkingTracker.Application.Features.Cards.Services;
 using ParkingTracker.Application.Features.Sectors.Queries.GetMailles;
@@ -42,11 +43,10 @@ public sealed class CardDialogTests : UiTestContext
 		var cut = Render<CardDialog>();
 		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
 
-		await cut.Find("#cardFrom").ChangeAsync("2026-01-01");
-		await cut.Find("#cardTo").ChangeAsync("2027-01-01");
+		await PickDatesAsync(cut, new DateOnly(2026, 1, 1), new DateOnly(2027, 1, 1));
 		await cut.Find("#cardPlate").ChangeAsync("1-abc 234");
 		await cut.Find("#cardNumber").ChangeAsync("B000-000-001");
-		await cut.Find("input[name=tol]").ChangeAsync(true);
+		await TickAsync(cut, "#tolBox", 0);
 		await cut.Find("#cardForm").SubmitAsync();
 
 		_ = Settings.Received(1).SaveCardAsync(Arg.Is<ParkingCard>(card => string.Equals(card.Municipality, "bruxelles", StringComparison.Ordinal)
@@ -86,12 +86,12 @@ public sealed class CardDialogTests : UiTestContext
 		var cut = Render<CardDialog>();
 		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
 
-		await cut.Find("#muniSelect").ChangeAsync("ixelles");
-		await cut.WaitForAssertionAsync(() => cut.FindAll("input[name=maille]").Should().HaveCount(2));
-		await cut.FindAll("input[name=maille]")[1].ChangeAsync(true);
-		await cut.Find("input[name=lim]").ChangeAsync(true);
-		await cut.Find("#cardFrom").ChangeAsync("2026-01-01");
-		await cut.Find("#cardTo").ChangeAsync("2027-01-01");
+		var municipalities = cut.FindComponent<RadzenDropDown<string>>();
+		await cut.InvokeAsync(() => municipalities.Instance.ValueChanged.InvokeAsync("ixelles"));
+		await cut.WaitForAssertionAsync(() => cut.FindAll("#maillesBox .rz-chkbox-box").Should().HaveCount(2));
+		await TickAsync(cut, "#maillesBox", 1);
+		await TickAsync(cut, "#limsBox", 0);
+		await PickDatesAsync(cut, new DateOnly(2026, 1, 1), new DateOnly(2027, 1, 1));
 		await cut.Find("#cardForm").SubmitAsync();
 
 		_ = Settings.Received(1).SaveCardAsync(Arg.Is<ParkingCard>(card => string.Equals(card.Municipality, "ixelles", StringComparison.Ordinal)
@@ -132,6 +132,162 @@ public sealed class CardDialogTests : UiTestContext
 		cut.Find("#cardNumber").GetAttribute("value").Should().Be("B012-345-678");
 		cut.Find("#cardPlate").GetAttribute("value").Should().Be("1ABC234");
 		cut.Find("#scanStatus").TextContent.Should().Be("Filled: number, plate. Please double-check.");
+	}
+	#endregion
+
+	#region Radzen Tests
+	/// <summary>
+	/// Verifies that the dialog is built from Radzen components and shows the fields of a municipality with a sector.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Render_Open_ShouldUseRadzenComponentsAndShowTheSectorFields()
+	{
+		var cut = Render<CardDialog>();
+		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
+
+		cut.FindComponents<RadzenDropDown<string>>().Should().HaveCount(2);
+		cut.FindComponents<RadzenDatePicker<DateTime?>>().Should().HaveCount(2);
+		cut.FindComponents<RadzenTextBox>().Should().HaveCount(2);
+		cut.FindComponents<RadzenCheckBoxList<string>>().Should().HaveCount(1);
+		cut.Find("#cardForm").Should().NotBeNull();
+		cut.Find("#sectorBox").TextContent.Should().Contain("Sector (on your card)");
+		cut.Find("#tolBox").TextContent.Should().Contain("Ixelles - Louise");
+		cut.Markup.Should().Contain("Bruxelles (Ville) / Brussel (Stad)");
+	}
+
+	/// <summary>
+	/// Verifies that clearing a date picker empties the date the view model holds.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Change_DateCleared_ShouldEmptyTheDateOfTheViewModel()
+	{
+		var cut = Render<CardDialog>();
+		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
+		await PickDatesAsync(cut, new DateOnly(2026, 1, 1), new DateOnly(2027, 1, 1));
+		var pickers = cut.FindComponents<RadzenDatePicker<DateTime?>>();
+
+		await cut.InvokeAsync(() => pickers[0].Instance.ValueChanged.InvokeAsync(null));
+		await cut.InvokeAsync(() => pickers[1].Instance.ValueChanged.InvokeAsync(null));
+
+		Resolve<CardViewModel>().ValidFrom.Should().BeEmpty();
+		Resolve<CardViewModel>().ValidTo.Should().BeEmpty();
+	}
+
+	/// <summary>
+	/// Verifies that unticking a box removes its code from the selection of the view model.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Change_ToleranceUnticked_ShouldRemoveTheCodeFromTheSelection()
+	{
+		var cut = Render<CardDialog>();
+		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
+		await TickAsync(cut, "#tolBox", 0);
+		Resolve<CardViewModel>().SelectedTolerances.Should().HaveCount(1);
+
+		await TickAsync(cut, "#tolBox", 0);
+
+		Resolve<CardViewModel>().SelectedTolerances.Should().BeEmpty();
+	}
+
+	/// <summary>
+	/// Verifies that a date of the view model that is not a date shows as an empty picker.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Render_DateNotADate_ShouldShowAnEmptyPicker()
+	{
+		var cut = Render<CardDialog>();
+		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
+
+		await cut.InvokeAsync(() => Resolve<CardViewModel>().ValidFrom = "not a date");
+		await cut.InvokeAsync(() => Resolve<CardViewModel>().ValidTo = "2027-13-45");
+		cut.Render();
+
+		var pickers = cut.FindComponents<RadzenDatePicker<DateTime?>>();
+		pickers[0].Instance.Value.Should().BeNull();
+		pickers[1].Instance.Value.Should().BeNull();
+	}
+
+	/// <summary>
+	/// Verifies that a date cleared after it was picked is refused with the visible form error.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Submit_DateCleared_ShouldShowTheFormError()
+	{
+		var cut = Render<CardDialog>();
+		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
+		await PickDatesAsync(cut, new DateOnly(2026, 1, 1), new DateOnly(2027, 1, 1));
+		var pickers = cut.FindComponents<RadzenDatePicker<DateTime?>>();
+		await cut.InvokeAsync(() => pickers[1].Instance.ValueChanged.InvokeAsync(null));
+
+		await cut.Find("#cardForm").SubmitAsync();
+
+		cut.Find("[role=alert]").TextContent.Should().Be("Enter the dates the card is valid from and until.");
+		_ = Settings.DidNotReceiveWithAnyArgs().SaveCardAsync(default!);
+	}
+
+	/// <summary>
+	/// Verifies that a municipality with areas hides the sector and the tolerances, and that one without areas shows only its note.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Change_MunicipalityWithAreas_ShouldHideTheSectorFields()
+	{
+		Sender.Send(Arg.Any<GetMaillesQuery>(), Arg.Any<CancellationToken>())
+			.Returns(Result.Success(new GetMaillesResponse([new MailleOption("IXLR_1", "Ixelles 1")], [])));
+		var cut = Render<CardDialog>();
+		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
+
+		var municipalities = cut.FindComponent<RadzenDropDown<string>>();
+		await cut.InvokeAsync(() => municipalities.Instance.ValueChanged.InvokeAsync("ixelles"));
+
+		await cut.WaitForAssertionAsync(() => cut.Find("#sectorBox").TextContent.Should().Contain("Tick every area"));
+		cut.Find("#sectorBox").TextContent.Should().NotContain("Sector (on your card)");
+		cut.Find("#tolBox").TextContent.Should().BeEmpty();
+		cut.FindAll("#limsBox").Should().BeEmpty();
+	}
+
+	/// <summary>
+	/// Verifies that the dates in reverse order are refused with the message of the card.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Submit_ReversedDates_ShouldStayOpenWithTheReason()
+	{
+		var cut = Render<CardDialog>();
+		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
+
+		await PickDatesAsync(cut, new DateOnly(2027, 1, 1), new DateOnly(2026, 1, 1));
+		await cut.Find("#cardForm").SubmitAsync();
+
+		cut.Find("[role=alert]").TextContent.Should().NotBeEmpty();
+		cut.Find("#cardForm").Should().NotBeNull();
+		_ = Settings.DidNotReceiveWithAnyArgs().SaveCardAsync(default!);
+	}
+
+	/// <summary>
+	/// Verifies that the scan button is disabled and a progress circle shows while a card is being read.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Scan_Reading_ShouldDisableTheButtonAndShowProgress()
+	{
+		var release = new TaskCompletionSource<Result<ParsedCard>>();
+		Sender.Send(Arg.Any<ReadCardQuery>(), Arg.Any<CancellationToken>()).Returns(_ => release.Task);
+		var cut = Render<CardDialog>();
+		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
+
+		var click = cut.Find("#scanBtn").ClickAsync();
+
+		cut.Find("#scanBtn").HasAttribute("disabled").Should().BeTrue();
+		cut.FindComponents<RadzenProgressBarCircular>().Should().HaveCount(1);
+		release.SetResult(Result.Success(new ParsedCard(null, null, null, null, null, null, [])));
+		await click;
+		cut.FindComponents<RadzenProgressBarCircular>().Should().BeEmpty();
 	}
 	#endregion
 
@@ -184,5 +340,31 @@ public sealed class CardDialogTests : UiTestContext
 
 		cut.Find("#cardDot").ClassList.Should().NotContain("none").And.NotContain("bad");
 	}
+	#endregion
+
+	#region Private Helpers
+	/// <summary>
+	/// Picks the two dates through the date pickers of the dialog.
+	/// </summary>
+	/// <param name="cut">The rendered dialog.</param>
+	/// <param name="from">The date the card is valid from.</param>
+	/// <param name="to">The date the card is valid until.</param>
+	/// <returns>A task that completes when both dates were set.</returns>
+	private static async Task PickDatesAsync(IRenderedComponent<CardDialog> cut, DateOnly from, DateOnly to)
+	{
+		var pickers = cut.FindComponents<RadzenDatePicker<DateTime?>>();
+		await cut.InvokeAsync(() => pickers[0].Instance.ValueChanged.InvokeAsync(from.ToDateTime(TimeOnly.MinValue))).ConfigureAwait(true);
+		await cut.InvokeAsync(() => pickers[1].Instance.ValueChanged.InvokeAsync(to.ToDateTime(TimeOnly.MinValue))).ConfigureAwait(true);
+	}
+
+	/// <summary>
+	/// Ticks one box of a check-box list of the dialog.
+	/// </summary>
+	/// <param name="cut">The rendered dialog.</param>
+	/// <param name="listSelector">The selector of the element that holds the list.</param>
+	/// <param name="index">The position of the box in the list.</param>
+	/// <returns>A task that completes when the box was clicked.</returns>
+	private static Task TickAsync(IRenderedComponent<CardDialog> cut, string listSelector, int index) =>
+		cut.FindAll(listSelector + " .rz-chkbox-box")[index].ClickAsync();
 	#endregion
 }

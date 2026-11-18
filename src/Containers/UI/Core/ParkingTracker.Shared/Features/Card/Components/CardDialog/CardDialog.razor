@@ -2,105 +2,126 @@
 @inherits ViewModelComponent<CardViewModel>
 @using ParkingTracker.Domain.Features.Sectors.ValueObjects
 <DialogShell IsOpen="ViewModel.IsOpen" Label="My parking card">
-    <form id="cardForm" @onsubmit="OnSaveAsync" @onsubmit:preventDefault>
-        <div class="dialog-head">
-            <h2>My parking card</h2>
-            <button type="button" class="icon-btn" aria-label="Close" @onclick="OnClose"><Icon Name="close" /></button>
-        </div>
-        <button type="button" id="scanBtn" class="scan" disabled="@ViewModel.IsScanning" @onclick="OnScanAsync">
-            <Icon Name="camera" />
-            <span><b>Scan my card</b><small>Take a photo, we fill in the fields</small></span>
-        </button>
-        <div id="scanStatus" class="muted small" role="status">@ViewModel.ScanStatus</div>
-        <div class="field">
-            <label for="muniSelect">Municipality that issued the card</label>
-            <select name="municipality" id="muniSelect" value="@ViewModel.MunicipalityId" @onchange="OnMunicipalityChangedAsync">
-                @foreach (var municipality in ViewModel.Municipalities)
+    <RadzenTemplateForm TItem="CardViewModel" Data="ViewModel" Submit="OnSaveAsync" id="cardForm">
+        <RadzenStack Gap="0.75rem">
+            <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween" AlignItems="AlignItems.Center" class="dialog-head">
+                <RadzenText TextStyle="TextStyle.H5" TagName="TagName.H2">My parking card</RadzenText>
+                <RadzenButton ButtonStyle="ButtonStyle.Base" Variant="Variant.Text" class="icon-btn" aria-label="Close" Click="OnClose"><Icon Name="close" /></RadzenButton>
+            </RadzenStack>
+            <RadzenButton id="scanBtn" ButtonStyle="ButtonStyle.Primary" Variant="Variant.Outlined" class="scan" Disabled="ViewModel.IsScanning" Click="OnScanAsync">
+                <Icon Name="camera" />
+                <span><b>Scan my card</b><small>Take a photo, we fill in the fields</small></span>
+                @if (ViewModel.IsScanning)
                 {
-                    <option value="@municipality.Id">@municipality.Name@(municipality.NameNl != municipality.Name ? " / " + municipality.NameNl : string.Empty)</option>
+                    <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" Size="ProgressBarCircularSize.ExtraSmall" />
                 }
-            </select>
-        </div>
-        <div id="sectorBox">
-            @switch (ViewModel.SelectedMunicipality?.Kind)
-            {
-                case MunicipalityKind.Streets:
-                    <div class="field">
-                        <label for="sectorSelect">Sector (on your card)</label>
-                        <select name="sector" id="sectorSelect" value="@ViewModel.SectorId" @onchange="OnSectorChanged">
-                            @foreach (var sector in ViewModel.Sectors)
-                            {
-                                <option value="@sector.Id">@sector.Name@(sector.NameNl != sector.Name ? " / " + sector.NameNl : string.Empty)</option>
-                            }
-                        </select>
-                    </div>
-                    break;
-                case MunicipalityKind.Mailles:
-                    @switch (ViewModel.MailleState)
-                    {
-                        case MailleLoadState.Loading:
-                            <p class="muted small"><span class="spinner" style="display:inline-block;width:12px;height:12px;border-width:2px"></span> Loading the areas from parking.brussels…</p>
-                            break;
-                        case MailleLoadState.Failed:
-                            <p class="muted small">@ViewModel.MailleError</p>
-                            break;
-                        case MailleLoadState.Loaded:
-                            <div class="field"><label>Areas on your card</label><p class="muted small">Tick every area (secteur / maille / zone) printed on your card.</p></div>
-                            <div class="stack">
-                                @foreach (var area in ViewModel.Mailles!.Areas)
-                                {
-                                    <label class="check">
-                                        <input type="checkbox" name="maille" value="@area.ZoneCode" checked="@ViewModel.SelectedMailles.Contains(area.ZoneCode)"
-                                               @onchange="e => ViewModel.Toggle(ViewModel.SelectedMailles, area.ZoneCode, (bool)e.Value!)" />
-                                        <span><b>@area.DisplayName</b><small>@area.ZoneCode</small></span>
-                                    </label>
-                                }
-                            </div>
-                            @if (ViewModel.Mailles!.BorderZones.Count > 0)
-                            {
-                                <div class="field"><label>Border zones</label></div>
-                                <div class="stack">
-                                    @foreach (var zone in ViewModel.Mailles!.BorderZones)
+            </RadzenButton>
+            <RadzenText id="scanStatus" TextStyle="TextStyle.Body2" TagName="TagName.Div" class="muted small" role="status">@ViewModel.ScanStatus</RadzenText>
+            <RadzenStack Gap="0.3rem" class="field">
+                <RadzenLabel Text="Municipality that issued the card" Component="muniSelect" />
+                <RadzenDropDown TValue="string" Name="muniSelect" id="muniSelect" Style="width:100%" Data="MunicipalityOptions" TextProperty="Value" ValueProperty="Key"
+                                Value="ViewModel.MunicipalityId" ValueChanged="OnMunicipalityChangedAsync" AllowClear="false" />
+            </RadzenStack>
+            <div id="sectorBox">
+                @switch (ViewModel.SelectedMunicipality?.Kind)
+                {
+                    case MunicipalityKind.Streets:
+                        <RadzenStack Gap="0.3rem" class="field">
+                            <RadzenLabel Text="Sector (on your card)" Component="sectorSelect" />
+                            <RadzenDropDown TValue="string" Name="sectorSelect" id="sectorSelect" Style="width:100%" Data="SectorOptions" TextProperty="Value" ValueProperty="Key"
+                                            Value="ViewModel.SectorId" ValueChanged="OnSectorChanged" AllowClear="false" />
+                        </RadzenStack>
+                        break;
+                    case MunicipalityKind.Mailles:
+                        @switch (ViewModel.MailleState)
+                        {
+                            case MailleLoadState.Loading:
+                                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+                                    <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" Size="ProgressBarCircularSize.ExtraSmall" />
+                                    <RadzenText TextStyle="TextStyle.Body2" TagName="TagName.Span" class="muted small">Loading the areas from parking.brussels…</RadzenText>
+                                </RadzenStack>
+                                break;
+                            case MailleLoadState.Failed:
+                                <RadzenText TextStyle="TextStyle.Body2" TagName="TagName.P" class="muted small">@ViewModel.MailleError</RadzenText>
+                                break;
+                            case MailleLoadState.Loaded:
+                                <RadzenStack Gap="0.5rem">
+                                    <RadzenLabel Text="Areas on your card" />
+                                    <RadzenText TextStyle="TextStyle.Body2" TagName="TagName.P" class="muted small">Tick every area (secteur / maille / zone) printed on your card.</RadzenText>
+                                    <RadzenCheckBoxList TValue="string" id="maillesBox" Orientation="Orientation.Vertical" Value="ViewModel.SelectedMailles" ValueChanged="OnMaillesChanged">
+                                        <Items>
+                                            @foreach (var area in ViewModel.Mailles!.Areas)
+                                            {
+                                                <RadzenCheckBoxListItem TValue="string" Value="area.ZoneCode" Text="@area.DisplayName">
+                                                    <Template Context="box"><b>@area.DisplayName</b> <small>@area.ZoneCode</small></Template>
+                                                </RadzenCheckBoxListItem>
+                                            }
+                                        </Items>
+                                    </RadzenCheckBoxList>
+                                    @if (ViewModel.Mailles!.BorderZones.Count > 0)
                                     {
-                                        <label class="check">
-                                            <input type="checkbox" name="lim" value="@zone.ZoneCode" checked="@ViewModel.SelectedLims.Contains(zone.ZoneCode)"
-                                                   @onchange="e => ViewModel.Toggle(ViewModel.SelectedLims, zone.ZoneCode, (bool)e.Value!)" />
-                                            <span><b>@zone.DisplayName</b><small>@zone.ZoneCode</small></span>
-                                        </label>
+                                        <RadzenLabel Text="Border zones" />
+                                        <RadzenCheckBoxList TValue="string" id="limsBox" Orientation="Orientation.Vertical" Value="ViewModel.SelectedLims" ValueChanged="OnLimsChanged">
+                                            <Items>
+                                                @foreach (var zone in ViewModel.Mailles!.BorderZones)
+                                                {
+                                                    <RadzenCheckBoxListItem TValue="string" Value="zone.ZoneCode" Text="@zone.DisplayName">
+                                                        <Template Context="box"><b>@zone.DisplayName</b> <small>@zone.ZoneCode</small></Template>
+                                                    </RadzenCheckBoxListItem>
+                                                }
+                                            </Items>
+                                        </RadzenCheckBoxList>
                                     }
-                                </div>
+                                </RadzenStack>
+                                break;
+                        }
+                        break;
+                    default:
+                        <RadzenText TextStyle="TextStyle.Body2" TagName="TagName.P" class="muted small">@ViewModel.SelectedMunicipality?.Note</RadzenText>
+                        break;
+                }
+            </div>
+            <div class="grid2">
+                <RadzenStack Gap="0.3rem" class="field">
+                    <RadzenLabel Text="Valid from" Component="cardFrom" />
+                    <RadzenDatePicker TValue="DateTime?" Name="cardFrom" Style="width:100%" Value="ParseDate(ViewModel.ValidFrom)" ValueChanged="OnValidFromChanged" AllowClear="true" />
+                </RadzenStack>
+                <RadzenStack Gap="0.3rem" class="field">
+                    <RadzenLabel Text="Valid until" Component="cardTo" />
+                    <RadzenDatePicker TValue="DateTime?" Name="cardTo" Style="width:100%" Value="ParseDate(ViewModel.ValidTo)" ValueChanged="OnValidToChanged" AllowClear="true" />
+                </RadzenStack>
+            </div>
+            <div class="grid2">
+                <RadzenStack Gap="0.3rem" class="field">
+                    <RadzenLabel Text="Plate" Component="cardPlate" />
+                    <RadzenTextBox Name="cardPlate" id="cardPlate" Placeholder="1ABC234" Style="width:100%" @bind-Value="ViewModel.Plate" />
+                </RadzenStack>
+                <RadzenStack Gap="0.3rem" class="field">
+                    <RadzenLabel Text="Card number" Component="cardNumber" />
+                    <RadzenTextBox Name="cardNumber" id="cardNumber" Placeholder="B000-000-000" Style="width:100%" @bind-Value="ViewModel.Number" />
+                </RadzenStack>
+            </div>
+            <div id="tolBox">
+                @if (ViewModel.Tolerances.Count > 0)
+                {
+                    <RadzenCheckBoxList TValue="string" Orientation="Orientation.Vertical" Value="ViewModel.SelectedTolerances" ValueChanged="OnTolerancesChanged">
+                        <Items>
+                            @foreach (var tolerance in ViewModel.Tolerances)
+                            {
+                                <RadzenCheckBoxListItem TValue="string" Value="tolerance.Code" Text="@tolerance.Label">
+                                    <Template Context="box"><b>@tolerance.Label</b> <small>Only if your card shows the code <b>@tolerance.Code</b>. Not sure? Ask the City (02 279 22 11).</small></Template>
+                                </RadzenCheckBoxListItem>
                             }
-                            break;
-                    }
-                    break;
-                default:
-                    <p class="muted small">@ViewModel.SelectedMunicipality?.Note</p>
-                    break;
-            }
-        </div>
-        <div class="grid2">
-            <div class="field"><label for="cardFrom">Valid from</label><input id="cardFrom" name="from" type="date" required value="@ViewModel.ValidFrom" @onchange="e => ViewModel.ValidFrom = e.Value?.ToString() ?? string.Empty" /></div>
-            <div class="field"><label for="cardTo">Valid until</label><input id="cardTo" name="to" type="date" required value="@ViewModel.ValidTo" @onchange="e => ViewModel.ValidTo = e.Value?.ToString() ?? string.Empty" /></div>
-        </div>
-        <div class="grid2">
-            <div class="field"><label for="cardPlate">Plate</label><input id="cardPlate" name="plate" placeholder="1ABC234" autocapitalize="characters" @bind="ViewModel.Plate" /></div>
-            <div class="field"><label for="cardNumber">Card number</label><input id="cardNumber" name="number" placeholder="B000-000-000" @bind="ViewModel.Number" /></div>
-        </div>
-        <div id="tolBox">
-            @foreach (var tolerance in ViewModel.Tolerances)
+                        </Items>
+                    </RadzenCheckBoxList>
+                }
+            </div>
+            @if (!string.IsNullOrEmpty(ViewModel.FormError))
             {
-                <label class="check">
-                    <input type="checkbox" name="tol" value="@tolerance.Code" checked="@ViewModel.SelectedTolerances.Contains(tolerance.Code)"
-                           @onchange="e => ViewModel.Toggle(ViewModel.SelectedTolerances, tolerance.Code, (bool)e.Value!)" />
-                    <span><b>@tolerance.Label</b><small>Only if your card shows the code <b>@tolerance.Code</b>. Not sure? Ask the City (02 279 22 11).</small></span>
-                </label>
+                <RadzenAlert AlertStyle="AlertStyle.Warning" Variant="Variant.Flat" Shade="Shade.Lighter" AllowClose="false" ShowIcon="false" role="alert">@ViewModel.FormError</RadzenAlert>
             }
-        </div>
-        @if (!string.IsNullOrEmpty(ViewModel.FormError))
-        {
-            <p class="muted small warn" role="alert">@ViewModel.FormError</p>
-        }
-        <p class="muted small">Stored only on this phone.</p>
-        <button type="submit" class="btn btn-primary btn-block">Save card</button>
-    </form>
+            <RadzenText TextStyle="TextStyle.Body2" TagName="TagName.P" class="muted small">Stored only on this phone.</RadzenText>
+            <RadzenButton ButtonType="ButtonType.Submit" ButtonStyle="ButtonStyle.Primary" Text="Save card" class="btn-block" Style="width:100%" />
+        </RadzenStack>
+    </RadzenTemplateForm>
 </DialogShell>
