@@ -10,8 +10,12 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
 
 ## [Unreleased]
 
-The first build of `main` after this change is merged publishes it as the next release, above v1.0.11, and installs
-over the earlier version.
+### Fixed
+
+- The card form refuses a card whose "valid from" date is after its "valid until" date, and a card whose municipality
+  is not known, with a message, instead of saving a card that could never cover a spot.
+
+## [1.0.21] - 2026-11-17
 
 No issue tracker entry exists for this work; it ships in pull request #1.
 

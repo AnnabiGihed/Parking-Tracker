@@ -110,6 +110,26 @@ public sealed class CardViewModelTests
 		_ = ui.Settings.DidNotReceiveWithAnyArgs().SaveCardAsync(default!);
 		ui.Card.IsOpen.Should().BeTrue();
 	}
+
+	/// <summary>
+	/// Verifies that dates in reverse order are not saved and the message of the card is shown.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Save_DatesInReverseOrder_ShouldNotSaveAndShowTheCardMessage()
+	{
+		using var ui = new UiFixture();
+		await ui.Card.OpenAsync();
+		ui.Card.ValidFrom = "2027-01-01";
+		ui.Card.ValidTo = "2026-01-01";
+
+		var saved = await ui.Card.SaveAsync();
+
+		saved.Should().BeFalse();
+		ui.Card.FormError.Should().Be("The card cannot be valid from a day after the day it is valid until.");
+		_ = ui.Settings.DidNotReceiveWithAnyArgs().SaveCardAsync(default!);
+		ui.Card.IsOpen.Should().BeTrue();
+	}
 	#endregion
 
 	#region Scan Tests

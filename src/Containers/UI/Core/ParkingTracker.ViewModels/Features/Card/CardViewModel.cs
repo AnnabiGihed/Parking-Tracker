@@ -7,9 +7,12 @@ using ParkingTracker.Application.Features.Sectors.Queries.GetOfficialListStatus;
 using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
 using ParkingTracker.Domain.Features.Cards.ValueObjects;
+using ParkingTracker.Domain.Features.ResidentCards.Aggregates;
+using ParkingTracker.Domain.Features.ResidentCards.Errors;
 using ParkingTracker.Domain.Features.Sectors.ValueObjects;
 using ParkingTracker.ViewModels.Features.Shared;
 using Pivot.Framework.Application.Abstractions.Messaging;
+using Pivot.Framework.Domain.Shared;
 
 namespace ParkingTracker.ViewModels.Features.Card;
 
@@ -348,9 +351,10 @@ public sealed class CardViewModel : ViewModelBase
 
 	/// <summary>
 	/// Saves the card through the settings store and closes the dialog. The dates are required; the plate is stored in capitals
-	/// without spaces or dashes.
+	/// without spaces or dashes. The card aggregate checks the form against the municipality and its message is shown when a rule is
+	/// broken, for example dates in reverse order.
 	/// </summary>
-	/// <returns>A task with <see langword="true"/> when the card was saved; <see langword="false"/> when the form is incomplete.</returns>
+	/// <returns>A task with <see langword="true"/> when the card was saved; <see langword="false"/> when the form is incomplete or breaks a rule of the card.</returns>
 	public async Task<bool> SaveAsync()
 	{
 		if (!TryReadDate(ValidFrom, out var from) || !TryReadDate(ValidTo, out var to))
@@ -360,16 +364,16 @@ public sealed class CardViewModel : ViewModelBase
 			return false;
 		}
 
+		var drafted = DraftCard(new CardPeriod(from, to));
+		if (drafted.IsFailure)
+		{
+			FormError = drafted.Error.Message;
+			NotifyChanged();
+			return false;
+		}
+
 		var first = await settings.GetCardAsync().ConfigureAwait(false) is null;
-		await settings.SaveCardAsync(new ParkingCard(
-			MunicipalityId,
-			SectorId,
-			new CardPeriod(from, to),
-			[.. SelectedTolerances],
-			[.. SelectedMailles],
-			[.. SelectedLims],
-			Number.Trim(),
-			NormalisePlate(Plate))).ConfigureAwait(false);
+		await settings.SaveCardAsync(drafted.Value.ToParkingCard()).ConfigureAwait(false);
 		FormError = string.Empty;
 		IsOpen = false;
 		await AnnounceSavedCardAsync(first).ConfigureAwait(false);
@@ -555,13 +559,19 @@ public sealed class CardViewModel : ViewModelBase
 	}
 
 	/// <summary>
-	/// Writes a plate in capitals without spaces or dashes.
+	/// Builds the residents' card from the form through the card aggregate, which trims the number, puts the plate in capitals
+	/// without spaces or dashes and checks the card against its municipality.
 	/// </summary>
-	/// <param name="plate">The plate as typed.</param>
-	/// <returns>The plate, for example <c>1ABC234</c>.</returns>
-	private static string NormalisePlate(string plate)
+	/// <param name="period">The validity dates read from the form.</param>
+	/// <returns>The card, or the rule the form breaks.</returns>
+	private Result<ResidentCard> DraftCard(CardPeriod period)
 	{
-		return new string([.. plate.Trim().ToUpperInvariant().Where(character => !char.IsWhiteSpace(character) && character != '-')]);
+		if (SelectedMunicipality is not { } municipality)
+		{
+			return Result.Failure<ResidentCard>(ResidentCardErrors.MunicipalityRequired);
+		}
+
+		return ResidentCard.Create(municipality, new ParkingCard(MunicipalityId, SectorId, period, [.. SelectedTolerances], [.. SelectedMailles], [.. SelectedLims], Number, Plate));
 	}
 
 	/// <summary>
