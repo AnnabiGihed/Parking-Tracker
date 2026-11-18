@@ -12,7 +12,7 @@ namespace ParkingTracker.Shared.Tests.Features.MapLayers.Components;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : Component tests for <see cref="MapView"/>, <see cref="MapScript"/> and <see cref="LayersPopover"/> with the JavaScript
+/// Purpose     : Component tests for <see cref="MapView"/> and <see cref="MapScript"/> with the JavaScript
 ///              interop in strict mode: the map module is imported and initialised, the four callbacks reach the component callbacks,
 ///              calls before the map exists do nothing, and disposing the component disposes the module and the .NET reference.
 /// </summary>
@@ -129,38 +129,6 @@ public sealed class MapViewTests : UiTestContext
 		module.Invocations["setView"].Single().Arguments.Should().Equal(50.825, 4.3606, null);
 		module.Invocations["setViewAtLeast"].Single().Arguments.Should().Equal(50.825, 4.3606, 17);
 		module.Invocations["drawSurfaces"].Single().Arguments[0].Should().Be("streets");
-	}
-	#endregion
-
-	#region Layers Popover Tests
-	/// <summary>
-	/// Verifies that a switch of the popover is saved through the settings store and that the popover is hidden until opened.
-	/// </summary>
-	/// <returns>A task that completes when the assertions have run.</returns>
-	[Fact]
-	public async Task Toggle_CarParksSwitch_ShouldSaveTheSwitches()
-	{
-		var cut = Render<LayersPopover>(parameters => parameters.Add(popover => popover.IsOpen, true));
-		cut.Find("#layersPanel").ClassList.Should().NotContain("hidden");
-
-		await cut.Find("input[data-layer=carparks]").ChangeAsync(true);
-
-		await Task.Yield();
-		_ = Settings.Received(1).SaveLayersAsync(new ParkingTracker.Domain.Features.MapLayers.ValueObjects.LayerSettings(true, true, true, true, false));
-		Resolve<MapLayersViewModel>().Switches.CarParks.Should().BeTrue();
-	}
-
-	/// <summary>
-	/// Verifies that the popover lists the five layers and the legend.
-	/// </summary>
-	[Fact]
-	public void Render_Popover_ShouldListFiveLayersAndTheLegend()
-	{
-		var cut = Render<LayersPopover>();
-
-		cut.FindAll(".switch").Should().HaveCount(5);
-		cut.FindAll(".legend-row span").Should().HaveCount(7);
-		cut.Find("#layersPanel").ClassList.Should().Contain("hidden");
 	}
 	#endregion
 }

@@ -19,6 +19,8 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
   show in the format of the phone's language.
 - The car dialog is built with Radzen components: buttons, a switch for the parking alerts, preset buttons and a
   number field for the timer. Texts and behaviour stay the same; the minutes field now has up and down arrows.
+- The layers popover is built with Radzen components: a switch for each map layer, a close button and the line that
+  says what the map shows. Texts and behaviour stay the same; the switches look like Radzen switches.
 
 ### Fixed
 
