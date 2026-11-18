@@ -7,7 +7,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "check": "node --check emulator-test.mjs && node --check upgrade-test.mjs && node --check webview-cdp.mjs",
+    "check": "node --check emulator-test.mjs && node --check upgrade-test.mjs && node --check webview-cdp.mjs && node --check adb-tool.mjs && node --check app-crashes.mjs",
     "test": "node emulator-test.mjs",
     "test:upgrade": "node upgrade-test.mjs"
   }

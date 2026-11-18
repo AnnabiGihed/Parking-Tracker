@@ -13,6 +13,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { adbPath, apkArgument } from './adb-tool.mjs';
+import { appFailureLines } from './app-crashes.mjs';
 
 // A fixed path, not a command-line argument: nothing given to the script can reach adb.
 const APK = 'apk/ParkingTracker-test.apk';
@@ -26,8 +27,6 @@ const DRIVE_KNOTS = 23; // about 11.8 m/s
 const HOME = { name: 'Avenue Louise 216', lat: 50.82655, lon: 4.36505, expect: ['FREE ✓'] };
 const CHATELAIN = { name: 'Place du Châtelain (Ixelles)', lat: 50.82480, lon: 4.36040, expect: ['PAY', 'FREE NOW'] };
 const TEST_CARD = { number: 'TEST', plate: '1TST000', sector: 'louise', from: '2026-01-01', to: '2099-12-31', tolerances: [] };
-// What logcat shows when .NET or Blazor lets an exception escape.
-const DOTNET_FAILURE = /FATAL UNHANDLED EXCEPTION|Unhandled managed exception|Unhandled exception rendering component|AndroidRuntime.*FATAL EXCEPTION/i;
 
 
 mkdirSync(OUT, { recursive: true });
@@ -290,14 +289,16 @@ try { report = await main(); } catch (e) {
 const LOG_BUFFER = { maxBuffer: 64 * 1024 * 1024 };
 const logcat = tryAdb(['logcat', '-d', '-v', 'time'], LOG_BUFFER);
 writeFileSync(join(OUT, 'logcat.txt'), logcat);
-const dotnetFailures = logcat.split(/\r?\n/).filter((l) => DOTNET_FAILURE.test(l));
+const dotnetFailures = appFailureLines(logcat, PKG);
 check('No unhandled .NET exception in logcat', dotnetFailures.length === 0, dotnetFailures.slice(0, 2).join(' | '));
 const crash = tryAdb(['logcat', '-d', '-b', 'crash', '-v', 'time'], LOG_BUFFER);
 writeFileSync(join(OUT, 'crash.txt'), crash);
-if (/FATAL EXCEPTION/.test(crash)) {
-  const lines = crash.split(/\r?\n/);
-  report.crash = lines.slice(0, 25).join('\n');
-  check('App did not crash', false, lines.find((l) => /Exception|Error/.test(l)) || 'see crash.txt');
+// Other processes on the emulator (System UI, the phone service) sometimes crash; crash.txt keeps them, only the
+// app's own crashes fail the check.
+const appCrashes = appFailureLines(crash, PKG);
+if (appCrashes.length > 0) {
+  report.crash = appCrashes.slice(0, 25).join('\n');
+  check('App did not crash', false, appCrashes[0]);
 }
 try { ws?.close(); } catch { /* closed */ }
 writeFileSync(join(OUT, 'report.json'), JSON.stringify(report, null, 2));

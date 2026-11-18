@@ -17,6 +17,7 @@ import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { connectWebView, tryAdb } from './webview-cdp.mjs';
 import { adbPath, apkArgument } from './adb-tool.mjs';
+import { appFailureLines } from './app-crashes.mjs';
 
 const [CAPACITOR_APK, MAUI_APK] = process.argv.slice(2);
 const PKG = 'be.parkingtracker.app';
@@ -31,7 +32,6 @@ const MAX_FLUSH_WAIT_MS = 60000;
 const RELAUNCH_WAIT_MS = 15000;
 const LEVELDB_DIRECTORY = 'app_webview/Default/Local Storage/leveldb';
 const KNOWN_READERS = ['leveldb', 'webview'];
-const DOTNET_FAILURE = /FATAL UNHANDLED EXCEPTION|Unhandled managed exception|Unhandled exception rendering component|AndroidRuntime.*FATAL EXCEPTION/i;
 
 // What the old app wrote, in the JSON shapes of app.js (ADR-0004).
 const OLD_CARD = { number: 'UPG-1', plate: '1UPG234', municipality: 'bruxelles', sector: 'louise', from: '2026-01-01', to: '2099-12-31', tolerances: ['BXL_LIM_IXL_LOUISE'] };
@@ -190,7 +190,7 @@ try { report = await main(); } catch (error) {
 }
 const logcat = tryAdb(['logcat', '-d', '-v', 'time'], { maxBuffer: 64 * 1024 * 1024 });
 writeFileSync(join(OUT, 'logcat.txt'), logcat);
-const dotnetFailures = logcat.split(/\r?\n/).filter((line) => DOTNET_FAILURE.test(line));
+const dotnetFailures = appFailureLines(logcat, PKG);
 check('No unhandled .NET exception in logcat', dotnetFailures.length === 0, dotnetFailures.slice(0, 2).join(' | '));
 writeFileSync(join(OUT, 'report.json'), JSON.stringify(report, null, 2));
 const failed = checks.filter((c) => !c.ok);
