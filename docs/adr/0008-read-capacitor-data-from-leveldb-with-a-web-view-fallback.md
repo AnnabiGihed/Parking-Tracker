@@ -1,6 +1,6 @@
 # ADR-0008: Read the Capacitor data from the LevelDB files first, with a hidden web view as the fallback
 
-- Status: Accepted
+- Status: Superseded by ADR-0018
 - Date: 2026-11-17
 - Deciders: Gihed Annabi
 - Supersedes: ADR-0004

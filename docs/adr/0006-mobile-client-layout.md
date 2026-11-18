@@ -1,6 +1,6 @@
 # ADR-0006: Map the Pivot.Framework canonical layout onto an on-device mobile client
 
-- Status: Accepted
+- Status: Superseded by ADR-0021
 - Date: 2026-11-17
 - Deciders: Gihed Annabi
 

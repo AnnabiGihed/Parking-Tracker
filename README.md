@@ -17,7 +17,8 @@ python .agent-kit/verify.py
 
 The token must be able to read packages, because the `Pivot.Framework.*` packages come from GitHub Packages. The
 Android app builds only in CI (it needs the `maui-android` workload); the solution on a PC holds everything else,
-with its unit tests. Documentation: [docs/architecture.md](docs/architecture.md) (design, build and CI) and
+with its unit tests. Documentation: [docs/architecture.md](docs/architecture.md) (design, build and CI),
+[docs/architecture-v2.md](docs/architecture-v2.md) (proposed back end, sign-in and admin app) and
 [CONTRIBUTING.md](CONTRIBUTING.md) (rules for contributions).
 
 ## Features
