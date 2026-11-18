@@ -11,6 +11,13 @@ namespace ParkingTracker.Shared.Features.SpotCheck.Components;
 /// </summary>
 public sealed partial class NearestSpot : ViewModelComponent<NearestSpotViewModel>
 {
+	#region Properties
+	/// <summary>
+	/// Gets the CSS classes of the block, which is hidden until a search runs.
+	/// </summary>
+	private string BlockClass => ViewModel.State == NearestSpotState.Hidden ? "spot hidden" : "spot";
+	#endregion
+
 	#region Event Handlers
 	/// <summary>
 	/// Handles the Waze button.

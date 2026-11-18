@@ -47,4 +47,13 @@ public sealed partial class StatusBlock : ViewModelComponent<SpotCheckViewModel>
 		await Launcher.OpenAsync(app.Address);
 	}
 	#endregion
+
+	#region Private Helpers
+	/// <summary>
+	/// Gets the CSS classes of the block: the colour of the verdict, and dimmed while a check runs.
+	/// </summary>
+	/// <param name="status">The status shown.</param>
+	/// <returns>The classes.</returns>
+	private string BlockClass(SpotStatusView status) => ViewModel.IsChecking ? $"result {status.ColourKey} checking" : $"result {status.ColourKey}";
+	#endregion
 }

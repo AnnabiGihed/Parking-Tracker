@@ -1,33 +1,33 @@
 @namespace ParkingTracker.Shared.Features.SpotCheck.Components
 @inherits ViewModelComponent<NearestSpotViewModel>
-<div id="nearest" class="spot @(ViewModel.State == NearestSpotState.Hidden ? "hidden" : string.Empty)">
+<RadzenCard Variant="Variant.Outlined" id="nearest" class="@BlockClass">
     @switch (ViewModel.State)
     {
         case NearestSpotState.Loading:
-            <div class="spot-loading"><span class="spinner"></span>Looking for the nearest spot your card covers…</div>
+            <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="10px" class="spot-loading"><span class="spinner"></span>Looking for the nearest spot your card covers…</RadzenStack>
             break;
         case NearestSpotState.Failed:
-            <div class="spot-loading">@ViewModel.FailureMessage</div>
+            <RadzenText TextStyle="TextStyle.Body2" TagName="TagName.Div" class="spot-loading">@ViewModel.FailureMessage</RadzenText>
             break;
         case NearestSpotState.NoneFound:
-            <div class="spot-loading">No spot covered by your card within ~400 m right now.</div>
+            <RadzenText TextStyle="TextStyle.Body2" TagName="TagName.Div" class="spot-loading">No spot covered by your card within ~400 m right now.</RadzenText>
             break;
         case NearestSpotState.Found:
-            <div class="spot-head">
+            <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="10px" class="spot-head">
                 <div class="spot-icon"><Icon Name="parking" /></div>
                 <div>
-                    <div class="spot-title">@ViewModel.Best!.Label</div>
-                    <div class="spot-sub">@ViewModel.BestSubtitle</div>
+                    <RadzenText TextStyle="TextStyle.Body1" TagName="TagName.Div" class="spot-title">@ViewModel.Best!.Label</RadzenText>
+                    <RadzenText TextStyle="TextStyle.Body2" TagName="TagName.Div" class="spot-sub">@ViewModel.BestSubtitle</RadzenText>
                 </div>
-            </div>
-            <div class="nav-row">
-                <button type="button" class="btn btn-waze" @onclick="OnWazeAsync"><Icon Name="navigation" />Waze</button>
-                <button type="button" class="btn btn-gmaps" @onclick="OnGoogleMapsAsync"><Icon Name="directions" />Google Maps</button>
-            </div>
+            </RadzenStack>
+            <RadzenStack Orientation="Orientation.Horizontal" Gap="8px" class="nav-row">
+                <RadzenButton ButtonStyle="ButtonStyle.Base" class="btn-waze" Click="OnWazeAsync"><Icon Name="navigation" />Waze</RadzenButton>
+                <RadzenButton ButtonStyle="ButtonStyle.Base" class="btn-gmaps" Click="OnGoogleMapsAsync"><Icon Name="directions" />Google Maps</RadzenButton>
+            </RadzenStack>
             @if (ViewModel.Others.Count > 0)
             {
-                <div class="spot-more">@ViewModel.OthersText</div>
+                <RadzenText TextStyle="TextStyle.Caption" TagName="TagName.Div" class="spot-more">@ViewModel.OthersText</RadzenText>
             }
             break;
     }
-</div>
+</RadzenCard>
