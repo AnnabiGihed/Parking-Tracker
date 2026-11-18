@@ -286,4 +286,67 @@ public sealed class ParkingSessionTests
 		(high >= low).Should().BeTrue();
 	}
 	#endregion
+
+	#region Restore Tests
+	/// <summary>
+	/// Verifies that a stored open session with a timer comes back with its stored identifier and raises no event.
+	/// </summary>
+	[Fact]
+	public void Restore_OpenSessionWithTimer_ShouldKeepTheIdentifierAndValues()
+	{
+		var id = ParkingSessionId.New();
+		var timer = new ParkingTimer(Parked.AddMinutes(60), 60);
+
+		var result = ParkingSession.Restore(id, Place, Parked, "Paid parking", "Rue Neuve 1", timer, null);
+
+		result.IsSuccess.Should().BeTrue();
+		result.Value.Id.Should().Be(id);
+		result.Value.Timer.Should().Be(timer);
+		result.Value.IsOpen.Should().BeTrue();
+		result.Value.GetDomainEvents().Should().BeEmpty();
+	}
+
+	/// <summary>
+	/// Verifies that a stored ended session keeps the moment it ended.
+	/// </summary>
+	[Fact]
+	public void Restore_EndedSession_ShouldKeepTheEnd()
+	{
+		var result = ParkingSession.Restore(ParkingSessionId.New(), Place, Parked, string.Empty, string.Empty, null, Parked.AddHours(1));
+
+		result.IsSuccess.Should().BeTrue();
+		result.Value.IsOpen.Should().BeFalse();
+		result.Value.EndedAt.Should().Be(Parked.AddHours(1));
+	}
+
+	/// <summary>
+	/// Verifies that stored values that break the rules of the behaviours are refused.
+	/// </summary>
+	[Fact]
+	public void Restore_ValuesThatBreakARule_ShouldFail()
+	{
+		var id = ParkingSessionId.New();
+
+		ParkingSession.Restore(id, new GeoPoint(91, 4), Parked, string.Empty, string.Empty, null, null).Error.Should().Be(ParkingSessionErrors.PositionInvalid);
+		ParkingSession.Restore(id, Place, Parked, string.Empty, string.Empty, new ParkingTimer(Parked.AddMinutes(1), 1), null).Error.Should().Be(ParkingSessionErrors.TimerLengthOutOfRange);
+		ParkingSession.Restore(id, Place, Parked, string.Empty, string.Empty, new ParkingTimer(Parked.AddMinutes(-30), 30), null).Error.Should().Be(ParkingSessionErrors.TimerEndsBeforeParking);
+		ParkingSession.Restore(id, Place, Parked, string.Empty, string.Empty, null, Parked.AddMinutes(-1)).Error.Should().Be(ParkingSessionErrors.EndedBeforeParked);
+		ParkingSession.Restore(id, Place, Parked, string.Empty, string.Empty, new ParkingTimer(Parked.AddMinutes(60), 60), Parked.AddMinutes(10)).Error.Should().Be(ParkingSessionErrors.AlreadyEnded);
+	}
+
+	/// <summary>
+	/// Verifies that missing arguments are rejected.
+	/// </summary>
+	[Fact]
+	public void Restore_NullArguments_ShouldThrow()
+	{
+		var noId = () => ParkingSession.Restore(null!, Place, Parked, string.Empty, string.Empty, null, null); // null on purpose: proves the guard clause rejects it
+		var noHeadline = () => ParkingSession.Restore(ParkingSessionId.New(), Place, Parked, null!, string.Empty, null, null); // null on purpose: proves the guard clause rejects it
+		var noAddress = () => ParkingSession.Restore(ParkingSessionId.New(), Place, Parked, string.Empty, null!, null, null); // null on purpose: proves the guard clause rejects it
+
+		noId.Should().Throw<ArgumentNullException>();
+		noHeadline.Should().Throw<ArgumentNullException>();
+		noAddress.Should().Throw<ArgumentNullException>();
+	}
+	#endregion
 }

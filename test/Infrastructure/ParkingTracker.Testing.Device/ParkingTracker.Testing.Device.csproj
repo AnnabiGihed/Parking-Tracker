@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Support code of the tests of the device database: a real SQLite file with the real cipher, repositories and a key store in memory.
+       It is shared by the tests of the database and of the settings store, so that neither needs access to the internals of the database. -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NSubstitute" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Infrastructure\ParkingTracker.Persistence.Device\ParkingTracker.Persistence.Device.csproj" />
+  </ItemGroup>
+
+</Project>

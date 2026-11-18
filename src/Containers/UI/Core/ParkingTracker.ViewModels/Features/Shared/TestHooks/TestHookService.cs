@@ -139,7 +139,7 @@ public sealed class TestHookService
 	public async Task SetCardAsync(string json)
 	{
 		var parsed = SettingsJson.ParseCard(json) ?? throw new ArgumentException("The text is not a card.", nameof(json));
-		var first = await settings.GetCardAsync().ConfigureAwait(false) is null;
+		var first = await settings.GetCardOrNoneAsync().ConfigureAwait(false) is null;
 		await settings.SaveCardAsync(parsed).ConfigureAwait(false);
 		await card.AnnounceSavedCardAsync(first).ConfigureAwait(false);
 	}

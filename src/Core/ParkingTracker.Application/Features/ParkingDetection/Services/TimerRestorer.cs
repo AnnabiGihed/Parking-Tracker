@@ -57,7 +57,7 @@ public sealed class TimerRestorer
 	/// <returns>A task with <see langword="true"/> when at least one reminder was scheduled.</returns>
 	public async Task<bool> RestoreAsync(CancellationToken cancellationToken = default)
 	{
-		var timer = await settings.GetTimerAsync().ConfigureAwait(false);
+		var timer = await settings.GetTimerOrNoneAsync().ConfigureAwait(false);
 		if (timer is null)
 		{
 			return false;

@@ -32,7 +32,7 @@ public sealed class TestHookScriptTests
 	[Fact]
 	public void Hooks_ShouldBeTheElevenOfTheEmulatorTests()
 	{
-		TestHookScript.Hooks.Select(h => h.JsName).Should().Equal("setCard", "getCard", "decide", "freeSpots", "officialList", "platformStatus", "screenState", "startTimer", "parseCardText", "getCar", "migration");
+		TestHookScript.Hooks.Select(h => h.JsName).Should().Equal("setCard", "getCard", "decide", "freeSpots", "officialList", "platformStatus", "screenState", "startTimer", "parseCardText", "getCar", "migration", "dbMigration");
 	}
 	#endregion
 }

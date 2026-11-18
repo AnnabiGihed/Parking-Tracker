@@ -1,4 +1,5 @@
 using System.Globalization;
+using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Domain.Features.Cards.ValueObjects;
 using ParkingTracker.Domain.Features.Sectors.ValueObjects;
 using ParkingTracker.ViewModels.Features.Shared;
@@ -42,6 +43,15 @@ public static class CardLinePresenter
 		var (detail, warning, renewal) = Detail(card, state, listChanged, today);
 		var dot = state.IsValid && !listChanged ? CardDot.Ok : CardDot.Bad;
 		return new CardLineView(dot, Pill(card, municipality, sectorName), detail, warning, renewal, false);
+	}
+
+	/// <summary>
+	/// Builds the card line for a saved card that cannot be read: it is not "no card yet", it asks the user to enter the card again.
+	/// </summary>
+	/// <returns>The view of the card line, with the link that adds a card.</returns>
+	public static CardLineView Unreadable()
+	{
+		return new CardLineView(CardDot.Bad, "Card not readable", SavedDataUnreadableException.CardMessage, true, null, true);
 	}
 	#endregion
 

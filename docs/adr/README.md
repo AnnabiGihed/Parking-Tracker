@@ -19,7 +19,7 @@
 | 15 | [Require sign-in in the mobile app and keep the driver's data on the phone](0015-require-sign-in-and-keep-the-drivers-data-on-the-phone.md) | Accepted |
 | 16 | [Expose a REST API versioned by URL segment, documented with Swashbuckle, with Scalar in Development only](0016-expose-a-rest-api-versioned-by-url-segment-with-scalar-in-development.md) | Accepted |
 | 17 | [Build a public admin web app on Blazor Server and Radzen, protected by Google sign-in and an allow-list](0017-build-a-public-admin-web-app-with-google-sign-in-and-an-allow-list.md) | Accepted |
-| 18 | [Keep the driver's data in an encrypted on-device SQLite database through Pivot's SQLite package](0018-keep-the-drivers-data-in-an-encrypted-on-device-sqlite-database.md) | Accepted |
+| 18 | [Keep the driver's data in an encrypted on-device SQLite database through Pivot's SQLite package](0018-keep-the-drivers-data-in-an-encrypted-on-device-sqlite-database.md) | Superseded by [ADR-0026](0026-store-the-drivers-data-with-sqlite-net-pcl-on-the-phone.md) |
 | 19 | [Model aggregates per bounded context and keep the decision engine as value objects and pure services](0019-model-aggregates-per-bounded-context-and-keep-the-decision-engine-pure.md) | Accepted |
 | 20 | [Use Radzen.Blazor for the phone screens and keep Leaflet for the map](0020-use-radzen-for-the-phone-screens-and-keep-leaflet-for-the-map.md) | Accepted |
 | 21 | [Map the canonical layout to two bounded contexts with one Domain and two Application projects](0021-map-the-canonical-layout-to-two-bounded-contexts.md) | Accepted |
@@ -27,3 +27,4 @@
 | 23 | [Deploy from GitHub Actions with private GHCR images and an SSH forced command, with migration bundles](0023-deploy-from-github-actions-through-an-ssh-forced-command.md) | Accepted |
 | 24 | [Fall back to the upstream services when the API cannot answer, switchable remotely](0024-fall-back-to-upstream-services-when-the-api-cannot-answer.md) | Accepted |
 | 25 | [Test the API path with API-mode parity and Testcontainers PostgreSQL, without in-memory providers](0025-test-the-api-path-with-api-mode-parity-and-testcontainers.md) | Accepted |
+| 26 | [Store the driver's data with sqlite-net-pcl on the phone](0026-store-the-drivers-data-with-sqlite-net-pcl-on-the-phone.md) | Accepted |

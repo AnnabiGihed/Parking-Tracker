@@ -153,6 +153,10 @@ async function checkMigratedData(app, report) {
   const marker = JSON.parse((await app.evaluate('ptTest.migration()')) || 'null');
   report.marker = marker;
   check('The migration marker pt.migration is set', marker?.version === 1 && marker?.outcome === 'migrated' && marker?.found?.includes('pt.card') && marker?.found?.includes('pt.car'), JSON.stringify(marker));
+  // The card, car and timer are read through the device database (ADR-0026): the move of the saved values into it has its own marker.
+  const dbMarker = JSON.parse((await app.evaluate('ptTest.dbMigration()')) || 'null');
+  report.dbMarker = dbMarker;
+  check('The database migration marker pt.dbMigration says migrated', dbMarker?.version === 1 && dbMarker?.outcome === 'migrated' && dbMarker?.found?.includes('pt.card') && dbMarker?.found?.includes('pt.car'), JSON.stringify(dbMarker));
   report.reader = marker?.reader;
   check('The migration marker names the reader that was used', KNOWN_READERS.includes(marker?.reader), `reader ${marker?.reader}`);
   check('The alerts switch and the layers were copied', ['pt.bgAlerts', 'pt.layers', 'pt.permSnooze'].every((k) => marker?.found?.includes(k)), JSON.stringify(marker?.found));

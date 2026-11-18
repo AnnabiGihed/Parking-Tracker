@@ -6,7 +6,7 @@ using ParkingTracker.Application.Features.ParkingDetection.Services;
 using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.ViewModels.Features.Car;
 using ParkingTracker.ViewModels.Features.Shared;
-using ParkingTracker.ViewModels.Features.Shared.Settings.Legacy;
+using ParkingTracker.ViewModels.Features.Shared.Settings;
 using ParkingTracker.ViewModels.Features.SpotCheck;
 
 namespace ParkingTracker.App.Features.Shared;
@@ -83,10 +83,11 @@ public sealed partial class PlatformRelay : ComponentBase, IDisposable
 	public ISettingsStore Settings { get; set; } = null!;
 
 	/// <summary>
-	/// Gets or sets the migration of the saved data of the previous version, which finishes before the settings are read.
+	/// Gets or sets the start-up gate (the migration of the saved data of the previous version and the device database), which
+	/// finishes before the settings are read.
 	/// </summary>
 	[Inject]
-	public LegacyDataMigration Migration { get; set; } = null!;
+	public StartupGate Gate { get; set; } = null!;
 
 	/// <summary>
 	/// Gets or sets the car dialog, whose saved car is read again after a return to the app.
@@ -226,7 +227,7 @@ public sealed partial class PlatformRelay : ComponentBase, IDisposable
 	{
 		try
 		{
-			await Migration.RunOnceAsync().ConfigureAwait(false);
+			await Gate.RunOnceAsync().ConfigureAwait(false);
 			await Task.Delay(NotificationAskDelay, Clock).ConfigureAwait(false);
 			if (await Settings.GetAlertsEnabledAsync().ConfigureAwait(false))
 			{

@@ -1,3 +1,4 @@
+using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Services;
 using ParkingTracker.Domain.Features.Shared.ValueObjects;
@@ -12,7 +13,9 @@ namespace ParkingTracker.Application.Features.SpotDecisions.Queries.DecideSpot;
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
 /// Purpose     : Handles <see cref="DecideSpotQuery"/>: builds the decision context, then lets the pure decider ask for live data
-///              step by step. Every failed source ends in a "can't verify" answer, never in a failed result.
+///              step by step. Every failed source ends in a "can't verify" answer, never in a failed result; so does a saved card that exists
+///              but cannot be read (<see cref="SavedDataUnreadableException"/>), which asks the user to enter the card again and is never
+///              answered as "no card".
 /// </summary>
 public sealed class DecideSpotQueryHandler : IQueryHandler<DecideSpotQuery, SpotDecision>
 {
@@ -60,7 +63,16 @@ public sealed class DecideSpotQueryHandler : IQueryHandler<DecideSpotQuery, Spot
 	public async Task<Result<SpotDecision>> Handle(DecideSpotQuery request, CancellationToken cancellationToken)
 	{
 		var now = clock.GetLocalNow();
-		var context = await contexts.CreateAsync(now, cancellationToken).ConfigureAwait(false);
+		Result<DecisionContext> context;
+		try
+		{
+			context = await contexts.CreateAsync(now, cancellationToken).ConfigureAwait(false);
+		}
+		catch (SavedDataUnreadableException unreadable)
+		{
+			return Result.Success(SpotDecision.CantVerify(unreadable.Message));
+		}
+
 		if (context.IsFailure)
 		{
 			return Result.Failure<SpotDecision>(context.Error);

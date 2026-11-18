@@ -1,3 +1,4 @@
+using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Domain.Features.Cards.ValueObjects;
 using ParkingTracker.Domain.Features.Sectors.ValueObjects;
 using ParkingTracker.ViewModels.Features.Card;
@@ -122,6 +123,21 @@ public sealed class CardLinePresenterTests
 		CardLinePresenter.Present(withTolerance, City, "Louise", null, Today).Pill.Should().Be("Louise + Ixelles · 1ABC234");
 		CardLinePresenter.Present(areas, Ixelles, null, null, Today).Pill.Should().Be("Ixelles · 2 areas");
 		CardLinePresenter.Present(noAreas, Ixelles, null, null, Today).Pill.Should().Be("Ixelles · choose your areas");
+	}
+
+	/// <summary>
+	/// Verifies that a saved card that cannot be read is not shown as "no card yet": the line asks for the card again.
+	/// </summary>
+	[Fact]
+	public void Unreadable_ShouldAskForTheCardInsteadOfSayingNoCard()
+	{
+		var line = CardLinePresenter.Unreadable();
+
+		line.Pill.Should().NotBe("No card yet");
+		line.Detail.Should().Be(SavedDataUnreadableException.CardMessage);
+		line.DetailIsWarning.Should().BeTrue();
+		line.ShowAddLink.Should().BeTrue();
+		line.Dot.Should().Be(CardDot.Bad);
 	}
 	#endregion
 }

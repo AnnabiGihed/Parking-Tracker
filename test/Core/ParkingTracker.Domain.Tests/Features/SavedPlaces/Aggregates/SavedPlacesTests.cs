@@ -239,4 +239,59 @@ public sealed class SavedPlacesTests
 		(highPlace >= lowPlace).Should().BeTrue();
 	}
 	#endregion
+
+	#region Restore Tests
+	/// <summary>
+	/// Verifies that stored places come back with the stored identifiers, in order, and that the list raises no event.
+	/// </summary>
+	[Fact]
+	public void Restore_StoredPlaces_ShouldKeepTheIdentifiersAndOrder()
+	{
+		var listId = SavedPlacesId.New();
+		var home = new StoredPlace(SavedPlaceId.New(), PlaceKind.Home, " Home ", Centre, " Rue Neuve 1 ");
+		var favourite = new StoredPlace(SavedPlaceId.New(), PlaceKind.Favourite, "Cinema", Centre, null);
+
+		var result = SavedPlacesList.Restore(listId, [home, favourite]);
+
+		result.IsSuccess.Should().BeTrue();
+		result.Value.Id.Should().Be(listId);
+		result.Value.Places.Select(place => place.Id).Should().Equal(home.Id, favourite.Id);
+		result.Value.Home!.Label.Should().Be("Home");
+		result.Value.Home.AddressText.Should().Be("Rue Neuve 1");
+		result.Value.GetDomainEvents().Should().BeEmpty();
+	}
+
+	/// <summary>
+	/// Verifies that stored places are checked like new ones: label, box, kind, repeats and the favourites limit.
+	/// </summary>
+	[Fact]
+	public void Restore_PlacesThatBreakARule_ShouldFail()
+	{
+		var listId = SavedPlacesId.New();
+		var home = new StoredPlace(SavedPlaceId.New(), PlaceKind.Home, "Home", Centre, null);
+
+		SavedPlacesList.Restore(listId, [home with { Label = " " }]).Error.Should().Be(SavedPlacesErrors.LabelRequired);
+		SavedPlacesList.Restore(listId, [home with { Point = Antwerp }]).Error.Should().Be(SavedPlacesErrors.PointOutsideBrussels);
+		SavedPlacesList.Restore(listId, [home with { Kind = (PlaceKind)9 }]).Error.Should().Be(SavedPlacesErrors.KindUnknown);
+		SavedPlacesList.Restore(listId, [home, home with { Id = SavedPlaceId.New() }]).Error.Should().Be(SavedPlacesErrors.PlaceDuplicated);
+		SavedPlacesList.Restore(listId, [home, home with { Kind = PlaceKind.Favourite }]).Error.Should().Be(SavedPlacesErrors.PlaceDuplicated);
+		var tooMany = Enumerable.Range(0, SavedPlacesList.MaximumFavourites + 1).Select(_ => home with { Id = SavedPlaceId.New(), Kind = PlaceKind.Favourite });
+		SavedPlacesList.Restore(listId, tooMany).Error.Should().Be(SavedPlacesErrors.TooManyFavourites);
+	}
+
+	/// <summary>
+	/// Verifies that an empty stored list restores and that missing arguments are rejected.
+	/// </summary>
+	[Fact]
+	public void Restore_EmptyListAndNullArguments_ShouldBehave()
+	{
+		SavedPlacesList.Restore(SavedPlacesId.New(), []).Value.Places.Should().BeEmpty();
+
+		var noId = () => SavedPlacesList.Restore(null!, []); // null on purpose: proves the guard clause rejects it
+		var noPlaces = () => SavedPlacesList.Restore(SavedPlacesId.New(), null!); // null on purpose: proves the guard clause rejects it
+
+		noId.Should().Throw<ArgumentNullException>();
+		noPlaces.Should().Throw<ArgumentNullException>();
+	}
+	#endregion
 }

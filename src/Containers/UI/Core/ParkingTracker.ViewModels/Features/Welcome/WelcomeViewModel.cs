@@ -58,7 +58,7 @@ public sealed class WelcomeViewModel : ViewModelBase
 	/// <returns>A task that completes when the permission state was read.</returns>
 	public async Task StartAsync(CancellationToken cancellationToken = default)
 	{
-		if (await settings.GetCardAsync().ConfigureAwait(false) is not null || await settings.GetWelcomeSeenAsync().ConfigureAwait(false))
+		if (await settings.GetCardOrNoneAsync().ConfigureAwait(false) is not null || await settings.GetWelcomeSeenAsync().ConfigureAwait(false))
 		{
 			return;
 		}

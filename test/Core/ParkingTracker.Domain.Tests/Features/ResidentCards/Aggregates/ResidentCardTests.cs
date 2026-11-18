@@ -305,4 +305,49 @@ public sealed class ResidentCardTests
 		(low > high).Should().BeFalse();
 	}
 	#endregion
+
+	#region Restore Tests
+	/// <summary>
+	/// Verifies that a stored card comes back with its stored identifier and values, and raises no event.
+	/// </summary>
+	[Fact]
+	public void Restore_StoredCard_ShouldKeepTheIdentifierAndRaiseNoEvent()
+	{
+		var id = ResidentCardId.New();
+
+		var result = ResidentCard.Restore(id, City, CityCard());
+
+		result.IsSuccess.Should().BeTrue();
+		result.Value.Id.Should().Be(id);
+		result.Value.ToParkingCard().Should().BeEquivalentTo(CityCard());
+		result.Value.GetDomainEvents().Should().BeEmpty();
+	}
+
+	/// <summary>
+	/// Verifies that a stored card is checked against its municipality like a new one.
+	/// </summary>
+	[Fact]
+	public void Restore_CardThatBreaksARule_ShouldFail()
+	{
+		var reversed = CityCard() with { Period = new CardPeriod(new DateOnly(2027, 1, 1), new DateOnly(2026, 1, 1)) };
+
+		ResidentCard.Restore(ResidentCardId.New(), City, reversed).Error.Should().Be(ResidentCardErrors.PeriodReversed);
+		ResidentCard.Restore(ResidentCardId.New(), Areas, CityCard()).Error.Should().Be(ResidentCardErrors.MunicipalityMismatch);
+	}
+
+	/// <summary>
+	/// Verifies that missing arguments are rejected.
+	/// </summary>
+	[Fact]
+	public void Restore_NullArguments_ShouldThrow()
+	{
+		var noId = () => ResidentCard.Restore(null!, City, CityCard()); // null on purpose: proves the guard clause rejects it
+		var noMunicipality = () => ResidentCard.Restore(ResidentCardId.New(), null!, CityCard()); // null on purpose: proves the guard clause rejects it
+		var noCard = () => ResidentCard.Restore(ResidentCardId.New(), City, null!); // null on purpose: proves the guard clause rejects it
+
+		noId.Should().Throw<ArgumentNullException>();
+		noMunicipality.Should().Throw<ArgumentNullException>();
+		noCard.Should().Throw<ArgumentNullException>();
+	}
+	#endregion
 }

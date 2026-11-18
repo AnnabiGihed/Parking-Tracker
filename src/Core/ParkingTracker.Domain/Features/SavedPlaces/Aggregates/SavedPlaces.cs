@@ -70,6 +70,33 @@ public sealed class SavedPlaces : LightweightAggregateRoot<SavedPlacesId>
 	/// </summary>
 	/// <returns>A list without places.</returns>
 	public static SavedPlaces Create() => new(SavedPlacesId.New());
+
+	/// <summary>
+	/// Rebuilds a list that was stored before, with its stored identifier, the identifiers of its places and the same rules as the
+	/// behaviours: every place needs a label and a point inside the Brussels box, there is at most one home, one work place and 20
+	/// favourites, and no identifier repeats. It raises no event: the list existed already.
+	/// </summary>
+	/// <param name="id">The stored identifier of the list.</param>
+	/// <param name="stored">The stored places, in the order they were saved.</param>
+	/// <returns>The list, or the first rule the stored places break.</returns>
+	/// <exception cref="ArgumentNullException">An argument is <see langword="null"/>.</exception>
+	public static Result<SavedPlaces> Restore(SavedPlacesId id, IEnumerable<StoredPlace> stored)
+	{
+		ArgumentNullException.ThrowIfNull(id);
+		ArgumentNullException.ThrowIfNull(stored);
+		var list = new SavedPlaces(id);
+		foreach (var item in stored)
+		{
+			var restored = SavedPlace.Restore(item);
+			var accepted = restored.IsFailure ? Result.Failure(restored.Error, restored.ResultExceptionType) : list.Accept(restored.Value);
+			if (accepted.IsFailure)
+			{
+				return Result.Failure<SavedPlaces>(accepted.Error, accepted.ResultExceptionType);
+			}
+		}
+
+		return list;
+	}
 	#endregion
 
 	#region Domain Behaviours
@@ -136,6 +163,28 @@ public sealed class SavedPlaces : LightweightAggregateRoot<SavedPlacesId>
 	#endregion
 
 	#region Private Helpers
+	/// <summary>
+	/// Adds a restored place after checking that it does not repeat a home, a work place or an identifier, and that the favourites stay within the limit.
+	/// </summary>
+	/// <param name="place">The restored place.</param>
+	/// <returns>Success, or the rule the place breaks.</returns>
+	private Result Accept(SavedPlace place)
+	{
+		var repeats = places.Any(existing => existing.Id == place.Id || (place.Kind != PlaceKind.Favourite && existing.Kind == place.Kind));
+		if (repeats)
+		{
+			return Result.Failure(SavedPlacesErrors.PlaceDuplicated, ResultExceptionType.Conflict);
+		}
+
+		if (place.Kind == PlaceKind.Favourite && places.Count(existing => existing.Kind == PlaceKind.Favourite) >= MaximumFavourites)
+		{
+			return Result.Failure(SavedPlacesErrors.TooManyFavourites, ResultExceptionType.Conflict);
+		}
+
+		places.Add(place);
+		return Result.Success();
+	}
+
 	/// <summary>
 	/// Saves the one place of a kind that may exist only once; the old one is dropped only when the new one is valid.
 	/// </summary>
