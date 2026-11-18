@@ -2,5 +2,5 @@
 @inherits ViewModelComponent<CarViewModel>
 @if (ViewModel.TimerLine is { } line)
 {
-    <div id="timerLine" class="timerline"><Icon Name="timer" />@line</div>
+    <RadzenText id="timerLine" TextStyle="TextStyle.Body2" TagName="TagName.Div" class="timerline"><Icon Name="timer" />@line</RadzenText>
 }
