@@ -1,4 +1,5 @@
 using Bunit;
+using Radzen.Blazor;
 using ParkingTracker.Shared.Features.MapLayers.Services;
 using ParkingTracker.Shared.Features.Shared.Components;
 using ParkingTracker.Shared.Features.Shared.Layout;
@@ -16,7 +17,7 @@ public sealed class RoutesTests : UiTestContext
 {
 	#region Routing Tests
 	/// <summary>
-	/// Verifies that the router of the app shows the home page at the root address, inside the layout that holds the toast.
+	/// Verifies that the router of the app shows the home page at the root address, inside the layout that holds the toast and the Radzen hosts.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
@@ -28,6 +29,7 @@ public sealed class RoutesTests : UiTestContext
 
 		await cut.WaitForAssertionAsync(() => cut.FindComponent<Home>().Should().NotBeNull());
 		cut.FindComponent<Toast>().Should().NotBeNull();
+		cut.FindComponent<RadzenComponents>().Should().NotBeNull();
 	}
 	#endregion
 

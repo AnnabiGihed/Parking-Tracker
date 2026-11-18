@@ -26,9 +26,9 @@ namespace ParkingTracker.Shared.Tests.Features.Shared.TestDoubles;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : The bUnit context every component test starts from: the installers of the view models and of the screens, over
-///              substitutes for the ports and a fake clock, and the JavaScript interop in strict mode, so that a call to map.js that a
-///              test did not expect fails the test.
+/// Purpose     : The bUnit context every component test starts from: the installers of the view models and of the screens (which
+///              register the Radzen services), over substitutes for the ports and a fake clock, and the JavaScript interop in strict
+///              mode with the calls of Radzen.Blazor.js answered, so that a call to map.js that a test did not expect fails the test.
 /// </summary>
 public abstract class UiTestContext : BunitContext
 {
@@ -51,6 +51,7 @@ public abstract class UiTestContext : BunitContext
 	protected UiTestContext()
 	{
 		JSInterop.Mode = JSRuntimeMode.Strict;
+		SetUpRadzenInterop();
 		Network.IsOnline.Returns(true);
 		Permissions.GetStatusAsync(Arg.Any<CancellationToken>()).Returns(new LocationPermissionStatus(PermissionState.Unknown, PermissionState.Unknown));
 		Settings.GetLayersAsync().Returns(new LayerSettings());
@@ -190,6 +191,16 @@ public abstract class UiTestContext : BunitContext
 	#endregion
 
 	#region Private Helpers
+	/// <summary>
+	/// Answers the fire-and-forget calls that the Radzen components make to <c>Radzen.Blazor.js</c> (global functions named
+	/// <c>Radzen.*</c>, for example when a dialog or a tooltip opens). Only those calls are answered: strict mode stays on, so a call
+	/// to <c>map.js</c> that a test did not set up still fails the test.
+	/// </summary>
+	private void SetUpRadzenInterop()
+	{
+		JSInterop.SetupVoid(invocation => invocation.Identifier.StartsWith("Radzen.", StringComparison.Ordinal)).SetVoidResult();
+	}
+
 	/// <summary>
 	/// Builds the reference data: the City of Brussels with one sector and a municipality with areas.
 	/// </summary>

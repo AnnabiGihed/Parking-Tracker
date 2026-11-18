@@ -1,0 +1,31 @@
+/*
+ * Author  : Gihed Annabi
+ * Date    : 11-2026
+ * Purpose : Sets the CSS variables of Radzen (default-base theme) to the colours of style.css, so that the Radzen components
+ *           keep the look of the app (ADR-0020). Loaded after the Radzen theme and before style.css; the values refer to
+ *           the variables of style.css, which apply in the dark scheme too because they are resolved where they are used.
+ */
+:root {
+  --rz-primary: var(--brand);
+  --rz-primary-light: var(--brand);
+  --rz-primary-lighter: var(--surface-2);
+  --rz-primary-dark: var(--brand);
+  --rz-primary-darker: var(--brand);
+  --rz-on-primary: var(--brand-ink);
+  --rz-success: var(--free);
+  --rz-danger: var(--pay);
+  --rz-warning: var(--warn);
+  --rz-info: var(--idle);
+  --rz-body-background-color: var(--bg);
+  --rz-base-background-color: var(--surface);
+  --rz-dialog-background-color: var(--surface);
+  --rz-card-background-color: var(--surface);
+  --rz-text-color: var(--fg);
+  --rz-text-title-color: var(--fg);
+  --rz-text-secondary-color: var(--muted);
+  --rz-border-normal: 1px solid var(--line);
+  --rz-border-radius: 12px;
+  --rz-card-border-radius: var(--radius);
+  --rz-text-font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --rz-body-font-size: 15px;
+}

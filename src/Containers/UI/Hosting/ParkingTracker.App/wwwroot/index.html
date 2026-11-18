@@ -7,6 +7,9 @@
   <meta name="theme-color" content="#0b1220" media="(prefers-color-scheme: dark)" />
   <title>Parking Tracker</title>
   <base href="/" />
+  <!-- Radzen theme, then the file that sets its variables to the colours of the app, then the style of the app (ADR-0020). -->
+  <link rel="stylesheet" href="_content/Radzen.Blazor/css/default-base.css" />
+  <link rel="stylesheet" href="_content/ParkingTracker.Shared/css/radzen-theme.css" />
   <!-- Leaflet and its style are loaded by map.js from the same package, so the map starts offline. -->
   <link rel="stylesheet" href="_content/ParkingTracker.Shared/css/style.css" />
 </head>
@@ -23,6 +26,7 @@
     <button type="button" class="dismiss" aria-label="Close" style="float: right; border: 0; background: none; color: inherit; font: inherit; cursor: pointer;" onclick="this.parentElement.style.display = 'none'">&#x2715;</button>
   </div>
 
+  <script src="_content/Radzen.Blazor/Radzen.Blazor.min.js"></script>
   <script src="_framework/blazor.webview.js" autostart="false"></script>
 </body>
 </html>

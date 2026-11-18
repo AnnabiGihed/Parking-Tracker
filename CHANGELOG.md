@@ -10,6 +10,11 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
 
 ## [Unreleased]
 
+### Changed
+
+- The welcome screen is built with the Radzen component library, the first screen of the move to Radzen. Its texts
+  and colours stay the same; buttons and text spacing may look slightly different.
+
 ### Fixed
 
 - The card form refuses a card whose "valid from" date is after its "valid until" date, and a card whose municipality
