@@ -158,6 +158,8 @@ button, input, select { font: inherit; color: inherit; }
 .spot-sub { font-size: 13px; color: var(--muted); }
 .spot-more { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
 .spot-loading { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 14px; }
+/* Smaller spinner inside a button; !important beats the base .spinner size. */
+.spinner-sm { width: 12px !important; height: 12px !important; border-width: 2px !important; }
 .spinner { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid var(--line); border-top-color: var(--brand); animation: spin .8s linear infinite; flex: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
 

@@ -21,6 +21,9 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
   number field for the timer. Texts and behaviour stay the same; the minutes field now has up and down arrows.
 - The layers popover is built with Radzen components: a switch for each map layer, a close button and the line that
   says what the map shows. Texts and behaviour stay the same; the switches look like Radzen switches.
+- The status sheet is built with Radzen components: the answer card, the chips, the nearest free spot with its Waze and
+  Google Maps buttons, the location banner and the search box. Texts and behaviour stay the same; buttons and spacing
+  may look slightly different. This completes the move of the screens to Radzen.
 
 ### Fixed
 

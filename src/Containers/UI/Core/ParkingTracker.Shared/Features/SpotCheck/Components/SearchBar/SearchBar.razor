@@ -2,7 +2,7 @@
 @inherits ViewModelComponent<SearchViewModel>
 <form id="searchForm" class="searchbar" role="search" @onsubmit="OnSubmitAsync" @onsubmit:preventDefault>
     <span class="searchbar-logo"><Icon Name="parking" /></span>
-    <input id="searchInput" type="search" placeholder="Search a street or address" autocomplete="off" enterkeyhint="search"
-           @bind="ViewModel.Text" @bind:event="oninput" />
+    <RadzenTextBox id="searchInput" type="search" Placeholder="Search a street or address" autocomplete="off" enterkeyhint="search"
+                   @bind-Value="ViewModel.Text" Immediate="true" />
     <CardButton />
 </form>

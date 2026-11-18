@@ -3,24 +3,24 @@
 @{
     var status = ViewModel.Status;
 }
-<div id="status" class="result @status.ColourKey @(ViewModel.IsChecking ? "checking" : string.Empty)">
-    <div class="hero">
+<RadzenCard Variant="Variant.Flat" id="status" class="@BlockClass(status)">
+    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Start" Gap="14px" class="hero">
         <div class="hero-icon"><Icon Name="@status.IconName" /></div>
         <div class="hero-text">
-            <div class="hero-title">@status.Title</div>
+            <RadzenText TextStyle="TextStyle.H6" TagName="TagName.Div" class="hero-title">@status.Title</RadzenText>
             @if (status.IsIdle)
             {
-                <div class="hero-sub">Tap the map, search a street, or press <b>my location</b>. I'll tell you if your residents' card covers it.</div>
+                <RadzenText TextStyle="TextStyle.Body2" TagName="TagName.Div" class="hero-sub">Tap the map, search a street, or press <b>my location</b>. I'll tell you if your residents' card covers it.</RadzenText>
             }
             else
             {
-                <div class="hero-sub">@status.Detail</div>
+                <RadzenText TextStyle="TextStyle.Body2" TagName="TagName.Div" class="hero-sub">@status.Detail</RadzenText>
             }
         </div>
-    </div>
+    </RadzenStack>
     @if (status.Tariff is not null)
     {
-        <div class="tariff"><Icon Name="euro" /><span>@status.Tariff</span></div>
+        <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Start" Gap="8px" class="tariff"><Icon Name="euro" /><span>@status.Tariff</span></RadzenStack>
     }
     @if (status.Notes.Count > 0)
     {
@@ -33,21 +33,21 @@
     }
     @if (status.ShowParkedHere || status.ShowPayApps)
     {
-        <div class="actions">
+        <RadzenStack Orientation="Orientation.Horizontal" Wrap="FlexWrap.Wrap" Gap="8px" class="actions">
             @if (status.ShowParkedHere)
             {
-                <button type="button" class="btn btn-primary btn-sm" @onclick="OnParkedHereAsync"><Icon Name="car" />I parked here</button>
+                <RadzenButton ButtonStyle="ButtonStyle.Primary" Size="ButtonSize.Small" class="btn-primary" Click="OnParkedHereAsync"><Icon Name="car" />I parked here</RadzenButton>
             }
             @if (status.ShowPayApps)
             {
-                <span class="paylinks">
+                <RadzenStack Orientation="Orientation.Horizontal" Wrap="FlexWrap.Wrap" AlignItems="AlignItems.Center" Gap="6px" class="paylinks">
                     Pay with
                     @foreach (var app in NavigationLinks.PayApps)
                     {
-                        <button type="button" class="btn btn-sm" @onclick="() => OnPayAppAsync(app)">@app.Name</button>
+                        <RadzenButton ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" Click="() => OnPayAppAsync(app)">@app.Name</RadzenButton>
                     }
-                </span>
+                </RadzenStack>
             }
-        </div>
+        </RadzenStack>
     }
-</div>
+</RadzenCard>

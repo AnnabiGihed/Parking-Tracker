@@ -16,12 +16,12 @@ public sealed partial class LiveChips : ViewModelComponent<SpotCheckViewModel>
 	/// Gets the CSS classes of a chip.
 	/// </summary>
 	/// <param name="chip">The chip.</param>
-	/// <returns>The extra classes, empty for a plain chip.</returns>
+	/// <returns>The classes: <c>chip</c>, which the tests and the styles read, and the kind of the chip.</returns>
 	private static string ChipClass(StatusChip chip) => chip.Kind switch
 	{
-		ChipKind.Live => "live",
-		ChipKind.Zone => "zone-chip",
-		_ => string.Empty,
+		ChipKind.Live => "chip live",
+		ChipKind.Zone => "chip zone-chip",
+		_ => "chip",
 	};
 	#endregion
 }

@@ -1,16 +1,18 @@
 using Bunit;
 using NSubstitute;
+using ParkingTracker.Application.Features.SpotDecisions.Queries.FindFreeSpots;
 using ParkingTracker.Domain.Features.SpotDecisions.ValueObjects;
 using ParkingTracker.Shared.Features.SpotCheck.Components;
 using ParkingTracker.Shared.Tests.Features.Shared.TestDoubles;
 using ParkingTracker.ViewModels.Features.SpotCheck;
+using Pivot.Framework.Domain.Shared;
 
 namespace ParkingTracker.Shared.Tests.Features.SpotCheck.Components;
 
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : Component tests for <see cref="StatusBlock"/>, <see cref="LiveChips"/> and <see cref="NearestSpot"/>: the status
+/// Purpose     : Component tests for <see cref="StatusBlock"/>, <see cref="LiveChips"/> and <see cref="NearestSpot"/>, built from Radzen: the status
 ///              block keeps the <c>.hero-title</c> and <c>.hero-sub</c> classes the emulator test reads, escapes the decision text, offers
 ///              the actions of the verdict, and the nearest spot opens the Waze link through the launcher.
 /// </summary>
@@ -100,6 +102,41 @@ public sealed class StatusBlockTests : UiTestContext
 		_ = Settings.Received(1).SaveCarAsync(Arg.Any<ParkingTracker.Domain.Features.Cars.ValueObjects.ParkedCar>());
 		Resolve<ParkingTracker.ViewModels.Features.Car.CarViewModel>().IsOpen.Should().BeTrue();
 	}
+
+	/// <summary>
+	/// Verifies the title, the sub-text and the colour class of each kind of verdict, on the elements the emulator test reads.
+	/// </summary>
+	/// <param name="verdict">The verdict answered.</param>
+	/// <param name="colour">The colour class expected on the block.</param>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Theory]
+	[InlineData(Verdict.Free, "free")]
+	[InlineData(Verdict.Pay, "pay")]
+	[InlineData(Verdict.CantVerify, "unknown")]
+	public async Task Render_Verdict_ShouldShowItsHeadlineDetailAndColour(Verdict verdict, string colour)
+	{
+		var decision = SpotDecision.Create(verdict, "The detail.");
+		AnswerChecks(decision);
+		AnswerSearches();
+		var cut = Render<StatusBlock>();
+
+		await cut.InvokeAsync(() => Resolve<SpotCheckViewModel>().HandleMapClickAsync(Here));
+
+		cut.Find(".hero-title").TextContent.Should().Be(decision.Headline);
+		cut.Find(".hero-sub").TextContent.Should().Be("The detail.");
+		cut.Find("#status").ClassList.Should().Contain(colour);
+	}
+
+	/// <summary>
+	/// Verifies that the block offers no action and no tariff before any check.
+	/// </summary>
+	[Fact]
+	public void Render_BeforeAnyCheck_ShouldOfferNoActions()
+	{
+		var cut = Render<StatusBlock>();
+
+		cut.FindAll(".actions, .tariff, .notes").Should().BeEmpty();
+	}
 	#endregion
 
 	#region Chip Tests
@@ -120,6 +157,18 @@ public sealed class StatusBlockTests : UiTestContext
 		cut.Find(".chip.live").Should().NotBeNull();
 		cut.Find(".zone-chip i").GetAttribute("style").Should().Contain("#7f1d1d");
 	}
+
+	/// <summary>
+	/// Verifies that the chips show nothing before any check.
+	/// </summary>
+	[Fact]
+	public void Render_BeforeAnyCheck_ShouldShowNoChips()
+	{
+		var cut = Render<LiveChips>();
+
+		cut.Find("#liveLine").Should().NotBeNull();
+		cut.FindAll(".chip").Should().BeEmpty();
+	}
 	#endregion
 
 	#region Nearest Spot Tests
@@ -139,6 +188,57 @@ public sealed class StatusBlockTests : UiTestContext
 		cut.Find(".spot-sub").TextContent.Should().Be("Free with your card · 25 m · about 1 min on foot");
 		await cut.Find(".btn-waze").ClickAsync();
 		await Launcher.Received(1).OpenAsync(new Uri("https://waze.com/ul?ll=50.825200,4.360800&navigate=yes"), Arg.Any<CancellationToken>());
+	}
+
+	/// <summary>
+	/// Verifies that the Google Maps button opens the spot's link and that other spots are listed.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Render_SeveralSpots_ShouldOpenGoogleMapsAndListTheOthers()
+	{
+		AnswerSearches(
+			new FreeSpot(new ParkingTracker.Domain.Features.Shared.ValueObjects.GeoPoint(50.8252, 4.3608), 25, "Rue Test", "Ixelles", "Rue Test, Ixelles"),
+			new FreeSpot(new ParkingTracker.Domain.Features.Shared.ValueObjects.GeoPoint(50.8260, 4.3610), 90, "Rue Autre", "Ixelles", "Rue Autre, Ixelles"));
+		var cut = Render<NearestSpot>();
+
+		await cut.InvokeAsync(() => Resolve<NearestSpotViewModel>().ShowAsync(Here));
+		await cut.Find(".btn-gmaps").ClickAsync();
+
+		cut.Find(".spot-more").TextContent.Should().Contain("Rue Autre, Ixelles");
+		await Launcher.Received(1).OpenAsync(Arg.Any<Uri>(), Arg.Any<CancellationToken>());
+	}
+
+	/// <summary>
+	/// Verifies the message when no spot is covered.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Render_NoSpotFound_ShouldSayNoSpotIsCovered()
+	{
+		AnswerSearches();
+		var cut = Render<NearestSpot>();
+
+		await cut.InvokeAsync(() => Resolve<NearestSpotViewModel>().ShowAsync(Here));
+
+		cut.Find("#nearest").ClassList.Should().NotContain("hidden");
+		cut.Find(".spot-loading").TextContent.Should().Be("No spot covered by your card within ~400 m right now.");
+		cut.FindAll(".nav-row").Should().BeEmpty();
+	}
+
+	/// <summary>
+	/// Verifies the message when the search fails.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Render_SearchFailed_ShouldShowTheFailureMessage()
+	{
+		Sender.Send(Arg.Any<FindFreeSpotsQuery>(), Arg.Any<CancellationToken>()).Returns(Result.Failure<IReadOnlyList<FreeSpot>>(new Error("Search.Unavailable", "offline")));
+		var cut = Render<NearestSpot>();
+
+		await cut.InvokeAsync(() => Resolve<NearestSpotViewModel>().ShowAsync(Here));
+
+		cut.Find(".spot-loading").TextContent.Should().Be("Could not search right now (offline).");
 	}
 
 	/// <summary>

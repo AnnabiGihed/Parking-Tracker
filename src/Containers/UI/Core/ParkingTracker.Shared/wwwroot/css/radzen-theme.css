@@ -6,6 +6,9 @@
  *           the variables of style.css, which apply in the dark scheme too because they are resolved where they are used.
  */
 :root {
+  /* The status chips are sentences ("My position ±5 m"); Radzen badges are upper-case by default. */
+  --rz-badge-text-transform: none;
+  --rz-badge-letter-spacing: normal;
   --rz-primary: var(--brand);
   --rz-primary-light: var(--brand);
   --rz-primary-lighter: var(--surface-2);

@@ -11,6 +11,13 @@ namespace ParkingTracker.Shared.Features.SpotCheck.Components;
 /// </summary>
 public sealed partial class PermissionBanner : ViewModelComponent<LocationPermissionViewModel>
 {
+	#region Properties
+	/// <summary>
+	/// Gets the CSS classes of the banner, which is hidden when there is nothing to ask.
+	/// </summary>
+	private string BannerClass => ViewModel.Banner == PermissionBannerKind.None ? "perm-banner hidden" : "perm-banner";
+	#endregion
+
 	#region Event Handlers
 	/// <summary>
 	/// Handles "Turn on".

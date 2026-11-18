@@ -46,7 +46,7 @@ public sealed class PermissionBannerTests : UiTestContext
 		var cut = Render<PermissionBanner>();
 		await cut.InvokeAsync(() => Resolve<LocationPermissionViewModel>().RefreshAsync());
 
-		cut.FindAll("#permBanner .btn").Select(button => button.TextContent).Should().Equal("Allow", "Later");
+		cut.FindAll("#permBanner .rz-button").Select(button => button.TextContent).Should().Equal("Allow", "Later");
 		await cut.Find("#permBanner .btn-ghost").ClickAsync();
 
 		await cut.WaitForAssertionAsync(() => cut.Find("#permBanner").ClassList.Should().Contain("hidden"));
