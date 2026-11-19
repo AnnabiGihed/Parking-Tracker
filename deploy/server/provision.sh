@@ -144,11 +144,12 @@ create_folders_and_secrets() {
 
 # Prints the Caddyfile with the Parking Tracker block replaced, or appended when the markers are absent, with the proxy
 # key and the privacy notice page in place of their placeholders. The proxy key reaches the script through the
-# environment, not the argument list, so that no process listing shows it.
+# environment, not the argument list, so that no process listing shows it. The script reads parking.Caddyfile and
+# site/privacy-notice.html from its own deploy/ folder and the current Caddyfile from standard input.
 caddyfile_with_block() {
-	local current=$1 block=$2 page=$3
+	local current=$1
 	PT_PROXY_KEY=$(cat "$SECRETS_DIR/app/proxy_key") python3 "$SCRIPT_DIR/pt_caddy_block.py" \
-		"$current" "$block" "$page" "$BEGIN_MARKER" "$END_MARKER"
+		"$BEGIN_MARKER" "$END_MARKER" <"$current"
 }
 
 # Has the shared Caddy check the candidate before the live file is touched; the copy in the container is removed again.
@@ -167,7 +168,7 @@ install_caddy_sites() {
 	[[ -f $page ]] || fail "site/privacy-notice.html is missing next to this folder (copy the whole deploy/ folder)"
 	candidate=$(mktemp)
 	caddy_candidate=$candidate
-	caddyfile_with_block "$PROXY_CADDYFILE" "$block" "$page" >"$candidate" || fail "could not build the Caddyfile"
+	caddyfile_with_block "$PROXY_CADDYFILE" >"$candidate" || fail "could not build the Caddyfile"
 	if cmp -s "$candidate" "$PROXY_CADDYFILE"; then
 		rm -f "$candidate"
 		echo "The shared Caddyfile already has the current block"

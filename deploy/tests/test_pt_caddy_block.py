@@ -108,21 +108,26 @@ class RenderBlockTests(unittest.TestCase):
 
     @staticmethod
     def run_cli(page: str | None, current: str = "", key: str | None = "key-1") -> subprocess.CompletedProcess[str]:
-        """Runs the script on temporary files; a page of None leaves the page file out."""
+        """Runs a copy of the script in a temporary deploy/ layout, because the script reads the block and the page
+        from its own folder; a page of None leaves the page file out."""
         with tempfile.TemporaryDirectory() as folder:
-            current_file = Path(folder) / "Caddyfile"
-            current_file.write_text(current, encoding="utf-8", newline="\n")
-            page_file = Path(folder) / "page.html"
+            deploy = Path(folder)
+            (deploy / "server").mkdir()
+            (deploy / "site").mkdir()
+            shutil.copy(DEPLOY_DIR / "server" / "pt_caddy_block.py", deploy / "server" / "pt_caddy_block.py")
+            shutil.copy(BLOCK_FILE, deploy / "parking.Caddyfile")
             if page is not None:
-                page_file.write_text(page, encoding="utf-8", newline="\n")
+                (deploy / "site" / "privacy-notice.html").write_text(page, encoding="utf-8", newline="\n")
             environment = {name: value for name, value in os.environ.items() if name != "PT_PROXY_KEY"}
             if key is not None:
                 environment["PT_PROXY_KEY"] = key
-            return subprocess.run(
-                [sys.executable, str(DEPLOY_DIR / "server" / "pt_caddy_block.py"), str(current_file), str(BLOCK_FILE),
-                 str(page_file), BEGIN, END],
-                env=environment, capture_output=True, text=True, encoding="utf-8", check=False,
+            # Bytes both ways: text mode would turn \n into \r\n on Windows and change what the script reads.
+            result = subprocess.run(
+                [sys.executable, str(deploy / "server" / "pt_caddy_block.py"), BEGIN, END],
+                input=current.encode("utf-8"), env=environment, capture_output=True, check=False,
             )
+            return subprocess.CompletedProcess(
+                result.args, result.returncode, result.stdout.decode("utf-8"), result.stderr.decode("utf-8"))
 
 
 @unittest.skipUnless(os.environ.get("PT_CADDY_DOCKER") == "1" and shutil.which("docker"),

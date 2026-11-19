@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Writes the Parking Tracker block into the shared Caddyfile (ADR-0028); used by provision.sh and its tests.
 
-Usage: pt_caddy_block.py <current Caddyfile> <block file> <privacy notice page> <begin marker> <end marker>
-The proxy key comes from the environment (PT_PROXY_KEY), never from the argument list. The result goes to stdout and
+Usage: pt_caddy_block.py <begin marker> <end marker> < <current Caddyfile>
+The current shared Caddyfile comes on standard input. The block and the page are read from the deploy/ folder this
+script sits in (parking.Caddyfile and site/privacy-notice.html), never from a path given on the command line. The
+proxy key comes from the environment (PT_PROXY_KEY), never from the argument list. The result goes to stdout and
 nothing is written to disk; exit code 1 with a message on standard error when a file is missing or the page is unfit.
 """
 
@@ -14,6 +16,9 @@ import re
 import sys
 from pathlib import Path
 
+DEPLOY_DIR = Path(__file__).resolve().parents[1]
+BLOCK_FILE = DEPLOY_DIR / "parking.Caddyfile"
+PAGE_FILE = DEPLOY_DIR / "site" / "privacy-notice.html"
 PROXY_KEY_PLACEHOLDER = "PT_PROXY_KEY_PLACEHOLDER"
 PAGE_PLACEHOLDER = "PT_PRIVACY_NOTICE_PLACEHOLDER"
 HEREDOC_MARKER = "PT_PRIVACY_NOTICE_END"
@@ -73,22 +78,20 @@ def merge_block(current: str, new_block: str, begin: str, end: str) -> str:
 
 
 def main(argv: list[str]) -> int:
-    """Reads the files named on the command line and prints the new Caddyfile."""
+    """Reads the shared Caddyfile from standard input and prints it with the new block."""
     parser = argparse.ArgumentParser(description="Writes the Parking Tracker block into the shared Caddyfile.")
-    parser.add_argument("current", type=Path, help="the shared Caddyfile")
-    parser.add_argument("block", type=Path, help="deploy/parking.Caddyfile")
-    parser.add_argument("page", type=Path, help="deploy/site/privacy-notice.html")
     parser.add_argument("begin", help="the begin marker line")
     parser.add_argument("end", help="the end marker line")
     args = parser.parse_args(argv)
     try:
         new_block = render_block(
-            args.block.read_text(encoding="utf-8"),
-            args.page.read_text(encoding="utf-8"),
+            BLOCK_FILE.read_text(encoding="utf-8"),
+            PAGE_FILE.read_text(encoding="utf-8"),
             os.environ["PT_PROXY_KEY"],
         )
-        merged = merge_block(args.current.read_text(encoding="utf-8"), new_block, args.begin, args.end)
-    except (BlockError, OSError) as error:
+        current = sys.stdin.buffer.read().decode("utf-8")
+        merged = merge_block(current, new_block, args.begin, args.end)
+    except (BlockError, OSError, UnicodeDecodeError) as error:
         print(f"pt_caddy_block: {error}", file=sys.stderr)
         return 1
     except KeyError:
