@@ -23,9 +23,10 @@
 | 19 | [Model aggregates per bounded context and keep the decision engine as value objects and pure services](0019-model-aggregates-per-bounded-context-and-keep-the-decision-engine-pure.md) | Accepted |
 | 20 | [Use Radzen.Blazor for the phone screens and keep Leaflet for the map](0020-use-radzen-for-the-phone-screens-and-keep-leaflet-for-the-map.md) | Accepted |
 | 21 | [Map the canonical layout to two bounded contexts with one Domain and two Application projects](0021-map-the-canonical-layout-to-two-bounded-contexts.md) | Accepted |
-| 22 | [Host on one OVH VPS with Docker Compose, Caddy and PostgreSQL, with off-site backups to Backblaze B2](0022-host-on-one-ovh-vps-with-docker-compose-and-off-site-backups.md) | Accepted |
+| 22 | [Host on one OVH VPS with Docker Compose, Caddy and PostgreSQL, with off-site backups to Backblaze B2](0022-host-on-one-ovh-vps-with-docker-compose-and-off-site-backups.md) | Superseded by ADR-0028 |
 | 23 | [Deploy from GitHub Actions with private GHCR images and an SSH forced command, with migration bundles](0023-deploy-from-github-actions-through-an-ssh-forced-command.md) | Accepted |
 | 24 | [Fall back to the upstream services when the API cannot answer, switchable remotely](0024-fall-back-to-upstream-services-when-the-api-cannot-answer.md) | Accepted |
 | 25 | [Test the API path with API-mode parity and Testcontainers PostgreSQL, without in-memory providers](0025-test-the-api-path-with-api-mode-parity-and-testcontainers.md) | Accepted |
 | 26 | [Store the driver's data with sqlite-net-pcl on the phone](0026-store-the-drivers-data-with-sqlite-net-pcl-on-the-phone.md) | Accepted |
 | 27 | [Run the app on a developer PC, not in CI](0027-run-the-app-on-a-developer-pc-not-in-ci.md) | Accepted |
+| 28 | [Host on the shared OVH server, behind its Caddy, with OVH backups only](0028-host-on-the-shared-ovh-server-with-ovh-backups-only.md) | Proposed |
