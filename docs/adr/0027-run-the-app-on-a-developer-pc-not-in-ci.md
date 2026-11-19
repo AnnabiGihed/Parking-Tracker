@@ -1,6 +1,6 @@
 # ADR-0027: Run the app on a developer PC, not in CI
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-19
 - Deciders: Gihed Annabi
 
