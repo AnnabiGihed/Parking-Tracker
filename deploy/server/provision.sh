@@ -11,8 +11,9 @@
 #   3. installs pt-deploy, pt-deploy-root, pt-backup and pt_compose_check.py, and the single sudoers line;
 #   4. creates /opt/apps/parking-tracker and the secret files: database passwords generated here (they never leave
 #      the server), the proxy key (generated once, never rotated by a rerun) and the GHCR read token, typed at a prompt;
-#   5. writes the Parking Tracker block into the shared Caddyfile between its marker lines, with the proxy key in
-#      place of its placeholder, validates and reloads Caddy, and restores the previous file when Caddy rejects it;
+#   5. writes the Parking Tracker block into the shared Caddyfile between its marker lines, with the proxy key and the
+#      privacy notice (deploy/site/privacy-notice.html) in place of their placeholders (pt_caddy_block.py), validates
+#      and reloads Caddy, and restores the previous file when Caddy rejects it;
 #   6. installs and starts the nightly dump and monthly restore-test timers.
 # Exit code 0 when everything is in place; 1 with a message otherwise. Safe to run again.
 set -euo pipefail
@@ -28,7 +29,6 @@ readonly END_MARKER="# END Parking Tracker (ADR-0028)"
 readonly SUDOERS_FILE=/etc/sudoers.d/parking-tracker
 readonly POSTGRES_UID=999
 readonly DOTNET_APP_UID=1654
-readonly PROXY_KEY_PLACEHOLDER=PT_PROXY_KEY_PLACEHOLDER
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 readonly SCRIPT_DIR
 readonly DEPLOY_DIR=$SCRIPT_DIR/..
@@ -142,52 +142,44 @@ create_folders_and_secrets() {
 	echo "Secrets in $SECRETS_DIR (database passwords generated on this server, never copied elsewhere)"
 }
 
-# Prints the Caddyfile with the Parking Tracker block replaced, or appended when the markers are absent. The proxy key
-# reaches the script through the environment, not the argument list, so that no process listing shows it.
+# Prints the Caddyfile with the Parking Tracker block replaced, or appended when the markers are absent, with the proxy
+# key and the privacy notice page in place of their placeholders. The proxy key reaches the script through the
+# environment, not the argument list, so that no process listing shows it.
 caddyfile_with_block() {
-	local current=$1 block=$2
-	PT_PROXY_KEY=$(cat "$SECRETS_DIR/app/proxy_key") python3 - "$current" "$block" "$BEGIN_MARKER" "$END_MARKER" "$PROXY_KEY_PLACEHOLDER" <<'PYTHON'
-import os
-import sys
-from pathlib import Path
+	local current=$1 block=$2 page=$3
+	PT_PROXY_KEY=$(cat "$SECRETS_DIR/app/proxy_key") python3 "$SCRIPT_DIR/pt_caddy_block.py" \
+		"$current" "$block" "$page" "$BEGIN_MARKER" "$END_MARKER"
+}
 
-current, block, begin, end, placeholder = sys.argv[1:6]
-text = Path(current).read_text(encoding="utf-8")
-new_block = Path(block).read_text(encoding="utf-8").rstrip("\n") + "\n"
-new_block = new_block.replace(placeholder, os.environ["PT_PROXY_KEY"])
-if begin in text and end in text:
-    head, rest = text.split(begin, 1)
-    _, tail = rest.split(end, 1)
-    text = head + new_block + tail.lstrip("\n")
-else:
-    text = text.rstrip("\n") + "\n\n" + new_block
-sys.stdout.write(text)
-PYTHON
+# Has the shared Caddy check the candidate before the live file is touched; the copy in the container is removed again.
+validate_candidate() {
+	local candidate=$1 in_container=/tmp/parking-tracker-candidate.Caddyfile status=0
+	docker cp "$candidate" "$PROXY_CONTAINER:$in_container" || fail "could not copy the candidate into $PROXY_CONTAINER"
+	docker exec "$PROXY_CONTAINER" caddy validate --config "$in_container" --adapter caddyfile || status=$?
+	docker exec "$PROXY_CONTAINER" rm -f "$in_container" || true
+	((status == 0)) || fail "Caddy rejected the Parking Tracker block; the shared Caddyfile is untouched"
 }
 
 install_caddy_sites() {
 	step "Caddy sites"
-	local block=$DEPLOY_DIR/parking.Caddyfile backup candidate
+	local block=$DEPLOY_DIR/parking.Caddyfile page=$DEPLOY_DIR/site/privacy-notice.html backup candidate
 	[[ -f $block ]] || fail "parking.Caddyfile is missing next to this folder"
+	[[ -f $page ]] || fail "site/privacy-notice.html is missing next to this folder (copy the whole deploy/ folder)"
 	candidate=$(mktemp)
 	caddy_candidate=$candidate
-	caddyfile_with_block "$PROXY_CADDYFILE" "$block" >"$candidate"
+	caddyfile_with_block "$PROXY_CADDYFILE" "$block" "$page" >"$candidate" || fail "could not build the Caddyfile"
 	if cmp -s "$candidate" "$PROXY_CADDYFILE"; then
 		rm -f "$candidate"
 		echo "The shared Caddyfile already has the current block"
 		return
 	fi
-	backup="$PROXY_CADDYFILE.$(date +%Y%m%d%H%M%S).bak"
-	cp -p "$PROXY_CADDYFILE" "$backup"
+	validate_candidate "$candidate"
 	# The backup is ours and may hold the key; the live file belongs to another project and keeps its mode.
-	chmod 600 "$backup"
+	backup="$PROXY_CADDYFILE.$(date +%Y%m%d%H%M%S).bak"
+	(umask 077 && cp "$PROXY_CADDYFILE" "$backup")
 	# Written in place: the proxy bind-mounts the single file, and a new inode would stay invisible to it.
 	cat "$candidate" >"$PROXY_CADDYFILE"
 	rm -f "$candidate"
-	if ! docker exec "$PROXY_CONTAINER" caddy validate --config "$PROXY_CONFIG_IN_CONTAINER" --adapter caddyfile; then
-		cat "$backup" >"$PROXY_CADDYFILE"
-		fail "Caddy rejected the Parking Tracker block; the Caddyfile is restored from $backup"
-	fi
 	if ! docker exec "$PROXY_CONTAINER" caddy reload --config "$PROXY_CONFIG_IN_CONTAINER" --adapter caddyfile; then
 		cat "$backup" >"$PROXY_CADDYFILE"
 		docker exec "$PROXY_CONTAINER" caddy reload --config "$PROXY_CONFIG_IN_CONTAINER" --adapter caddyfile || true

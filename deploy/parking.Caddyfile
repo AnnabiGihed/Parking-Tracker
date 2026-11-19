@@ -1,10 +1,15 @@
 # BEGIN Parking Tracker (ADR-0028)
 # provision.sh writes this block into the shared proxy's Caddyfile, between these two marker lines, and replaces it on
 # a later run; deployments never edit it. The API forwards to its container on the shared `web` network; until that
-# container runs, the site answers 503 over HTTPS with its own certificate. The admin app (S8) and the privacy notice
-# (S5) answer 503 until their stage. The access log drops the query string, because a query can hold a bounding box.
+# container runs, the site answers 503 over HTTPS with its own certificate. The admin app (S8) answers 503 until its
+# stage. The apex serves the privacy notice at /privacy, redirects / to it and answers 404 elsewhere. The access log
+# drops the query string, because a query can hold a bounding box.
 # The API trusts X-Forwarded-* only on a request with the proxy key (ADR-0029): provision.sh replaces
-# PT_PROXY_KEY_PLACEHOLDER with the key it holds in secrets/app/proxy_key when it writes the block, so the key is never committed.
+# the proxy-key placeholder of the header_up line below with the key it holds in secrets/app/proxy_key when it writes
+# the block, so the key is never committed (the comment does not repeat the placeholder, so the key lands only there).
+# It likewise replaces the PT_PRIVACY_NOTICE_PLACEHOLDER line with deploy/site/privacy-notice.html
+# (server/pt_caddy_block.py), braces escaped, and refuses a page that holds the heredoc marker PT_PRIVACY_NOTICE_END.
+# The placeholder and the marker sit in column 0 because a heredoc body must carry its closing marker's indentation.
 
 (parking_tracker_common) {
 	encode zstd gzip
@@ -45,6 +50,20 @@ admin.parking.pivotsoftwares.com {
 
 parking.pivotsoftwares.com {
 	import parking_tracker_common
-	respond "Parking Tracker: the privacy notice comes with sign-in." 503
+	handle /privacy {
+		header Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+		header X-Content-Type-Options nosniff
+		header Referrer-Policy no-referrer
+		header Content-Type "text/html; charset=utf-8"
+		respond <<PT_PRIVACY_NOTICE_END
+PT_PRIVACY_NOTICE_PLACEHOLDER
+PT_PRIVACY_NOTICE_END 200
+	}
+	handle / {
+		redir * /privacy 302
+	}
+	handle {
+		respond 404
+	}
 }
 # END Parking Tracker (ADR-0028)
