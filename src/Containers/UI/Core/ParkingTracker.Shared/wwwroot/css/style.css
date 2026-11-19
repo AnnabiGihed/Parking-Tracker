@@ -70,6 +70,11 @@ button, input, select { font: inherit; color: inherit; }
   padding: 7px 14px 7px 10px; display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 13.5px; cursor: pointer; }
 .chip-float .ic { width: 18px; height: 18px; color: var(--brand); }
 .chip-float.late { color: var(--pay); }
+/* the Home and Work shortcuts sit in .top, which lets taps through to the map, so they take taps back; the Radzen "Light"
+   fill alone has no shadow and is lost on the map, so they get the surface and shadow of the car chip */
+.place-chips { pointer-events: auto; display: flex; gap: 8px; }
+.place-chips .rz-button.place-go { background: var(--surface); color: var(--fg); box-shadow: var(--shadow); border-radius: 999px; font-weight: 600; }
+.place-chips .rz-button.place-go .ic { width: 18px; height: 18px; color: var(--brand); }
 
 /* ---------- right controls ---------- */
 .controls { position: fixed; right: 12px; bottom: calc(var(--sheet-h) + 14px); z-index: 900; display: flex; flex-direction: column; gap: 10px; }
@@ -176,8 +181,10 @@ button, input, select { font: inherit; color: inherit; }
 .btn-sm { padding: 7px 12px; font-size: 13.5px; border-radius: 10px; }
 .paylinks { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
 
-/* dialogs: a backdrop with a sheet, instead of the native <dialog> element, so that Blazor controls when it is open */
-.dialog-backdrop { position: fixed; inset: 0; z-index: 3000; background: rgba(8, 12, 22, .5); display: flex; justify-content: center; align-items: flex-end; }
+/* dialogs: a backdrop with a sheet, instead of the native <dialog> element, so that Blazor controls when it is open.
+   The layer stays under 2000, where Radzen.Blazor.js puts the popups it moves to <body> (date picker calendar, drop-down
+   list): above it, the calendar of the card dialog opened behind the dialog and no date could be picked. */
+.dialog-backdrop { position: fixed; inset: 0; z-index: 1500; background: rgba(8, 12, 22, .5); display: flex; justify-content: center; align-items: flex-end; }
 @media (min-width: 720px) { .dialog-backdrop { align-items: center; } }
 .sheet-dialog { background: var(--surface); color: var(--fg); width: min(480px, 100vw); max-width: 100vw;
   max-height: 92vh; overflow-y: auto; margin: 0; border-radius: 24px 24px 0 0; box-shadow: var(--shadow); }

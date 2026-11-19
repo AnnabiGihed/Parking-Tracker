@@ -21,6 +21,9 @@
   --rz-info: var(--idle);
   --rz-body-background-color: var(--bg);
   --rz-base-background-color: var(--surface);
+  /* The "Light" buttons and badges are filled with base-200, a near-white grey that Radzen does not change in the dark
+     scheme; with the light text of the dark scheme on it they could not be read. */
+  --rz-base-200: var(--surface-2);
   --rz-dialog-background-color: var(--surface);
   --rz-card-background-color: var(--surface);
   --rz-text-color: var(--fg);

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Bunit;
 using NSubstitute;
 using Radzen.Blazor;
@@ -288,6 +289,26 @@ public sealed class CardDialogTests : UiTestContext
 		release.SetResult(Result.Success(new ParsedCard(null, null, null, null, null, null, [])));
 		await click;
 		cut.FindComponents<RadzenProgressBarCircular>().Should().BeEmpty();
+	}
+
+	/// <summary>
+	/// Verifies that a picked date shows as the short date of the culture, without a time of day, and that the fields open the
+	/// calendar instead of taking typed text, so that a tap on a phone brings no keyboard over the dialog.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Render_DatesPicked_ShouldShowTheShortDateInFieldsWithoutTyping()
+	{
+		var cut = Render<CardDialog>();
+		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
+
+		await PickDatesAsync(cut, new DateOnly(2026, 11, 1), new DateOnly(2027, 10, 31));
+
+		var from = new DateTime(2026, 11, 1, 0, 0, 0, DateTimeKind.Unspecified).ToString("d", CultureInfo.CurrentCulture);
+		var to = new DateTime(2027, 10, 31, 0, 0, 0, DateTimeKind.Unspecified).ToString("d", CultureInfo.CurrentCulture);
+		cut.Find("#cardFrom").GetAttribute("value").Should().Be(from);
+		cut.Find("#cardTo").GetAttribute("value").Should().Be(to);
+		cut.FindComponents<RadzenDatePicker<DateTime?>>().Should().OnlyContain(picker => !picker.Instance.AllowInput);
 	}
 	#endregion
 

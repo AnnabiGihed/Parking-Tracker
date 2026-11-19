@@ -51,6 +51,12 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
 
 - The card form refuses a card whose "valid from" date is after its "valid until" date, and a card whose municipality
   is not known, with a message, instead of saving a card that could never cover a spot.
+- The "valid from" and "valid until" dates of the card form can be picked again: the calendar opened behind the form,
+  so no date could be chosen. A picked date now shows as a short date in the phone's language, without a time, and
+  picking it no longer brings up the keyboard; tap the calendar button to change it.
+- The Home and Work chips under the search bar use the colours of the app, light or dark, like the car chip, instead of
+  a light grey fill whose text could not be read in the dark theme. The other light buttons (car dialog, place dialog,
+  "pay" button) follow the dark theme too.
 
 ## [1.0.21] - 2026-11-17
 

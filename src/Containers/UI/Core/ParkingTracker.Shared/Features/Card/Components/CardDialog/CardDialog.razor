@@ -84,11 +84,11 @@
             <div class="grid2">
                 <RadzenStack Gap="0.3rem" class="field">
                     <RadzenLabel Text="Valid from" Component="cardFrom" />
-                    <RadzenDatePicker TValue="DateTime?" Name="cardFrom" Style="width:100%" Value="ParseDate(ViewModel.ValidFrom)" ValueChanged="OnValidFromChanged" AllowClear="true" />
+                    <RadzenDatePicker TValue="DateTime?" Name="cardFrom" Style="width:100%" DateFormat="@DisplayDateFormat" AllowInput="false" Value="ParseDate(ViewModel.ValidFrom)" ValueChanged="OnValidFromChanged" AllowClear="true" />
                 </RadzenStack>
                 <RadzenStack Gap="0.3rem" class="field">
                     <RadzenLabel Text="Valid until" Component="cardTo" />
-                    <RadzenDatePicker TValue="DateTime?" Name="cardTo" Style="width:100%" Value="ParseDate(ViewModel.ValidTo)" ValueChanged="OnValidToChanged" AllowClear="true" />
+                    <RadzenDatePicker TValue="DateTime?" Name="cardTo" Style="width:100%" DateFormat="@DisplayDateFormat" AllowInput="false" Value="ParseDate(ViewModel.ValidTo)" ValueChanged="OnValidToChanged" AllowClear="true" />
                 </RadzenStack>
             </div>
             <div class="grid2">
