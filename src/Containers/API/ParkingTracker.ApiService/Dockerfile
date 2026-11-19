@@ -6,7 +6,7 @@
 # The Pivot packages come from GitHub Packages; the credentials are BuildKit secrets, never a build argument or a layer.
 
 # mcr.microsoft.com/dotnet/sdk:10.0
-FROM mcr.microsoft.com/dotnet/sdk:10.0@sha256:bef136a371963aaa46ec97882845ef6f54dec15728bb4b128b1c2a400ffbc9b4 AS build
+FROM mcr.microsoft.com/dotnet/sdk@sha256:bef136a371963aaa46ec97882845ef6f54dec15728bb4b128b1c2a400ffbc9b4 AS build
 WORKDIR /src
 
 # Package and project files first, so the restore layer survives a change of source.
@@ -25,7 +25,7 @@ RUN dotnet publish src/Containers/API/ParkingTracker.ApiService/ParkingTracker.A
     --no-restore -c Release -o /app/publish -p:UseAppHost=false
 
 # mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra (ICU and time-zone data, no shell, no package manager)
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra@sha256:cae5b962bfb786606def03d250c6a645cc98839095c89e806e4bd8978a68115b AS final
+FROM mcr.microsoft.com/dotnet/aspnet@sha256:cae5b962bfb786606def03d250c6a645cc98839095c89e806e4bd8978a68115b AS final
 WORKDIR /app
 COPY --from=build /app/publish ./
 
