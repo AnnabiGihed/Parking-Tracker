@@ -14,6 +14,8 @@ COPY global.json nuget.config .editorconfig Directory.Build.props Directory.Pack
 COPY src/Containers/API/ParkingTracker.ApiService/ParkingTracker.ApiService.csproj src/Containers/API/ParkingTracker.ApiService/
 COPY src/Containers/Aspire/Defaults/ParkingTracker.ServiceDefaults/ParkingTracker.ServiceDefaults.csproj src/Containers/Aspire/Defaults/ParkingTracker.ServiceDefaults/
 COPY src/Infrastructure/ParkingTracker.Persistence.EntityFrameworkCore/ParkingTracker.Persistence.EntityFrameworkCore.csproj src/Infrastructure/ParkingTracker.Persistence.EntityFrameworkCore/
+COPY src/Core/ParkingTracker.Domain/ParkingTracker.Domain.csproj src/Core/ParkingTracker.Domain/
+COPY src/Core/ParkingTracker.Application/ParkingTracker.Application.csproj src/Core/ParkingTracker.Application/
 RUN --mount=type=secret,id=github_packages_user,env=GITHUB_PACKAGES_USER \
     --mount=type=secret,id=github_packages_token,env=GITHUB_PACKAGES_TOKEN \
     dotnet restore src/Containers/API/ParkingTracker.ApiService/ParkingTracker.ApiService.csproj
@@ -21,6 +23,8 @@ RUN --mount=type=secret,id=github_packages_user,env=GITHUB_PACKAGES_USER \
 COPY src/Containers/API/ParkingTracker.ApiService/ src/Containers/API/ParkingTracker.ApiService/
 COPY src/Containers/Aspire/Defaults/ParkingTracker.ServiceDefaults/ src/Containers/Aspire/Defaults/ParkingTracker.ServiceDefaults/
 COPY src/Infrastructure/ParkingTracker.Persistence.EntityFrameworkCore/ src/Infrastructure/ParkingTracker.Persistence.EntityFrameworkCore/
+COPY src/Core/ParkingTracker.Domain/ src/Core/ParkingTracker.Domain/
+COPY src/Core/ParkingTracker.Application/ src/Core/ParkingTracker.Application/
 RUN dotnet publish src/Containers/API/ParkingTracker.ApiService/ParkingTracker.ApiService.csproj \
     --no-restore -c Release -o /app/publish -p:UseAppHost=false
 
