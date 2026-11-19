@@ -28,4 +28,4 @@
 | 24 | [Fall back to the upstream services when the API cannot answer, switchable remotely](0024-fall-back-to-upstream-services-when-the-api-cannot-answer.md) | Accepted |
 | 25 | [Test the API path with API-mode parity and Testcontainers PostgreSQL, without in-memory providers](0025-test-the-api-path-with-api-mode-parity-and-testcontainers.md) | Accepted |
 | 26 | [Store the driver's data with sqlite-net-pcl on the phone](0026-store-the-drivers-data-with-sqlite-net-pcl-on-the-phone.md) | Accepted |
-| 27 | [Run the app on a developer PC, not in CI](0027-run-the-app-on-a-developer-pc-not-in-ci.md) | Proposed |
+| 27 | [Run the app on a developer PC, not in CI](0027-run-the-app-on-a-developer-pc-not-in-ci.md) | Accepted |
