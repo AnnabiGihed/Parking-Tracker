@@ -7,9 +7,19 @@
     <Project Path="src/Containers/UI/Core/ParkingTracker.ViewModels/ParkingTracker.ViewModels.csproj" />
     <Project Path="src/Containers/UI/Core/ParkingTracker.Shared/ParkingTracker.Shared.csproj" />
   </Folder>
+  <Folder Name="/src/Containers/Aspire/Defaults/">
+    <Project Path="src/Containers/Aspire/Defaults/ParkingTracker.ServiceDefaults/ParkingTracker.ServiceDefaults.csproj" />
+  </Folder>
+  <Folder Name="/src/Containers/API/">
+    <Project Path="src/Containers/API/ParkingTracker.ApiService/ParkingTracker.ApiService.csproj" />
+  </Folder>
+  <Folder Name="/src/Containers/Aspire/Hosting/">
+    <Project Path="src/Containers/Aspire/Hosting/ParkingTracker.AppHost/ParkingTracker.AppHost.csproj" />
+  </Folder>
   <Folder Name="/src/Infrastructure/">
     <Project Path="src/Infrastructure/ParkingTracker.Infrastructure/ParkingTracker.Infrastructure.csproj" />
     <Project Path="src/Infrastructure/ParkingTracker.Persistence.Device/ParkingTracker.Persistence.Device.csproj" />
+    <Project Path="src/Infrastructure/ParkingTracker.Persistence.EntityFrameworkCore/ParkingTracker.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
   <Folder Name="/test/Core/">
     <Project Path="test/Core/ParkingTracker.Domain.Tests/ParkingTracker.Domain.Tests.csproj" />
@@ -19,9 +29,17 @@
     <Project Path="test/Containers/UI/Core/ParkingTracker.ViewModels.Tests/ParkingTracker.ViewModels.Tests.csproj" />
     <Project Path="test/Containers/UI/Core/ParkingTracker.Shared.Tests/ParkingTracker.Shared.Tests.csproj" />
   </Folder>
+  <Folder Name="/test/Containers/Aspire/Defaults/">
+    <Project Path="test/Containers/Aspire/Defaults/ParkingTracker.ServiceDefaults.Tests/ParkingTracker.ServiceDefaults.Tests.csproj" />
+  </Folder>
   <Folder Name="/test/Infrastructure/">
     <Project Path="test/Infrastructure/ParkingTracker.Infrastructure.Tests/ParkingTracker.Infrastructure.Tests.csproj" />
     <Project Path="test/Infrastructure/ParkingTracker.Persistence.Device.Tests/ParkingTracker.Persistence.Device.Tests.csproj" />
     <Project Path="test/Infrastructure/ParkingTracker.Testing.Device/ParkingTracker.Testing.Device.csproj" />
+    <Project Path="test/Infrastructure/ParkingTracker.Testing.PostgreSql/ParkingTracker.Testing.PostgreSql.csproj" />
+    <Project Path="test/Infrastructure/ParkingTracker.Persistence.EntityFrameworkCore.Tests/ParkingTracker.Persistence.EntityFrameworkCore.Tests.csproj" />
+  </Folder>
+  <Folder Name="/test/">
+    <Project Path="test/ParkingTracker.Api.E2E.Tests/ParkingTracker.Api.E2E.Tests.csproj" />
   </Folder>
 </Solution>

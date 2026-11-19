@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Forced command of the parking-deploy account (ADR-0023, ADR-0028).
+#
+# The deploy key in ~parking-deploy/.ssh/authorized_keys is `restrict`ed to this program, so whatever the client asks
+# for arrives in SSH_ORIGINAL_COMMAND. Only these commands pass, and they are handed to the root helper through the
+# single sudoers line provision.sh writes:
+#   deploy sha-<12 hex> [force] [drill]   deploy that release (force: inside the job window; drill: prove the rollback)
+#   rollback                              go back to the previous release
+#   status                                print the current and previous release and the health
+# Anything else is refused with exit code 2. provision.sh installs this file to /usr/local/bin.
+set -euo pipefail
+
+readonly ROOT_HELPER=/usr/local/sbin/pt-deploy-root
+
+# Prints the accepted words of a command, one per line; returns 1 for anything not in the list above.
+parse_command() {
+	local command=$1
+	[[ $command =~ ^[a-z0-9\ -]{1,40}$ ]] || return 1
+	local -a words
+	read -r -a words <<<"$command"
+	case "${words[0]:-}" in
+		deploy)
+			((${#words[@]} >= 2 && ${#words[@]} <= 4)) || return 1
+			[[ ${words[1]} =~ ^sha-[0-9a-f]{12}$ ]] || return 1
+			local seen=" " option
+			for option in "${words[@]:2}"; do
+				[[ $option == force || $option == drill ]] || return 1
+				[[ $seen != *" $option "* ]] || return 1
+				seen+="$option "
+			done
+			;;
+		rollback | status)
+			((${#words[@]} == 1)) || return 1
+			;;
+		*)
+			return 1
+			;;
+	esac
+	printf '%s\n' "${words[@]}"
+}
+
+main() {
+	local -a args
+	if ! mapfile -t args < <(parse_command "${SSH_ORIGINAL_COMMAND:-}") || ((${#args[@]} == 0)); then
+		echo "pt-deploy: refused. Use: deploy sha-<12 hex> [force] [drill] | rollback | status" >&2
+		exit 2
+	fi
+	exec sudo -n "$ROOT_HELPER" "${args[@]}"
+}
+
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+	main "$@"
+fi

@@ -1,0 +1,4 @@
+# EF Core writes these files; analyzers and formatting skip them, and they are regenerated rather than edited.
+[*.cs]
+generated_code = true
+dotnet_diagnostic.S1186.severity = none

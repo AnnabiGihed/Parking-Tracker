@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ParkingTracker.Api.E2E.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Aspire\Defaults\ParkingTracker.ServiceDefaults\ParkingTracker.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\..\..\Infrastructure\ParkingTracker.Persistence.EntityFrameworkCore\ParkingTracker.Persistence.EntityFrameworkCore.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Pivot.Framework.Containers.API" />
+    <!-- Pivot's WithSwagger needs Keycloak (ADR-0014 excludes it), so the host registers the generator itself (ADR-0016). -->
+    <PackageReference Include="Swashbuckle.AspNetCore" />
+    <PackageReference Include="Scalar.AspNetCore" />
+  </ItemGroup>
+
+</Project>

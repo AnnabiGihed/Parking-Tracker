@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# Nightly dump and monthly restore test of the Parking Tracker database (ADR-0028), run by systemd timers.
+#
+# Usage:
+#   pt-backup dump          pg_dump -Fc of parkingdata to backups/nightly-<UTC time>.dump; dumps older than 7 days
+#                           are removed. OVH's daily server backup carries the folder off the disk.
+#   pt-backup restore-test  restores the newest nightly dump into a throw-away PostGIS container (no network, 256 MB)
+#                           and checks that the migrations history came back; the container is removed.
+# Each command pings an optional dead-man URL on success, read from secrets/deadman_dump_url or
+# secrets/deadman_restore_url; without the file, no ping is sent. Exit code 0 on success, 1 on failure.
+#
+# provision.sh installs this file to /usr/local/sbin.
+set -euo pipefail
+
+readonly APP_DIR=/opt/apps/parking-tracker
+readonly BACKUP_DIR=$APP_DIR/backups
+readonly SECRETS_DIR=$APP_DIR/secrets
+readonly PROJECT=parking-tracker
+readonly KEEP_DAYS=7
+
+log() { echo "pt-backup: $*" >&2; }
+fail() { log "$*"; exit 1; }
+
+postgres_container() {
+	docker ps -q --filter "label=com.docker.compose.project=$PROJECT" --filter "label=com.docker.compose.service=postgres"
+}
+
+ping_dead_man() {
+	local file=$SECRETS_DIR/$1
+	[[ -s $file ]] || return 0
+	curl -fsS --max-time 10 -o /dev/null "$(head -n 1 "$file")" || log "the dead-man ping failed"
+}
+
+dump() {
+	local container file
+	container=$(postgres_container)
+	[[ -n $container ]] || fail "the postgres container is not running"
+	install -d -m 700 "$BACKUP_DIR"
+	file="$BACKUP_DIR/nightly-$(date -u +%Y%m%dT%H%M%SZ).dump"
+	docker exec "$container" pg_dump -U postgres -Fc parkingdata >"$file.partial"
+	mv "$file.partial" "$file"
+	chmod 600 "$file"
+	find "$BACKUP_DIR" -maxdepth 1 -name 'nightly-*.dump' -mtime +$((KEEP_DAYS - 1)) -delete
+	log "dumped to $file"
+	ping_dead_man deadman_dump_url
+}
+
+restore_test() {
+	local latest container image scratch
+	latest=$(find "$BACKUP_DIR" -maxdepth 1 -name 'nightly-*.dump' -printf '%T@ %p\n' | sort -rn | head -n 1 | cut -d' ' -f2-)
+	[[ -n $latest ]] || fail "no nightly dump to restore"
+	container=$(postgres_container)
+	[[ -n $container ]] || fail "the postgres container is not running"
+	image=$(docker inspect --format '{{.Config.Image}}' "$container")
+	scratch="parking-tracker-restore-test-$$"
+	# No network, so trust authentication reaches nothing but this throw-away database.
+	docker run -d --name "$scratch" --network none --memory 256m --user postgres --cap-drop ALL \
+		--security-opt no-new-privileges:true -e POSTGRES_HOST_AUTH_METHOD=trust "$image" >/dev/null
+	trap 'docker rm -f "$scratch" >/dev/null 2>&1 || true' EXIT
+	local tries=0
+	until docker exec "$scratch" pg_isready -U postgres >/dev/null 2>&1; do
+		((++tries < 60)) || fail "the throw-away database did not start"
+		sleep 2
+	done
+	sleep 3
+	docker exec "$scratch" psql -U postgres -c 'CREATE DATABASE parkingdata' >/dev/null
+	docker exec -i "$scratch" pg_restore -U postgres -d parkingdata --no-owner --exit-on-error <"$latest"
+	local migrations
+	migrations=$(docker exec "$scratch" psql -U postgres -d parkingdata -tAc 'SELECT count(*) FROM "__EFMigrationsHistory"')
+	((migrations > 0)) || fail "the restored database has no migration history"
+	log "restored $latest: $migrations migrations"
+	ping_dead_man deadman_restore_url
+}
+
+main() {
+	case "${1:-}" in
+		dump) dump ;;
+		restore-test) restore_test ;;
+		*) echo "usage: pt-backup dump | restore-test" >&2; exit 2 ;;
+	esac
+}
+
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+	main "$@"
+fi

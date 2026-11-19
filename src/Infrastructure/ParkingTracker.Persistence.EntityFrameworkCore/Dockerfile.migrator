@@ -1,0 +1,40 @@
+# syntax=docker/dockerfile:1
+# Build context: the repository root.
+#   docker build -f src/Infrastructure/ParkingTracker.Persistence.EntityFrameworkCore/Dockerfile.migrator \
+#     --secret id=github_packages_user,env=GITHUB_PACKAGES_USER \
+#     --secret id=github_packages_token,env=GITHUB_PACKAGES_TOKEN -t parking-tracker-migrator .
+# The image holds the EF Core migration bundle and the deployment folder; it runs once per release (ADR-0023). It reads the
+# connection string from the file named by PARKING_DATA_CONNECTION_FILE, or from ConnectionStrings__ParkingData.
+
+# mcr.microsoft.com/dotnet/sdk:10.0
+FROM mcr.microsoft.com/dotnet/sdk@sha256:bef136a371963aaa46ec97882845ef6f54dec15728bb4b128b1c2a400ffbc9b4 AS build
+WORKDIR /src
+
+COPY global.json nuget.config .editorconfig Directory.Build.props Directory.Packages.props stylecop.json ./
+COPY .config/dotnet-tools.json .config/
+RUN dotnet tool restore
+
+COPY src/Infrastructure/ParkingTracker.Persistence.EntityFrameworkCore/ParkingTracker.Persistence.EntityFrameworkCore.csproj src/Infrastructure/ParkingTracker.Persistence.EntityFrameworkCore/
+RUN --mount=type=secret,id=github_packages_user,env=GITHUB_PACKAGES_USER \
+    --mount=type=secret,id=github_packages_token,env=GITHUB_PACKAGES_TOKEN \
+    dotnet restore src/Infrastructure/ParkingTracker.Persistence.EntityFrameworkCore/ParkingTracker.Persistence.EntityFrameworkCore.csproj -r linux-x64
+
+COPY src/Infrastructure/ParkingTracker.Persistence.EntityFrameworkCore/ src/Infrastructure/ParkingTracker.Persistence.EntityFrameworkCore/
+# The bundle build creates the context once to read its model, so the design-time factory needs a connection string; this one is
+# a placeholder that is never connected to.
+RUN --mount=type=secret,id=github_packages_user,env=GITHUB_PACKAGES_USER \
+    --mount=type=secret,id=github_packages_token,env=GITHUB_PACKAGES_TOKEN \
+    ConnectionStrings__ParkingData="Host=bundle-build;Database=parking" \
+    dotnet ef migrations bundle \
+        --project src/Infrastructure/ParkingTracker.Persistence.EntityFrameworkCore/ParkingTracker.Persistence.EntityFrameworkCore.csproj \
+        --self-contained -r linux-x64 --output /app/efbundle --force
+
+# mcr.microsoft.com/dotnet/runtime-deps:10.0-noble-chiseled-extra (ICU, no shell, no package manager)
+FROM mcr.microsoft.com/dotnet/runtime-deps@sha256:bf8715422b59a65719605d4fe2b8f3f0eb96209b84cb2ed6bf3b5af7d879f148 AS final
+WORKDIR /app
+COPY --from=build /app/efbundle /app/efbundle
+# The deployment files (Compose file, role SQL) travel with the migrator, at the digest the release pulled.
+COPY deploy/ /deploy/
+# The non-root "app" user of the image (uid 1654).
+USER 1654
+ENTRYPOINT ["/app/efbundle"]

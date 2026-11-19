@@ -1,0 +1,9 @@
+# Nightly dump of the Parking Tracker database (ADR-0028); started by parking-tracker-dump.timer.
+[Unit]
+Description=Parking Tracker nightly database dump
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/pt-backup dump

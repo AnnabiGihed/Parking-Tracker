@@ -1,0 +1,9 @@
+# Monthly restore test of the newest nightly dump (ADR-0028); started by parking-tracker-restore-test.timer.
+[Unit]
+Description=Parking Tracker monthly restore test
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/pt-backup restore-test
