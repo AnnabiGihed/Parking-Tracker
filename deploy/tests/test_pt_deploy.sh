@@ -74,5 +74,17 @@ for hhmm in 0000 0229 0500 0800 2359; do
 	check "$hhmm is outside the job window" refuse in_job_window "$hhmm"
 done
 
+# Regression: clean_up after a first release (no previous one, nothing to remove) must succeed under set -e and
+# pipefail; it once returned grep's "no match" status and failed a deployment that had gone live.
+first_release_clean_up() {
+	(
+		set -euo pipefail
+		release_of_link() { [[ $1 == current ]] && echo sha-0123456789ab; return 0; }
+		docker() { return 0; }
+		clean_up
+	)
+}
+check "clean_up succeeds after a first release" accept first_release_clean_up
+
 echo "pt-deploy tests: $passes passed, $failures failed"
 ((failures == 0))

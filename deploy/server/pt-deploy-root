@@ -199,21 +199,37 @@ clean_up() {
 	local keep_current keep_previous
 	keep_current=$(release_of_link current)
 	keep_previous=$(release_of_link previous)
+	# Every step below may find nothing (a first release has no previous one and nothing to remove), which is normal:
+	# no command's status may leak out as the function's own under set -e and pipefail.
 	local -a in_use=()
 	local dir
 	for dir in "$keep_current" "$keep_previous"; do
-		[[ -n $dir && -f $RELEASES_DIR/$dir/.env ]] &&
+		if [[ -n $dir && -f $RELEASES_DIR/$dir/.env ]]; then
 			mapfile -t -O "${#in_use[@]}" in_use < <(grep -E '^(API|MIGRATOR)_IMAGE=' "$RELEASES_DIR/$dir/.env" | cut -d= -f2-)
+		fi
 	done
-	local image
+	# The in-use test is a plain loop, not a pipe into grep -q: under pipefail an early grep exit could fail the writer
+	# with SIGPIPE and make an image of `previous` look unused.
+	local image kept used
 	while read -r image; do
-		[[ -z $image ]] && continue
-		printf '%s\n' "${in_use[@]}" | grep -qxF "$image" || docker image rm "$image" >/dev/null 2>&1 || true
-	done < <(docker image ls --digests --format '{{.Repository}}@{{.Digest}}' "$REGISTRY/parking-tracker-*")
+		[[ -n $image ]] || continue
+		used=false
+		for kept in "${in_use[@]}"; do
+			[[ $kept == "$image" ]] && used=true
+		done
+		if ! $used; then
+			docker image rm "$image" >/dev/null 2>&1 || true
+		fi
+	done < <(docker image ls --digests --format '{{.Repository}}@{{.Digest}}' "$REGISTRY/parking-tracker-*" || true)
 	# Release folders are named sha-<12 hex>, so the names need no quoting beyond what find prints.
-	find "$RELEASES_DIR" -mindepth 1 -maxdepth 1 -type d -name 'sha-*' -printf '%T@ %f\n' | sort -rn | cut -d' ' -f2 |
-		grep -vxF -e "${keep_current:-none}" -e "${keep_previous:-none}" |
-		tail -n +$((KEEP_RELEASE_DIRS + 1)) | while read -r dir; do rm -rf "${RELEASES_DIR:?}/$dir"; done
+	local -a stale=()
+	mapfile -t stale < <(find "$RELEASES_DIR" -mindepth 1 -maxdepth 1 -type d -name 'sha-*' -printf '%T@ %f\n' 2>/dev/null |
+		sort -rn | cut -d' ' -f2 | { grep -vxF -e "${keep_current:-none}" -e "${keep_previous:-none}" || true; } |
+		tail -n +$((KEEP_RELEASE_DIRS + 1)))
+	for dir in "${stale[@]}"; do
+		rm -rf "${RELEASES_DIR:?}/$dir"
+	done
+	return 0
 }
 
 deploy() {
