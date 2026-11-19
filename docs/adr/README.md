@@ -30,3 +30,4 @@
 | 26 | [Store the driver's data with sqlite-net-pcl on the phone](0026-store-the-drivers-data-with-sqlite-net-pcl-on-the-phone.md) | Accepted |
 | 27 | [Run the app on a developer PC, not in CI](0027-run-the-app-on-a-developer-pc-not-in-ci.md) | Accepted |
 | 28 | [Host on the shared OVH server, behind its Caddy, with OVH backups only](0028-host-on-the-shared-ovh-server-with-ovh-backups-only.md) | Accepted |
+| 29 | [Trust forwarded headers only with a proxy key from the shared Caddy](0029-trust-forwarded-headers-only-with-a-proxy-key-from-the-shared-caddy.md) | Accepted |

@@ -62,7 +62,7 @@ Each assumption changes the design if it is wrong.
 | A3 | A daily refresh is accurate enough for zones, spaces, mailles, address points and rules; roadworks need an hourly refresh | If zones change during the day without notice, a day-old answer can be wrong; the shadow comparison of stage S6 measures it |
 | A4 | The spot decision keeps running on the phone | A server-side decision sends card data and precise positions to the server and changes the privacy analysis (6.3) |
 | A5 | The Pivot.Framework source at `c6c6bf0` matches the published 2.1.0 packages | Every API named here is checked against the package assemblies in stage S4 |
-| A6 | Android Credential Manager ("Sign in with Google") can be called from the MAUI app through the .NET Android bindings | Stage S5 starts with a spike; the fallback is in the risks (10.1) |
+| A6 | Android Credential Manager ("Sign in with Google") can be called from the MAUI app through the .NET Android bindings | Stage S5 starts with a spike; the fallback is in the risks (10.1). Confirmed on the emulator by the S5 spike (2026-11-19). |
 | A7 | A driver accepts a mandatory Google sign-in, and an upgrade from v1.0.x asks for it once | Fewer active users; the decision is the owner's (D3) |
 
 ### 1.4 Evidence gaps
@@ -564,7 +564,10 @@ flowchart TB
 
 On a developer PC the Aspire AppHost starts PostgreSQL with PostGIS (`postgis/postgis` image) and the three hosts. Sign-in
 uses OAuth clients of a separate Google Cloud project for development; the emulator reaches the API through the
-emulator's host address.
+emulator's host address. There are two Google Cloud projects. Development has a Web client and an Android client with
+the debug key's SHA-1. Production has a Web client and an Android client with the release key's SHA-1. A package and
+SHA-1 pair can be registered in one project only. Debug builds use the development Web client ID and release builds
+the production one. Until S9 the production API accepts both audiences, so the owner can sign in from a debug build.
 
 ```mermaid
 flowchart LR
@@ -926,7 +929,12 @@ erDiagram
         text TokenHash UK "RefreshTokenHash (VO)"
         date LastUsedOn "day precision"
         timestamptz AbsoluteExpiryUtc "90 days after sign-in"
+        timestamptz RotatedOn "null until the token is rotated"
         bool Revoked "reuse or sign-out"
+    }
+    SIGN_IN_CHALLENGES {
+        text Nonce PK "random, single use"
+        timestamptz ExpiresAtUtc "short lifetime"
     }
     ERASURE_LOG {
         text SubjectHash PK "SubjectHash (VO)"
@@ -940,6 +948,12 @@ erDiagram
         int RetryCount "OutboxRetryOptions"
     }
 ```
+
+`DEVICE_SESSIONS` holds one row per issued refresh token. A token whose row has `RotatedOn` set has been used, so
+presenting it again is a reuse and revokes the family. `SIGN_IN_CHALLENGES` holds the nonces of 6.1: a nonce is
+consumed atomically with `DELETE ... RETURNING` after the Google signature check, and expired rows are purged when a
+challenge is created. The nonces are in the database, not in memory, so a deployment during a sign-in does not lose
+them.
 
 Hangfire's tables live in the schema `hangfire` and are managed by `Hangfire.PostgreSql`. The inbox table that
 `AddInboxSupport` creates holds the idempotency keys of "run now" (5.5). Database roles (7.2): `pt_owner` owns the
@@ -1298,9 +1312,15 @@ sequenceDiagram
 sessions (hard delete) and writes the subject hash to `ERASURE_LOG`, in one transaction. The app then wipes its local
 database, the key and the tokens. The Google account itself is not touched; the privacy notice tells the user how to
 remove the app's access in their Google account settings. Backups keep an erased account at most 6 months (7.5);
-after a restore, the erasure log is re-applied before the API starts. The erasure log is purged after 6 months.
+after a restore, the restore step of the runbook first exports `ERASURE_LOG` from the live database and applies it to
+the restored one, before the API starts. After a total loss nothing newer exists to re-apply. The erasure log is purged
+after 6 months.
 
 Inactive accounts (no sign-in or refresh for 24 months) are deleted by the cleanup job in the same way.
+
+**Transactions on the session endpoints.** Pivot's `TransactionMiddleware` rolls back every response that is not `2xx`
+or `422`. A family revocation answered with `401`, or a nonce consumed by a failed exchange, would be undone. The
+`/sessions*` endpoints therefore run outside that middleware and commit through `IUnitOfWork` before they answer.
 
 ### 6.2 Authorization and admin hardening
 
@@ -1312,11 +1332,11 @@ Inactive accounts (no sign-in or refresh for 24 months) are deleted by the clean
 | Allow-list | Google `sub` values in a secret file read by the API and the admin app; e-mail kept only as a label; re-checked on every request (`OnValidatePrincipal`), so a removal takes effect at once |
 | Hangfire dashboard | Mounted in the admin app at `/jobs` with `MapHangfireDashboardWithAuthorizationPolicy("AdminOnly")` (to verify) and a dashboard filter that evaluates the same policy; antiforgery on |
 | Network path | Caddy routes `/api/v1/admin/*` nowhere from the internet; the admin app calls the API on the internal network |
-| Rate limiting (API) | Per account: token bucket 120 requests per minute, burst 30, on data endpoints; per IP: 10 per minute on `POST /sessions*`, 30 per minute on health; global concurrency limit 64; `429` with `Retry-After` |
+| Rate limiting (API) | Per account: token bucket 120 requests per minute, burst 30, on data endpoints; per IP: 10 per minute on `POST /sessions/challenges` and `POST /sessions`, 30 per minute on `POST /sessions/refresh` (many phones share a carrier address), 30 per minute on health, IPv6 partitioned by /64; global concurrency limit 64; `429` with `Retry-After` |
 | Rate limiting (admin app) | Per IP: 20 per minute on `/signin-oidc` and anonymous requests, 300 per minute for signed-in admins |
 | Security headers | HSTS (one year), `Content-Security-Policy` (`default-src 'self'`, `connect-src 'self' wss:`, `frame-ancestors 'none'`, styles as Radzen needs, checked in a test), `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy` with everything off |
 | Cookies | `__Host-` prefix, `Secure`, `HttpOnly`, `SameSite=Lax`, 8 h absolute, 1 h idle; Data Protection keys on a volume |
-| Forwarded headers | Trusted only from Caddy's network, so the IP used for rate limiting is real |
+| Forwarded headers | Applied only when the request carries the proxy key the shared Caddy adds ([ADR-0029](adr/0029-trust-forwarded-headers-only-with-a-proxy-key-from-the-shared-caddy.md)); otherwise removed |
 | Input limits | Caddy `request_body` 256 KB, Kestrel header limits, validated bounding-box size and position |
 
 ### 6.3 Security and privacy (GDPR)
@@ -1362,10 +1382,14 @@ with the API's own tokens.
 ### 6.6 Configuration and secrets
 
 Server hosts read non-secret defaults from `appsettings.json` and secrets from files mounted at `/run/secrets`
-(`AddKeyPerFile`): the database passwords per role, the token signing key, the subject hash key, the admin client
-secret and the allow-list. Development secrets are AppHost user secrets. The phone has the API base URL and the Web
-client ID per build configuration; nothing secret ships in the APK. `docs/reference/configuration.md` lists every
-configuration section with its defaults and which keys are secrets, in the stage that adds them.
+(`AddKeyPerFile`): the database passwords per role, the token signing keys, the subject hash key, the proxy key
+(ADR-0029), the admin client secret and the allow-list. The token signing keys are two P-256 files, current and
+previous, with the key thumbprint as `kid`. The subject hash key is never rotated: a new key orphans every account and
+the erasure log, so the owner keeps a copy in the password manager. The Google client IDs are configuration
+(`appsettings.Production.json`), not secrets. Development secrets are AppHost user secrets. The phone has the API
+base URL and the Web client ID per build configuration; nothing secret ships in the APK.
+`docs/reference/configuration.md` lists every configuration section with its defaults and which keys are secrets, in
+the stage that adds them.
 
 ### 6.7 Test strategy: what is verified where
 
@@ -1528,7 +1552,8 @@ restore test first.
 | PostgreSQL down or corrupt | Same as above | Monitor | Restart; restore the nightly or pre-deploy dump |
 | A refresh job fails or upstream changes format | The area's data ages; after its maximum age, CAN'T VERIFY or fallback; the previous snapshot is kept | Admin alerts, `/health/data`, dead-man switch | Fix the parser, run again from the admin app |
 | Google outage | New sign-ins fail; signed-in users keep working with the API's own tokens | User reports | Wait |
-| Token signing key lost | Every user must sign in again | Sign-in errors | Restore the key from the password manager, or issue a new key |
+| Token signing key lost | At most 15 minutes of access tokens fail before phones refresh; refresh tokens are hashes in the database and do not depend on the key | Sign-in or refresh errors | Issue a new key |
+| Subject hash key lost | Accounts cannot be matched and the erasure log no longer applies; this is the key that must not be lost | Sign-in creates new accounts | Restore the key from the password manager |
 | Admin Google account compromised | Admin actions possible until the ID is removed from the allow-list | Admin app audit stamps, Google alerts | Remove the ID, restart, review recent admin actions |
 | GitHub or GHCR outage | No deployments; runtime unaffected | none needed | Wait |
 | Domain lapses | API unreachable | Monitor | Auto-renew and registrar lock |
@@ -1555,6 +1580,7 @@ ADR-0018, superseded by ADR-0026, and ADR-0026, dated 2026-11-18.
 | [0020](adr/0020-use-radzen-for-the-phone-screens-and-keep-leaflet-for-the-map.md) | Radzen for the phone screens, Leaflet kept for the map | R8; Radzen has no WMS-capable map |
 | [0021](adr/0021-map-the-canonical-layout-to-two-bounded-contexts.md) | One Domain, two Application projects, two persistence projects; supersedes ADR-0006 | The APK carries no server handlers |
 | [0028](adr/0028-host-on-the-shared-ovh-server-with-ovh-backups-only.md) (supersedes 0022) | The shared OVH VPS-1 as it is, Docker Compose, the shared Caddy, PostgreSQL in a container, a 1 GB budget, OVH backups and local dumps only | No new server or provider; most server data is rebuilt by the jobs |
+| [0029](adr/0029-trust-forwarded-headers-only-with-a-proxy-key-from-the-shared-caddy.md) | Forwarded headers applied only with a proxy key the shared Caddy adds, compared in constant time | The shared Docker network holds other projects' containers; Caddy's IP is not ours to fix |
 | [0023](adr/0023-deploy-from-github-actions-through-an-ssh-forced-command.md) | GitHub Actions, private GHCR images, SSH forced command, migration bundles, expand and contract | Feedback in CI with a single-purpose key |
 | [0024](adr/0024-fall-back-to-upstream-services-when-the-api-cannot-answer.md) | Upstream fallback and honesty across the network boundary, remotely switchable | A single VPS must not reduce availability; Q1 |
 | [0025](adr/0025-test-the-api-path-with-api-mode-parity-and-testcontainers.md) | API-mode parity and Testcontainers PostgreSQL, no in-memory providers | Proof that the server path changes no verdict |
@@ -1572,7 +1598,7 @@ API-served data reaches the public only in stage S10, after the licence question
 | S2 | Radzen foundation in `ParkingTracker.Shared`, then one dialog per pull request (welcome, card, car, layers, status sheet). Progress: foundation (Radzen.Blazor 13.1.0, services, theme file, host page, bUnit interop), the welcome dialog, the card dialog, the car dialog (with the timer line), the layers popover and the status sheet (status block, chips, nearest spot, permission banner, search bar) are done in code, awaiting the emulator run; S2 is done | Each pull request: bUnit and emulator tests green, emulator selectors kept |
 | S3 | Budget spike done 2026-11-18 (see below; EF Core over budget, ADR-0026 chooses sqlite-net-pcl), then device database on sqlite-net-pcl, field encryption, settings migration, Home and Work places; spike code removed. Progress: the device database is done in code, awaiting the CI build, the emulator run and the budget measurement of the real database: `ParkingTracker.Persistence.Device` (schema steps, unit of work, `FieldCipher`, repositories of the three aggregates), the repository ports in `ParkingTracker.Application`, `DeviceSettingsStore` (the card, car and timer now go through the repositories), the start-up gate with `SettingsToDatabaseMigration`, the backup rules and the tests; Home and Work places are done in code too (the shortcut chips, `IPlacesStore`, `DevicePlacesStore`). Done 2026-11-19: the real device database measured +3.08 MB and about +40 ms against `main` before it (see "S3 budget measurement" below), within the budget. The spike code never reached `main` | Upgrade leg green; the real device database measured within 8 MB and 300 ms |
 | S4 | Provisioning on the shared OVH server (ADR-0028): DNS, the Caddy sites, PostgreSQL, nightly dumps and a restore test before any real data; back-end skeleton (AppHost, ServiceDefaults, ApiService with health, OpenAPI and Scalar, persistence with migrations, Dockerfiles, `backend.yml`, `pt-deploy`); runbook. Done 2026-11-19: DNS, the one-time setup of the runbook (protected `main`, the `production` environment, `provision.sh` on the server), the first deployment from `main` (`sha-6bb4a235d0d8`, `/health/ready` 200 through the shared Caddy; API 79 MiB, PostgreSQL 60 MiB), the second (`sha-4f72e2086b7b`), and the drill (run 44512786497: the health gate refused the release and the server fell back to `sha-6bb4a235d0d8`, exit code 3; the newer release was then rolled forward with `rollback`). The first two deploy jobs reported a failure after going live, from a `clean_up` bug fixed in the second release's helper. Moved to S6: the `Hangfire.PostgreSql` check on .NET 10, `/health/data` and the restore test's data queries; to S5: the anonymous `401` smoke check, and trusting forwarded headers only from the shared Caddy (the API trusts any sender on `web` until rate limiting uses the client address) | `/health/ready` green on the VPS through a deployment from `main`; a forced failed health check rolls back |
-| S5 | Credential Manager spike; session exchange, refresh, sign-out, `/me`, erasure, rate limiting | Authentication tests green; the owner signs in from a debug build against the VPS |
+| S5 | Credential Manager spike; session exchange, refresh, sign-out, `/me`, erasure, rate limiting. Progress: the Credential Manager spike passed on 2026-11-19 (see "S5 Credential Manager spike" below); the real-phone check moves to the app session client step | Authentication tests green; the owner signs in from a debug build against the VPS |
 | S6 | Jobs host: region job, roadworks job and one pilot municipality; `RefreshRun`, snapshots, freshness, admin endpoints, alerts; a shadow job compares API answers with live upstream at sample points for two weeks | API-mode parity green; no verdict difference on fresh data |
 | S7 | The other 18 municipalities and the City document check | Every area fresh for 7 consecutive days |
 | S8 | Admin web app: sign-in and allow-list, freshness board, runs, details, schedules, run now, rejected datasets, alerts, `/jobs` | Admin tests green; outside checks show only allow-listed access; the owner uses it for a week |
@@ -1626,6 +1652,31 @@ run, which started right after the emulator booted). Both are inside 300 ms and 
 limit remains: the base always runs before the head in a round, so drift within a round favours the head. The local
 times are not comparable with the spike's CI times (2003 ms plain), only with each other.
 
+**S5 Credential Manager spike (done 2026-11-19).** The spike added `Xamarin.AndroidX.Credentials` 1.6.0.1,
+`Xamarin.AndroidX.Credentials.PlayServicesAuth` 1.6.0.2 and `Xamarin.GoogleAndroid.Libraries.Identity.GoogleId`
+1.1.0.13 to the app. They raise no NU1608 conflict with the existing AndroidX pins. A logcat probe, started by an
+`am start` extra, called `ICredentialManager.GetCredentialAsync` with `GetGoogleIdOption` (the server client ID is the
+development Web client, with a random nonce). It ran from the trimmed Release APK signed with the debug key, on the
+local API 34 Google APIs emulator ([ADR-0027](adr/0027-run-the-app-on-a-developer-pc-not-in-ci.md)).
+
+| Check | Result |
+| --- | --- |
+| ID token returned | yes, RS256 with a `kid` |
+| `iss` | `https://accounts.google.com` |
+| `aud` | the Web client ID |
+| `azp` | the Android client ID |
+| `nonce` | equal to the one sent |
+| Lifetime | 1 h |
+| No Google account on the device | `NoCredentialException` |
+| Back pressed on the account chooser | `GetCredentialCancellationException` |
+| `ClearCredentialStateAsync` | succeeds |
+| Release APK size | +1.01 MB against `main` built the same way (75.47 MB to 76.48 MB, debug-signed) |
+| Cold start (median of 6 starts, two rounds) | base 1472 ms and 1557 ms, spike 1523 ms and 1520 ms: +50 ms and -37 ms, within the run-to-run noise |
+
+The token was decoded on the PC and deleted. The spike code never reached `main`; the real adapter is written in the
+app session client step. A6 holds, and the fallback in 10.1 is not needed. The real-phone check is done with the
+owner's sign-in from a debug build at the end of S5.
+
 Rollback: back-end stages roll back by redeploying the previous image tag (migrations are additive); the phone goes
 back to upstream data through `client-config` without a release. Stage S9 cannot be rolled back on phones (the
 sign-in requirement ships in the APK); a fix is a new release.
@@ -1640,7 +1691,7 @@ sign-in requirement ships in the APK); a fix is a new release.
 | Upstream returns partial or empty data that passes the guard | low, high | Row-count guard per source plus shape checks; admin review of rejected datasets; thresholds tuned in S6 |
 | The exchange endpoint or token handling has a flaw | medium, high | Small surface, tests for every refusal path, independent review of the authentication change, key rotation procedure |
 | A compromised admin Google account | low, high | Allow-list of `sub` values, re-checked per request; 2-step verification required by the owner's rule; the admin app cannot edit the allow-list |
-| Credential Manager bindings do not work in MAUI (A6) | medium, high | Spike at the start of S5; fallback: the system browser with Google's authorization code flow and PKCE through an App Link redirect on `<domain>`, handled by a new ADR |
+| Credential Manager bindings do not work in MAUI (A6) | low (spike passed), high | The S5 spike passed on the emulator (2026-11-19); the real-phone check is the owner's sign-in at the end of S5. Fallback if it fails there: the system browser with Google's authorization code flow and PKCE through an App Link redirect on `<domain>`, handled by a new ADR |
 | Mandatory sign-in loses users or blocks phones without Google Play services | medium, medium | Owner decision D3; the app already needs Play services for location (ADR-0002) |
 | VPS outage or full disk | medium, medium | Upstream fallback, uptime monitor, disk alert, cleanup job |
 | APK size or start-up regression from the device database and Radzen | low, medium | S3 spike measured EF Core at +40.09 MB and +827 ms, so ADR-0026 uses sqlite-net-pcl (+2.84 MB, +97 ms); the real device database measured +3.08 MB and about +40 ms (S3 budget measurement), within the budget |
