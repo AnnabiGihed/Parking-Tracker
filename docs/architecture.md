@@ -46,7 +46,7 @@ Assumptions:
 | Latency | One check stays within the current per-source timeouts (12 s, 30 s for City PDFs) | 5.2 |
 | Background | Parking alert within about 2.5 minutes of stopping, app off screen | ADR-0002 |
 | Update safety | The new APK installs over v1.0.11 and keeps the card | 7, ADR-0004 |
-| Release safety | No release unless the emulator test passes on the same Release code | 6.3, 7 |
+| Release safety | No release unless the build and the version and certificate guards pass; the emulator test runs on a developer PC before the merge (ADR-0027) | 6.3, 7 |
 | Privacy | Card and car data stay on the phone; only coordinates and bounding boxes go to the public APIs | 6.1 |
 | Local verifiability | Domain, Application and Infrastructure build and test on a PC without Android tooling | 3.1, 6.3 |
 
@@ -623,8 +623,8 @@ UI count as test failures. Resilience is honesty, not retries: any failed source
 | Parity | For 17 recorded places (Avenue Louise 216, Place du Châtelain with a City card and with two mailles cards, Etterbeek, Uccle, Saint-Josse, a tunnel, a red zone, a reserved space, a `check:` street, a limit between house numbers, outside paid hours, a holiday, City list changed, a failed source, poor GPS) plus a free-spot search and two map areas: the C# answer equals the `live.js` answer, and the C# code asks for exactly the requests `live.js` made | `test/fixtures/parity`, `test/Infrastructure/ParkingTracker.Infrastructure.Tests/Features/SpotDecisions/Parity` (they need the parsers and the handlers together) | locally and CI |
 | Integration | Clients against recorded responses through a stub `HttpMessageHandler`: URLs, parsing, filters, timeouts, error mapping; reference data loading | `test/Infrastructure/ParkingTracker.Infrastructure.Tests` | locally and CI |
 | Live smoke | Clients against the real services, trait `Live` | Infrastructure tests | on demand, not a gate |
-| Device | Emulator test: Release APK with test hooks | `test/ParkingTracker.E2E.Tests/emulator-test.mjs` in CI | every build of `android.yml` |
-| Upgrade | Capacitor build (tag `v1.0.11`), then MAUI build over it | CI job `upgrade-test` | branch pushes, pull requests and on demand; skipped on `main` |
+| Device | Emulator test: Release APK with test hooks | `test/ParkingTracker.E2E.Tests/emulator-test.mjs` on a developer PC (ADR-0027) | before merging a change the app can show |
+| Upgrade | Capacitor build (tag `v1.0.11`), then MAUI build over it | `test/ParkingTracker.E2E.Tests/upgrade-test.mjs` on a developer PC (ADR-0027) | before merging a change to stored data or its migration |
 
 Stack: xUnit, FluentAssertions, NSubstitute (owner's choice; FluentAssertions 8 has a commercial licence for commercial
 use), `Microsoft.Extensions.TimeProvider.Testing` for the clock. Test names `Method_Scenario_ShouldExpectation`.
@@ -639,7 +639,8 @@ ports that build each address with the production `SourceRequests`, so a request
 test, and so does one it made that the C# code did not. The recorder and `live.js` were deleted at cut-over (they are at tag `v1.0.11`); the
 fixtures stay as regression data.
 
-Emulator test changes:
+Emulator test changes (the `emulator-test` and `upgrade-test` jobs named below were removed from `android.yml` by
+ADR-0027; both tests now run on a developer PC):
 
 - The test APK is the Release configuration published with `-p:EnableTestHooks=true`. That constant enables WebView
   debugging and registers `window.ptTest`, which calls `[JSInvokable]` C# hooks. The release APK is built without it.
@@ -667,8 +668,8 @@ Emulator test changes:
   24 m apart, above 20 km/h, along Avenue Louise to number 216, press Home, wait up to 4 minutes, read `dumpsys
   notification --noredact` for the title "Free for you here"), then that the saved car shows as the car chip; and the
   timer (a 1-minute timer, Home, wait up to 2.5 minutes for the text "Your parking time is over."). The `emulator-test`
-  job allows 40 minutes, which these checks (about 8 minutes) do not exceed.
-- Upgrade job (stage 6c, proven by CI; job `upgrade-test` of `android.yml`, parallel to the
+  job allowed 40 minutes, which these checks (about 8 minutes) did not exceed.
+- Upgrade job (stage 6c, proven by CI; until ADR-0027 the job `upgrade-test` of `android.yml`, parallel to the
   emulator test): the job creates a throwaway PKCS12 key with `keytool`, builds the Capacitor debug APK from the
   checkout of the tag `v1.0.11` in the subfolder `capacitor/` (`npm ci`, `npm run build`, `npx cap sync android`,
   `./gradlew assembleDebug` with `VERSION_CODE=1`; a debug build has web view debugging on, because Capacitor's `webContentsDebuggingEnabled` defaults
@@ -691,9 +692,9 @@ No servers. CI on GitHub-hosted Ubuntu runners, same workflow file `.github/work
 | Job | Steps | Permissions |
 | --- | --- | --- |
 | build | checkout; `setup-dotnet` from `global.json`; `setup-java` 21; `dotnet workload install maui-android`; Android SDK platform 36 (`InstallAndroidDependencies` target); restore with `nuget.config` whose GitHub Packages credentials read `%GITHUB_TOKEN%`-style environment variables; `dotnet test` on the test projects; `dotnet publish` of the signed APK and of the test-hooks APK | `contents: read`, `packages: read` |
-| test | emulator API 34, `node test/ParkingTracker.E2E.Tests/emulator-test.mjs` | `contents: read` |
-| upgrade-test | as section 6.3, with the Capacitor build from tag `v1.0.11`; not on `main` | `contents: read` |
-| release | only on `main`, only if the tests passed; `gh release create v1.0.<run_number>` | `contents: write` |
+| release | only on `main`, only if the build passed; `gh release create v1.0.<run_number>` | `contents: write` |
+
+No job starts the app: the emulator test and the upgrade test run on a developer PC (ADR-0027).
 
 Signing and version (MSBuild properties of `dotnet publish -f net10.0-android -c Release`). The workflow passes the
 signing ones as environment variables of the publish step, which MSBuild reads as properties, so the passwords are never

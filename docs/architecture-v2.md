@@ -1371,7 +1371,7 @@ configuration section with its defaults and which keys are secrets, in the stage
 | Admin app | Allow-listed account gets in; another account gets `403`; `/jobs` refuses a non-admin; removal from the allow-list takes effect on the next request; security headers present | `ParkingTracker.AdminWeb.Tests` (test authentication handler), bUnit for pages | PC and CI |
 | Device persistence | Schema steps on a real SQLite file (empty and older versions, newer version refused), aggregate-to-row mapping round trip per aggregate, invalid rows give a failed `Result`, unit-of-work rollback, encryption round trip, missing key handling, settings-to-database migration, device owner binding | `ParkingTracker.Persistence.Device.Tests` | PC and CI |
 | UI | Radzen components with bUnit (Radzen interop set up explicitly, `map.js` still strict); sign-in gate in the view models with a stubbed sign-in port | `ParkingTracker.Shared.Tests`, `ParkingTracker.ViewModels.Tests`, `ParkingTracker.Admin.ViewModels.Tests` | PC and CI |
-| Device | Emulator test (existing checks) with a stubbed Google sign-in in the test-hooks build, one API-mode scenario against a fixture-backed fake API, API down, `429`, `5xx` and stale data giving CAN'T VERIFY or the fallback; upgrade leg of 5.8 | `test/ParkingTracker.E2E.Tests` | `android.yml` |
+| Device | Emulator test (existing checks) with a stubbed Google sign-in in the test-hooks build, one API-mode scenario against a fixture-backed fake API, API down, `429`, `5xx` and stale data giving CAN'T VERIFY or the fallback; upgrade leg of 5.8 | `test/ParkingTracker.E2E.Tests` | developer PC (ADR-0027) |
 | Deployment smoke | Images start with a PostgreSQL container on the runner; migrator runs; health is green; anonymous calls to protected endpoints give `401` | `backend.yml` smoke job | CI |
 | Live smoke | Jobs against the real upstream services, once by hand per stage | trait `Live` | on demand |
 
@@ -1546,7 +1546,7 @@ API-served data reaches the public only in stage S10, after the licence question
 | S0 | Done 2026-11-17: ADR-0009 to ADR-0025 accepted; upstream Pivot issues opened: AnnabiGihed/Pivot.Framework#5 (Hangfire storage and expression jobs), #6 (policy-based dashboard filter), #7 (persistence without messaging), #8 (SQL Server provider split), #9 (generic OIDC and user deletion) | Owner accepts the ADRs |
 | S1 | Done 2026-11-17 in code, awaiting the emulator run and the release: `ResidentCard`, `SavedPlaces` and `ParkingSession` aggregates with the `ToParkingCard()` and `ToParkedCar()` bridges; the card dialog builds its card through `ResidentCard`; no storage change | Parity, domain and emulator tests green; APK released; the only visible change is that the card form refuses reversed dates and an unknown municipality |
 | S2 | Radzen foundation in `ParkingTracker.Shared`, then one dialog per pull request (welcome, card, car, layers, status sheet). Progress: foundation (Radzen.Blazor 13.1.0, services, theme file, host page, bUnit interop), the welcome dialog, the card dialog, the car dialog (with the timer line), the layers popover and the status sheet (status block, chips, nearest spot, permission banner, search bar) are done in code, awaiting the emulator run; S2 is done | Each pull request: bUnit and emulator tests green, emulator selectors kept |
-| S3 | Budget spike done 2026-11-18 (see below; EF Core over budget, ADR-0026 chooses sqlite-net-pcl), then device database on sqlite-net-pcl, field encryption, settings migration, Home and Work places; spike code removed. Progress: the device database is done in code, awaiting the CI build, the emulator run and the budget measurement of the real database: `ParkingTracker.Persistence.Device` (schema steps, unit of work, `FieldCipher`, repositories of the three aggregates), the repository ports in `ParkingTracker.Application`, `DeviceSettingsStore` (the card, car and timer now go through the repositories), the start-up gate with `SettingsToDatabaseMigration`, the backup rules and the tests; Home and Work places are done in code too (the shortcut chips, `IPlacesStore`, `DevicePlacesStore`), so only the budget measurement of the real database remains. The spike code never reached `main` | Upgrade leg green; the real device database measured within 8 MB and 300 ms |
+| S3 | Budget spike done 2026-11-18 (see below; EF Core over budget, ADR-0026 chooses sqlite-net-pcl), then device database on sqlite-net-pcl, field encryption, settings migration, Home and Work places; spike code removed. Progress: the device database is done in code, awaiting the CI build, the emulator run and the budget measurement of the real database: `ParkingTracker.Persistence.Device` (schema steps, unit of work, `FieldCipher`, repositories of the three aggregates), the repository ports in `ParkingTracker.Application`, `DeviceSettingsStore` (the card, car and timer now go through the repositories), the start-up gate with `SettingsToDatabaseMigration`, the backup rules and the tests; Home and Work places are done in code too (the shortcut chips, `IPlacesStore`, `DevicePlacesStore`). Done 2026-11-19: the real device database measured +3.08 MB and about +40 ms against `main` before it (see "S3 budget measurement" below), within the budget. The spike code never reached `main` | Upgrade leg green; the real device database measured within 8 MB and 300 ms |
 | S4 | VPS bootstrap, DNS, Caddy, PostgreSQL, backups and a restore test before any real data; back-end skeleton (AppHost, ServiceDefaults, ApiService with health, OpenAPI and Scalar, persistence with migrations, Dockerfiles, `backend.yml`, `pt-deploy`); runbook | `/health/ready` green on the VPS through a deployment from `main`; a forced failed health check rolls back |
 | S5 | Credential Manager spike; session exchange, refresh, sign-out, `/me`, erasure, rate limiting | Authentication tests green; the owner signs in from a debug build against the VPS |
 | S6 | Jobs host: region job, roadworks job and one pilot municipality; `RefreshRun`, snapshots, freshness, admin endpoints, alerts; a shadow job compares API answers with live upstream at sample points for two weeks | API-mode parity green; no verdict difference on fresh data |
@@ -1576,7 +1576,31 @@ start-up (`Features/Shared/DeviceDatabaseSpike/`). Without the switch the app is
 
 EF Core exceeded the budget, so [ADR-0026](adr/0026-store-the-drivers-data-with-sqlite-net-pcl-on-the-phone.md) moves
 the device database to sqlite-net-pcl. The spike code, the `IncludeDeviceDatabase` switch, the EF Core package versions
-and the workflow are removed when the real device database lands, or the workflow is kept as its budget check.
+and the workflow never reached `main`.
+
+**S3 budget measurement (done 2026-11-19).** The real device database (sqlite-net-pcl with the schema steps, the
+encryption, the settings migration and the Home and Work places) against `main` before it. The base is `c19edef`, the
+first parent of the device database merge (`android.yml` run 44288295895). The head is `5c1d63c`, `main` with the
+Home and Work places (run 44471822378). Both are the release-key Release APKs of those runs. The measurement ran on a
+developer PC, as every run of the app now does
+([ADR-0027](adr/0027-run-the-app-on-a-developer-pc-not-in-ci.md)), with the budget check of
+`test/ParkingTracker.E2E.Tests/budget-check.mjs` on a local API 34 Google APIs emulator (`pixel_6`, Windows Hypervisor
+Platform, software rendering). It follows the spike method, with one change: both builds share the app id, so each run
+uninstalls the app, installs its APK and discards the first start, which creates the database.
+
+| Build | Release APK | Difference | Cold start (median of 30 starts) | Difference | Budget (8 MB, 300 ms) |
+| --- | --- | --- | --- | --- | --- |
+| Base `c19edef` | 68.88 MB | - | 1959 ms | - | - |
+| Head `5c1d63c` | 71.96 MB | +3.08 MB | 2001 ms | +42 ms | met |
+
+The size matches the spike: the base is the spike's plain build to the hundredth of a megabyte, and the real database
+adds 0.24 MB to the spike's +2.84 MB. Cold start on the PC was noisy. Three budget runs gave six rounds, and the
+difference per round, head minus base, was +1683, -53, -964, -478, +258 and -1 ms. That spread is several times the
+300 ms budget, so a single round cannot settle the budget on this PC. The verdict rests on the second rounds the method
+reports (-53, -478, -1 ms) and on the pooled medians of all 30 starts per build (+42 ms, or -32 ms without the first
+run, which started right after the emulator booted). Both are inside 300 ms and agree with the spike's +97 ms. One
+limit remains: the base always runs before the head in a round, so drift within a round favours the head. The local
+times are not comparable with the spike's CI times (2003 ms plain), only with each other.
 
 Rollback: back-end stages roll back by redeploying the previous image tag (migrations are additive); the phone goes
 back to upstream data through `client-config` without a release. Stage S9 cannot be rolled back on phones (the
@@ -1595,8 +1619,8 @@ sign-in requirement ships in the APK); a fix is a new release.
 | Credential Manager bindings do not work in MAUI (A6) | medium, high | Spike at the start of S5; fallback: the system browser with Google's authorization code flow and PKCE through an App Link redirect on `<domain>`, handled by a new ADR |
 | Mandatory sign-in loses users or blocks phones without Google Play services | medium, medium | Owner decision D3; the app already needs Play services for location (ADR-0002) |
 | VPS outage or full disk | medium, medium | Upstream fallback, uptime monitor, disk alert, cleanup job |
-| APK size or start-up regression from the device database and Radzen | low, medium | S3 spike measured EF Core at +40.09 MB and +827 ms, so ADR-0026 uses sqlite-net-pcl (+2.84 MB, +97 ms); the real device database is measured against the same 8 MB and 300 ms budget before S3 ends |
-| Hand-written device mapping, unit of work or schema steps lose or corrupt data | low, high | Round-trip, rollback and schema-step tests on a real SQLite file; released steps never edited; upgrade leg in `android.yml` |
+| APK size or start-up regression from the device database and Radzen | low, medium | S3 spike measured EF Core at +40.09 MB and +827 ms, so ADR-0026 uses sqlite-net-pcl (+2.84 MB, +97 ms); the real device database measured +3.08 MB and about +40 ms (S3 budget measurement), within the budget |
+| Hand-written device mapping, unit of work or schema steps lose or corrupt data | low, high | Round-trip, rollback and schema-step tests on a real SQLite file; released steps never edited; upgrade test on a developer PC before such a merge (ADR-0027) |
 | Pivot deviations drift (Hangfire, outbox drain, authentication) | medium, low | Each deviation has an ADR and an upstream issue; retire when Pivot ships the fix |
 | `Hangfire.PostgreSql` is a community package | low, medium | Pinned version; jobs survive a storage reset because schedules come from `CoverageArea` |
 | A stale neighbouring area blocks answers near a border | medium, low | Decided by default (conservative); per-area freshness on the admin board |
