@@ -34,7 +34,7 @@ We trust forwarded headers only on a request that carries a proxy key the shared
   key, compared in constant time. Otherwise it removes the `X-Forwarded-*` headers.
 - The API always removes `X-PT-Proxy-Key` before the request goes further.
 - Caddy 2.5 and later already discards forwarded headers sent by clients unless `trusted_proxies` is set. The runbook
-  checks that setting. The Caddy version of the server is to be verified.
+  checks that setting. On 2026-11-19 the shared server ran Caddy 2.11.4 (image `caddy:2`) without `trusted_proxies`.
 
 ## Consequences
 
