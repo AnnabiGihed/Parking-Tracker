@@ -1,0 +1,25 @@
+@namespace ParkingTracker.Shared.Features.Places.Components
+@inherits ViewModelComponent<PlacesViewModel>
+<DialogShell IsOpen="ViewModel.IsOpen" Label="@Title">
+    <RadzenStack Gap="0.75rem" class="dialog-form" id="placeDialog">
+        <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween" AlignItems="AlignItems.Center" class="dialog-head">
+            <RadzenText TextStyle="TextStyle.H5" TagName="TagName.H2">@Title</RadzenText>
+            <RadzenButton ButtonStyle="ButtonStyle.Base" Variant="Variant.Text" class="icon-btn" aria-label="Close" Click="OnClose"><Icon Name="close" /></RadzenButton>
+        </RadzenStack>
+        @if (ViewModel.Editing is { } place)
+        {
+            <RadzenText TextStyle="TextStyle.Body2" TagName="TagName.Div" class="muted">@(string.IsNullOrEmpty(place.AddressText) ? "Saved from a position on the map." : place.AddressText)</RadzenText>
+        }
+        <RadzenStack Gap="0.3rem" class="field">
+            <RadzenLabel Text="Address" Component="placeAddress" />
+            <RadzenTextBox Name="placeAddress" id="placeAddress" Placeholder="Search a street or address" Style="width:100%" @bind-Value="ViewModel.AddressText" Immediate="true" />
+        </RadzenStack>
+        <RadzenButton id="placeSearch" ButtonStyle="ButtonStyle.Primary" class="btn-block" Style="width:100%" Disabled="ViewModel.IsBusy" Click="OnSearchAsync"><Icon Name="search" />Search</RadzenButton>
+        <RadzenButton id="placeHere" ButtonStyle="ButtonStyle.Light" class="btn-block" Style="width:100%" Click="OnUseMyPositionAsync"><Icon Name="locate" />Use my position</RadzenButton>
+        @if (ViewModel.Editing is not null)
+        {
+            <RadzenButton id="placeClear" ButtonStyle="ButtonStyle.Base" Variant="Variant.Text" class="btn-block" Style="width:100%" Click="OnRemoveAsync">Remove</RadzenButton>
+        }
+        <RadzenText TextStyle="TextStyle.Body2" TagName="TagName.P" class="muted small">Stored only on this phone.</RadzenText>
+    </RadzenStack>
+</DialogShell>

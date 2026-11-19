@@ -399,7 +399,7 @@ public sealed class SettingsToDatabaseMigrationTests
 	{
 		await using var db = await DeviceTestDatabase.CreateAsync();
 		var (_, plain, migration) = Arrange(db, card: OldCard, car: OldCar);
-		var store = new DeviceSettingsStore(new SettingsStore(new InMemoryKeyValueStorage(), plain), db.Cards, db.Sessions, db.Places, db.UnitOfWork, db.Initializer, new FakeStartupGate(), db.ReferenceData, NullLogger<DeviceSettingsStore>.Instance);
+		var store = new DeviceSettingsStore(new SettingsStore(new InMemoryKeyValueStorage(), plain), db.Cards, db.Sessions, db.Places, db.UnitOfWork, db.Initializer, new FakeStartupGate(), db.ReferenceData, NullLogger<DeviceSettingsStore>.Instance, new DeviceDataResetNotice());
 		var newer = new ParkingCard("ixelles", null, new CardPeriod(null, null), [], ["IXLR_2"], []);
 
 		await Task.WhenAll(migration.RunOnceAsync(), store.SaveCardAsync(newer));

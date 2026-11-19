@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using ParkingTracker.ViewModels.Features.Car;
 using ParkingTracker.ViewModels.Features.Card;
 using ParkingTracker.ViewModels.Features.MapLayers;
+using ParkingTracker.ViewModels.Features.Places;
 using ParkingTracker.ViewModels.Features.Shared;
 using ParkingTracker.ViewModels.Features.SpotCheck;
 using ParkingTracker.ViewModels.Features.Welcome;
@@ -36,6 +37,7 @@ public sealed class UiServiceInstaller : IServiceInstaller
 		services.AddScoped<SpotCheckViewModel>();
 		services.AddScoped<SearchViewModel>();
 		services.AddScoped<CarViewModel>();
+		services.AddScoped<PlacesViewModel>();
 		services.AddScoped<ParkedOnScreenResponder>();
 		services.AddScoped<MapLayersViewModel>();
 	}

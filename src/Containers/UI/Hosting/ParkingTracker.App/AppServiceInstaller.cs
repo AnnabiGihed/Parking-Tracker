@@ -85,6 +85,7 @@ public sealed class AppServiceInstaller : IServiceInstaller
 			new PreferencesValueStorage()));
 
 		// What the screens and handlers read: the card, car and timer from the database, the rest from the key-value store.
+		services.AddSingleton<DeviceDataResetNotice>();
 		services.AddSingleton<ISettingsStore>(provider => new DeviceSettingsStore(
 			provider.GetRequiredService<SettingsStore>(),
 			provider.GetRequiredService<IResidentCardRepository>(),
@@ -94,7 +95,19 @@ public sealed class AppServiceInstaller : IServiceInstaller
 			provider.GetRequiredService<IDeviceDatabaseInitializer>(),
 			provider.GetRequiredService<IStartupGate>(),
 			provider.GetRequiredService<IReferenceData>(),
-			provider.GetRequiredService<ILogger<DeviceSettingsStore>>()));
+			provider.GetRequiredService<ILogger<DeviceSettingsStore>>(),
+			provider.GetRequiredService<DeviceDataResetNotice>()));
+
+		// The Home and Work places of the shortcut chips, in the same database.
+		services.AddSingleton<IPlacesStore>(provider => new DevicePlacesStore(
+			provider.GetRequiredService<ISavedPlacesRepository>(),
+			provider.GetRequiredService<IResidentCardRepository>(),
+			provider.GetRequiredService<IParkingSessionRepository>(),
+			provider.GetRequiredService<IDeviceUnitOfWork>(),
+			provider.GetRequiredService<IDeviceDatabaseInitializer>(),
+			provider.GetRequiredService<IStartupGate>(),
+			provider.GetRequiredService<ILogger<DevicePlacesStore>>(),
+			provider.GetRequiredService<DeviceDataResetNotice>()));
 	}
 
 	/// <summary>

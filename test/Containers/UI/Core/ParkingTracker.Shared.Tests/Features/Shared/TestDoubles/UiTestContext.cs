@@ -8,6 +8,7 @@ using ParkingTracker.Application.Features.ParkingDetection.Abstractions;
 using ParkingTracker.Application.Features.ParkingDetection.Services;
 using ParkingTracker.Application.Features.ParkingSessions.Abstractions;
 using ParkingTracker.Application.Features.ResidentCards.Abstractions;
+using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
 using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Queries.DecideSpot;
@@ -63,7 +64,9 @@ public abstract class UiTestContext : BunitContext
 		Services.AddSingleton(Sender);
 		Services.AddSingleton(Tracker);
 		Services.AddSingleton(Permissions);
+		Places.GetPlacesAsync(Arg.Any<CancellationToken>()).Returns([]);
 		Services.AddSingleton(Settings);
+		Services.AddSingleton(Places);
 		Services.AddSingleton(Launcher);
 		Services.AddSingleton(ReferenceData);
 		Services.AddSingleton(Network);
@@ -110,6 +113,11 @@ public abstract class UiTestContext : BunitContext
 	/// Gets the settings store substitute.
 	/// </summary>
 	protected ISettingsStore Settings { get; } = Substitute.For<ISettingsStore>();
+
+	/// <summary>
+	/// Gets the saved places store substitute, which holds no place.
+	/// </summary>
+	protected IPlacesStore Places { get; } = Substitute.For<IPlacesStore>();
 
 	/// <summary>
 	/// Gets the link launcher substitute.
