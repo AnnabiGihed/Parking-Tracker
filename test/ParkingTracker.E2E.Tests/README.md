@@ -1,21 +1,33 @@
 # Parking Tracker E2E tests
 
-The Android emulator test and the upgrade test of the .NET MAUI app. It replaces the API end-to-end test of a service
-([ADR-0006](../../docs/adr/0006-mobile-client-layout.md)) and ports the emulator test of the earlier Capacitor app.
+The Android emulator test, the upgrade test and the budget check of the .NET MAUI app. The emulator test replaces
+the API end-to-end test of a service ([ADR-0006](../../docs/adr/0006-mobile-client-layout.md)) and ports the emulator
+test of the earlier Capacitor app.
+
+These tests run on a developer PC, never in CI
+([ADR-0027](../../docs/adr/0027-run-the-app-on-a-developer-pc-not-in-ci.md)). CI only builds the APKs. Put the results
+of the runs in the pull request description:
+
+- the emulator test before you merge a change that the app can show;
+- the upgrade test before you merge a change to stored data or its migration;
+- the budget check before you close a stage that adds weight to the app.
+
+## Prerequisites
+
+- Node.js 22 or later (no packages to install).
+- The Android SDK with `platform-tools`, `emulator` and `system-images;android-34;google_apis;x86_64`, and
+  `ANDROID_HOME` set to its folder.
+- An API 34 emulator with Google APIs (for example a `pixel_6` device), booted.
+- The APKs: the `apks` artifact of an `android.yml` run (`ParkingTracker.apk`, the Release build, and
+  `ParkingTracker-test.apk`, the same code with test hooks). The host builds only where the `maui-android` workload is
+  installed, which is why CI builds them.
 
 ## Run it
 
-You need Node.js 22 or later (no packages to install), `adb` on the path and a booted emulator with Google APIs. The APK
-must be the Release build made with test hooks:
-
 ```bash
-dotnet publish src/Containers/UI/Hosting/ParkingTracker.App/ParkingTracker.App.csproj \
-  -f net10.0-android -c Release -p:EnableTestHooks=true -o artifacts/hooks
-bash test/ParkingTracker.E2E.Tests/collect-apk.sh artifacts/hooks apk/ParkingTracker-test.apk
+gh run download <run-id> -n apks -D apk
 node test/ParkingTracker.E2E.Tests/run-emulator-test.mjs   # reads apk/ParkingTracker-test.apk
 ```
-
-The host builds only where the `maui-android` workload is installed; CI does it in `.github/workflows/android.yml`.
 
 ## What it checks
 
@@ -40,7 +52,7 @@ The host builds only where the `maui-android` workload is installed; CI does it 
 The report goes to `emulator-report/` (`summary.md`, `report.json`, screenshots, `logcat.txt`, `crash.txt`); the exit
 code is 1 when a check fails.
 
-CI runs the test through `run-emulator-test.mjs`. On a freshly booted emulator, Google Play services updates its own
+Run the test through `run-emulator-test.mjs`. On a freshly booted emulator, Google Play services updates its own
 modules a few minutes after start; when that lands while the app is in the background, the location provider
 disappears, the system's GNSS code can deadlock and the system watchdog restarts the Android framework, app included.
 When the first run fails and its logcat holds `WATCHDOG KILLING SYSTEM PROCESS`, the wrapper waits for the system to
@@ -54,9 +66,8 @@ Any other failure, and a second restart, fail the check.
 [ADR-0008](../../docs/adr/0008-read-capacitor-data-from-leveldb-with-a-web-view-fallback.md)). It needs two APKs of
 the same app id signed with the same key, the MAUI one with the higher versionCode: the Capacitor debug build of the
 Git tag `v1.0.11`, the last Capacitor release (web view debugging on) and the MAUI test-hooks build.
-`resign-apk.sh` signs both with a throwaway key and `version-code.sh` prints a versionCode; the workflow `android.yml`
-(job `upgrade-test`) builds, signs and runs everything. Both scripts need `ANDROID_HOME`, echo each stage and report every failure as an `::error::` line on
-stderr.
+`resign-apk.sh` signs both with a throwaway key and `version-code.sh` prints a versionCode. Both scripts need
+`ANDROID_HOME`, echo each stage and report every failure as an `::error::` line on stderr.
 
 ```bash
 export UPGRADE_KEY_PASSWORD=changeit
@@ -93,5 +104,32 @@ What it checks:
 - No JavaScript error, no unhandled .NET exception in logcat.
 
 The report goes to `upgrade-report/` (`summary.md` with the file list and the reader, `report.json`, `logcat.txt`,
-screenshots); the exit code is 1 when a check fails. The job runs on branch pushes, pull requests and on demand, and
-is skipped on pushes to `main`.
+screenshots); the exit code is 1 when a check fails.
+
+## Budget check
+
+`budget-check.mjs` compares the Release APK of a base commit and a head commit against the budget of
+[ADR-0026](../../docs/adr/0026-store-the-drivers-data-with-sqlite-net-pcl-on-the-phone.md): at most 8 MB more APK size
+(1 MB = 1,048,576 bytes) and at most 300 ms more cold start on the API 34 emulator. Take both APKs from the `apks`
+artifacts of the `android.yml` runs of the two commits; the runs of `main` are signed with the same key, so they compare
+like for like.
+
+```bash
+gh run download <base-run-id> -n apks -D budget/base
+gh run download <head-run-id> -n apks -D budget/head
+cd budget
+node ../test/ParkingTracker.E2E.Tests/budget-check.mjs size base/ParkingTracker.apk head/ParkingTracker.apk
+node ../test/ParkingTracker.E2E.Tests/budget-check.mjs cold-start base/ParkingTracker.apk head/ParkingTracker.apk
+```
+
+Run the commands from the folder that holds the APKs: the script accepts APK paths inside the working directory only.
+
+`cold-start` runs the base, then the head, then both again. Each run uninstalls `be.parkingtracker.app` (its data on
+the emulator is lost), installs the APK with `adb install -g` and starts it cold six times with `am start -W -S`. The
+first start, which creates the database, is discarded, and the run keeps the median `TotalTime` of the other five. The
+script reports the second round and prints every start to stderr. The exit code is 1 when the head is over budget, and
+2 on wrong arguments or an `adb` failure.
+
+A freshly booted emulator or a busy PC moves a run by several hundred milliseconds. Run `cold-start` at least three
+times on a settled emulator and judge the pooled starts, not one round. `node --test budget-check.test.mjs` tests the
+calculations.

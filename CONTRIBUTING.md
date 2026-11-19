@@ -40,11 +40,14 @@ needs:
 
 1. Green checks: the **.NET quality gate** workflow (`.github/workflows/dotnet.yml`: restore, format check, Release
    build, unit tests) and the **Android APK** workflow (`.github/workflows/android.yml`: build, version and
-   certificate guards, emulator test, upgrade test). The repository owner should mark the ".NET quality gate" and
+   certificate guards). The repository owner should mark the ".NET quality gate" and
    Android checks as required in the branch protection of `main`; until then they are expected, not enforced.
 2. One approval from the repository owner.
 3. A `CHANGELOG.md` entry under `[Unreleased]` for every user-visible change, or a line saying why there is none.
 4. Documentation (`README.md`, `docs/`, ADRs) updated in the same pull request as the behavior it describes.
+5. The results of the runs on your PC that the change needs: the emulator test, the upgrade test or the budget check
+   ([test/ParkingTracker.E2E.Tests](test/ParkingTracker.E2E.Tests/README.md)). No workflow runs the app
+   ([ADR-0027](docs/adr/0027-run-the-app-on-a-developer-pc-not-in-ci.md)).
 
 Pull requests are merged with squash, so the title follows Conventional Commits.
 
@@ -81,6 +84,6 @@ security advisory on this repository) and give the steps to reproduce.
 ## Releases
 
 Releases are built from `main` by the Android APK workflow, which signs the APK and publishes it on the
-[GitHub Releases page](https://github.com/AnnabiGihed/Parking-Tracker/releases) only when the emulator test passes and
-the version and certificate guards hold.
+[GitHub Releases page](https://github.com/AnnabiGihed/Parking-Tracker/releases) only when the build and the version and
+certificate guards pass. The emulator test runs on a developer PC before the merge, not in the workflow.
 Every release gets its own `## [X.Y.Z] - YYYY-MM-DD` section in `CHANGELOG.md`.

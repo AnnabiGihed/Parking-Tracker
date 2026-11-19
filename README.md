@@ -121,8 +121,10 @@ Always check the street signs: works, delivery zones, disabled spots and other l
 
 ## CI tests
 
-The MAUI host builds only in CI ([docs/architecture.md](docs/architecture.md), section 4.1). CI also runs the
-emulator test and the upgrade test (`test/ParkingTracker.E2E.Tests`). On a PC you need the .NET SDK named in
+The MAUI host builds only in CI ([docs/architecture.md](docs/architecture.md), section 4.1). The emulator test, the
+upgrade test and the budget check run on your PC with the APKs CI built
+([test/ParkingTracker.E2E.Tests](test/ParkingTracker.E2E.Tests/README.md),
+[ADR-0027](docs/adr/0027-run-the-app-on-a-developer-pc-not-in-ci.md)). On a PC you need the .NET SDK named in
 `global.json`.
 
 ## Check the street data
