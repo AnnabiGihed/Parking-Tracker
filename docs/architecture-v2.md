@@ -43,7 +43,7 @@ Owner decisions of 2026-11-17 that shape the design (they override the earlier p
 | D2 | Google sign-in directly, JWT for the API, no Keycloak; account erasure is the app's own endpoint | ADR-0014, a recorded deviation from Pivot's Keycloak-only authentication packages |
 | D3 | Sign-in is required in the mobile app | ADR-0015; the app has no signed-out mode |
 | D4 | The admin web app is public, protected by Google sign-in and an allow-list of Google account IDs, with hardening | ADR-0017 |
-| D5 | OVH VPS-2 (4 vCores, 8 GB RAM); the domain name is chosen later (placeholder `<domain>`) | ADR-0022 |
+| D5 | The owner's shared OVH VPS-1 (2 vCores, 4 GB RAM), as it is; `<domain>` is `parking.pivotsoftwares.com`; no Backblaze B2 | ADR-0028 (supersedes ADR-0022) |
 | D6 | Hangfire with `Hangfire.PostgreSql` directly, because Pivot's scheduling package supports SQL Server only | ADR-0013, a recorded deviation and an upstream Pivot improvement |
 | D7 | The remaining open questions take the proposals' recommendations, decided by default | Section 10.2 |
 
@@ -76,8 +76,8 @@ Each assumption changes the design if it is wrong.
 - Not verified yet, each assigned to the stage that first needs it: `Hangfire.PostgreSql` version and compatibility
   with Hangfire 1.8 on .NET 10, Hangfire's `MapHangfireDashboardWithAuthorizationPolicy`, the Credential Manager
   bindings for .NET Android, Radzen inside a MAUI `BlazorWebView`, EF Core start-up time on the emulator, WFS paging
-  on each upstream layer, the .NET 10 chiseled image tag with time-zone data and ICU, restic on Backblaze B2 with a key
-  that cannot delete, and Google's current consent-screen requirements.
+  on each upstream layer, the .NET 10 chiseled image tag with time-zone data and ICU, the real memory use of each
+  container against the 1 GB budget of ADR-0028, and Google's current consent-screen requirements.
 
 ## 2. Quality attributes
 
@@ -403,10 +403,12 @@ ADR: [0021](adr/0021-map-the-canonical-layout-to-two-bounded-contexts.md).
 
 ### 3.14 Hosting and deployment
 
-**Decision:** one OVH VPS-2 (4 vCores, 8 GB, 75 GB NVMe) in an EU datacentre, Debian stable, Docker Compose with Caddy
-(TLS with Let's Encrypt), the API, the Jobs host, the admin app, a one-shot migrator and PostgreSQL with PostGIS.
-Private images in GitHub Container Registry (decided by default, 10.2), built and smoke-tested in GitHub Actions and
-deployed over SSH to a forced command. Nightly encrypted backups with restic to Backblaze B2, restore tested monthly.
+**Decision:** the owner's shared OVH VPS-1 (2 vCores, 4 GB, Gravelines), as it is, beside the `pivotsoftwares.com`
+website, Delivery Atlas and RaidManager. Docker Compose under `/opt/apps/parking-tracker` with the API, the Jobs host,
+the admin app, a one-shot migrator and PostgreSQL with PostGIS, within a memory budget of about 1 GB, behind the
+server's shared Caddy (TLS with Let's Encrypt) on subdomains of `parking.pivotsoftwares.com`. Private images in GitHub
+Container Registry (decided by default, 10.2), built and smoke-tested in GitHub Actions and deployed over SSH to a
+forced command. Backups: OVH's daily server backup and nightly local dumps, restore tested monthly; no off-site copy.
 
 **Options:** runtime A Docker Compose, B systemd services, C single-node k3s; deploy path A push over SSH with a forced
 command, B pull by a timer on the VPS, C SSH through Tailscale.
@@ -416,10 +418,13 @@ for, at about 100 MB of overhead; systemd ties the .NET runtime to the host's pa
 The forced command gives feedback in the Actions run with a key that can do one thing; pulling needs a registry
 token on the VPS and has no feedback; Tailscale is a good later step.
 
-**Accepted negatives:** Docker-published ports bypass the host firewall, so only Caddy publishes ports; a PostgreSQL
-major upgrade is a dump and restore; port 22 stays open to the internet for the deploy job.
+**Accepted negatives:** Docker-published ports bypass the host firewall, so only the shared Caddy publishes ports; a
+PostgreSQL major upgrade is a dump and restore; port 22 stays open to the internet for the deploy job; the 1 GB budget
+may prove too small in S6; the backups stay with OVH; Parking Tracker shares the server's memory and proxy with four
+other workloads.
 
-ADRs: [0022](adr/0022-host-on-one-ovh-vps-with-docker-compose-and-off-site-backups.md),
+ADRs: [0028](adr/0028-host-on-the-shared-ovh-server-with-ovh-backups-only.md) (supersedes
+[0022](adr/0022-host-on-one-ovh-vps-with-docker-compose-and-off-site-backups.md)),
 [0023](adr/0023-deploy-from-github-actions-through-an-ssh-forced-command.md).
 
 ### 3.15 Honesty across the network boundary, and the upstream fallback
@@ -498,8 +503,9 @@ flowchart LR
 
 ### 4.2 Containers as deployed
 
-What runs in production: the APK on phones, and the containers on one VPS behind Caddy. No Aspire AppHost and no
-development container appears here. Google, the upstream sources, Backblaze B2 and the uptime monitor are external.
+What runs in production: the APK on phones, and the containers on the shared OVH server behind its Caddy. No Aspire
+AppHost and no development container appears here. Google, the upstream sources and the uptime monitor are external.
+The other applications on the server are left out.
 
 ```mermaid
 flowchart TB
@@ -511,8 +517,8 @@ flowchart TB
         devdb[(Device SQLite<br/>card, places, parking session<br/>field-level encryption)]
     end
 
-    subgraph vps[OVH VPS-2, Docker Compose]
-        caddy[Caddy<br/>TLS, reverse proxy<br/>api and admin host names]
+    subgraph vps[Shared OVH VPS-1, Docker Compose project parking-tracker]
+        caddy[Shared Caddy<br/>TLS, reverse proxy<br/>api, admin and apex host names]
         api[ParkingTracker.ApiService<br/>ASP.NET Core + Pivot Containers.API<br/>REST v1, token exchange, outbox writes]
         jobs[ParkingTracker.RefreshJobs<br/>Hangfire server<br/>refresh per area, outbox drain]
         web[ParkingTracker.AdminWeb<br/>Blazor Server + Radzen<br/>allow-listed admins, job dashboard]
@@ -522,7 +528,7 @@ flowchart TB
 
     google[Google Identity<br/>OIDC, signing keys]
     upstream[Upstream open data<br/>parking.brussels, Brussels Mobility,<br/>UrbIS, bruxelles.be]
-    b2[Backblaze B2<br/>encrypted backups]
+    ovhb[OVH Automated Backup<br/>daily, whole server]
     mon[Uptime monitor<br/>health and TLS checks]
 
     driver -->|uses| app
@@ -541,7 +547,7 @@ flowchart TB
     jobs -->|stages, publishes, records runs, drains outbox<br/>EF Core, COPY, Hangfire| db
     jobs -->|downloads pages<br/>HTTPS| upstream
     mig -->|applies migrations<br/>Npgsql, owner role| db
-    db -->|nightly dump by a host timer<br/>restic over HTTPS| b2
+    db -->|daily backup of the server, nightly dumps included<br/>OVH| ovhb
     mon -->|probes health and TLS<br/>HTTPS| caddy
 
     classDef person   fill:#fce5cd,stroke:#b45f06,stroke-width:1px,color:#000
@@ -549,7 +555,7 @@ flowchart TB
     classDef external fill:#e8e8e8,stroke:#666,stroke-width:1px,color:#000
     class driver,admin person
     class app,devdb,caddy,api,jobs,web,mig,db internal
-    class google,upstream,b2,mon external
+    class google,upstream,ovhb,mon external
 ```
 
 ### 4.3 Local development composition (not deployed)
@@ -1323,7 +1329,7 @@ Inactive accounts (no sign-in or refresh for 24 months) are deleted by the clean
 
 Other rules: TLS only; PostgreSQL never reachable from the internet; secrets in files readable only by root and
 mounted into the containers, never in `appsettings*.json`, images or build arguments; logs never contain e-mails,
-tokens or precise coordinates (a user reference is the account ID). A privacy notice on the apex site of `<domain>`
+tokens or precise coordinates (a user reference is the account ID). A privacy notice on `parking.pivotsoftwares.com`
 and in the app states the table above, which the Google consent screen also needs. A short data-protection note goes
 with ADR-0015. Upstream attribution is shown in the app's about screen.
 
@@ -1384,26 +1390,29 @@ new test tool, needed because in-memory providers are not used and the spatial q
 
 | Item | Setting |
 | --- | --- |
-| Plan | OVH VPS-2: 4 vCores, 8 GB RAM, 75 GB NVMe, EU datacentre (D5). Peak use is estimated at 2 to 3 GB, leaving room for restore tests, dumps and rollback images |
-| Operating system | Current Debian stable, host time zone UTC, bootstrap steps as a versioned script in `deploy/` |
-| Accounts and SSH | Personal admin user with `sudo`; separate `deploy` user (7.4); root password locked; key-only SSH, `PermitRootLogin no`, `AllowUsers` |
-| Firewalls | OVH edge network firewall and host `nftables`: TCP 22, 80, 443 and UDP 443 only; only Caddy publishes container ports |
-| Updates | `unattended-upgrades` for security updates with automatic reboot at 05:30; Docker engine updated in the monthly maintenance |
-| fail2ban | `sshd` jail on the systemd backend; optional jail on Caddy's log for repeated `401` and `429` |
-| Docker daemon | `local` log driver with rotation, `no-new-privileges`, `live-restore`; containers non-root, `read_only` where possible, `cap_drop: [ALL]`, memory limits |
+| Plan | The owner's shared OVH VPS-1: 2 vCores, 4 GB RAM (3.7 GiB seen), 2 GB swap, 40 GB NVMe, Gravelines (D5). It also runs the `pivotsoftwares.com` website, Delivery Atlas and RaidManager's three environments, which leave Parking Tracker about 1 GB (ADR-0028) |
+| Operating system | Ubuntu 24.04 as the server is; Parking Tracker changes nothing on the host. A versioned script in `deploy/` only adds its folder, its account, its Caddy sites and its timers, and can run again |
+| Accounts and SSH | As the server is: `root` cannot sign in over SSH, key-only SSH. Parking Tracker adds `parking-deploy` (7.4), separate from RaidManager's `deploy` |
+| Firewall | `ufw` as the server is: 22, 80 and 443 (and 8080 for another application); UDP 443 closed, so no HTTP/3; only the shared Caddy publishes container ports |
+| Updates | Unattended security upgrades, as the server is |
+| Containers | Non-root, `read_only` where possible, `cap_drop: [ALL]`, `no-new-privileges`, hard memory limits (7.2) |
 
-Checked once from outside: `nmap` shows only 22, 80 and 443; `ssh-audit` passes; SSL Labs grades the TLS setup.
+Checked once from outside after provisioning: no Parking Tracker port is published, and SSL Labs grades the three sites.
 
 ### 7.2 Compose stack, networks and roles
 
 | Service | Image | Networks | Memory limit | Database role |
 | --- | --- | --- | --- | --- |
-| `caddy` | `caddy:2`, pinned by digest | `edge` | 128 MB | none |
-| `api` | `ghcr.io/<owner>/parking-tracker-api` | `edge`, `data` | 512 MB | `pt_api`: reads snapshots, writes accounts, sessions, area commands and the outbox |
-| `jobs` | `ghcr.io/<owner>/parking-tracker-jobs` | `data`, `egress` (no inbound) | 768 MB | `pt_jobs`: writes snapshots, runs, areas, the outbox drain state and the `hangfire` schema |
-| `admin` | `ghcr.io/<owner>/parking-tracker-admin` | `edge`, `data` | 512 MB | `pt_admin_hangfire`: the `hangfire` schema only |
-| `migrator` | `ghcr.io/<owner>/parking-tracker-migrator` (profile `migrate`, one-shot) | `data` | 256 MB | `pt_owner`: owns the schema |
-| `postgres` | `postgis/postgis` major 17, pinned by digest | `data` (internal, never published) | 2 GB | superuser for administration only |
+| `api` | `ghcr.io/<owner>/parking-tracker-api` | `web` (alias `parking-api`), `data` | 224 MB | `pt_api`: reads snapshots, writes accounts, sessions, area commands and the outbox |
+| `jobs` | `ghcr.io/<owner>/parking-tracker-jobs` | `data`, `egress` (no inbound) | 288 MB | `pt_jobs`: writes snapshots, runs, areas, the outbox drain state and the `hangfire` schema |
+| `admin` | `ghcr.io/<owner>/parking-tracker-admin` | `web` (alias `parking-admin`), `data` | 160 MB | `pt_admin_hangfire`: the `hangfire` schema only |
+| `migrator` | `ghcr.io/<owner>/parking-tracker-migrator` (profile `migrate`, one-shot) | `data` | 128 MB | `pt_owner`: owns the schema |
+| `postgres` | `postgis/postgis` major 17, pinned by digest; `shared_buffers` 48 MB, `max_connections` 30 | `data` (internal, never published) | 256 MB | superuser for administration only |
+
+`web` is the server's external network to the shared Caddy. The running total is 928 MB; the hosts use the workstation
+garbage collector with `DOTNET_GCConserveMemory`, and the Jobs host runs one job at a time. Stage S6 measures each
+container during a full refresh; a limit that is too small leads to an owner decision on a larger server, not a silent
+raise.
 
 Images are built multi-stage on `mcr.microsoft.com/dotnet/sdk:10.0` and run on a chiseled ASP.NET Core 10 image with
 time-zone data and ICU (to verify), because the rules need `Europe/Brussels` and French text. The Pivot feed token is
@@ -1411,9 +1420,13 @@ passed as a BuildKit secret, never as a build argument. Data Protection keys of 
 
 ### 7.3 TLS, DNS and the reverse proxy
 
-Caddy terminates TLS with Let's Encrypt for `api.<domain>` and `admin.<domain>`, with HTTP/3, compression and HSTS.
-DNS: `A` and `AAAA` for both host names, `CAA` for Let's Encrypt, and an apex page with the privacy notice and contact
-(needed by the Google consent screen). The API host name is compiled into the APK, so it is chosen once. Caddy has no
+The server's shared Caddy terminates TLS with Let's Encrypt for `api.parking.pivotsoftwares.com`,
+`admin.parking.pivotsoftwares.com` and `parking.pivotsoftwares.com`, with compression and HSTS. Parking Tracker adds
+the three sites to the shared Caddyfile once, at provisioning, from `deploy/parking.Caddyfile`; the script validates the
+file and restores the previous one when Caddy rejects it, and a deployment never edits it. HTTP/3 is off while UDP 443
+stays closed. DNS: `A` (and `AAAA` when the server has IPv6) for the three names at the DNS provider of
+`pivotsoftwares.com`; `parking.pivotsoftwares.com` serves a static page with the privacy notice and contact (needed by
+the Google consent screen). The API host name is compiled into the APK, so it is chosen once. Caddy has no
 built-in rate limiter, so rate limiting is done in ASP.NET Core (6.2). No CDN or Cloudflare proxy: it would terminate
 TLS outside the owner's control and see users' coordinates.
 
@@ -1427,11 +1440,12 @@ into scripts, no environment or `packages: write` for fork pull requests.
 | --- | --- | --- |
 | `build` | On pull requests (build only) and on `main` (build and push): four images, OCI labels, SBOM and provenance; tags `sha-<12>` and `1.<run_number>` | `contents: read`, `packages: write` only when pushing |
 | `smoke` | Starts the images with a PostgreSQL container on the runner, runs the migrator, waits for `/health/ready`, checks anonymous `401` on protected endpoints and the Scalar rule | `contents: read`, `packages: read` |
-| `deploy` | On `main` after `smoke`; environment `production` (holds the SSH key and `known_hosts`); `concurrency` without cancel; runs `ssh deploy@<vps> deploy sha-<12>` | `contents: read` |
+| `deploy` | On `main` after `smoke`; environment `production` (holds the SSH key and `known_hosts`); `concurrency` without cancel; runs `ssh parking-deploy@<vps> deploy sha-<12>` | `contents: read` |
 
-On the VPS, `~deploy/.ssh/authorized_keys` restricts the key to the forced command `pt-deploy`, which accepts only
-`deploy sha-<12 hex>`, `rollback` and `status`, and runs one validated root helper through a single `sudoers` line;
-`deploy` is not in the `docker` group. The VPS pulls private images with a token limited to `read:packages`.
+On the server, `~parking-deploy/.ssh/authorized_keys` restricts the key to the forced command `pt-deploy`, which
+accepts only `deploy sha-<12 hex>`, `rollback` and `status`, and runs one validated root helper through a single
+`sudoers` line; `parking-deploy` is not in the `docker` group (ADR-0028; RaidManager's `deploy` account is another).
+The server pulls private images with a token limited to `read:packages`.
 
 The deploy sequence: pull, pre-deploy dump, migrate, start, health gate, and automatic rollback of the application
 when the health gate fails.
@@ -1472,36 +1486,35 @@ edits are overwritten. The runbook lives in `docs/operations/runbook.md` (writte
 
 | Layer | What | Where | Retention |
 | --- | --- | --- | --- |
-| Nightly, 02:00 | `pg_dump -Fc` of the application database and the roles, encrypted and de-duplicated by restic | Backblaze B2 bucket in the EU region | 7 daily, 4 weekly, 6 monthly |
-| Pre-deploy | `pg_dump -Fc` | `/srv/backups/pre-deploy` on the VPS | Last 5 |
-| Whole VM | OVH's included daily backup | OVH, same datacentre | 7 days rolling |
+| Nightly, 02:00 | `pg_dump -Fc` of the application database and the roles | `/opt/apps/parking-tracker/backups` on the server | 7 days |
+| Pre-deploy | `pg_dump -Fc` | `/opt/apps/parking-tracker/backups/pre-deploy` on the server | Last 5 |
+| Whole server | OVH Automated Backup Standard, daily, already in place | OVH | As OVH keeps it |
 
-The VPS's B2 key is limited to one bucket and, if restic supports it (to verify), cannot delete; pruning runs monthly
-from the owner's PC. A monthly timer restores the latest backup into a throw-away container, runs sanity queries
-(every area has a current dataset, the newest `verifiedAt` is under 48 h, the erasure log applies) and pings a
-dead-man switch. Twice a year, a disaster drill rebuilds a fresh VM from the bootstrap script and B2, and its duration
-is the real RTO. A PostgreSQL major upgrade is a yearly dump and restore onto a new volume, rehearsed in the restore
-test first.
+There is no off-site copy (ADR-0028). The nightly dump restores one database without touching the other applications;
+OVH's backup restores the whole server, dumps included. A monthly timer at 05:30, after the job window, restores the
+latest dump into a throw-away container with a 256 MB limit, runs sanity queries (every area has a current dataset,
+the newest `verifiedAt` is under 48 h, the erasure log applies) and pings a dead-man switch. After a total loss of the
+server and its backups, drivers sign in again, the owner re-enters the admin allow-list from the runbook, and the run
+history starts again. A PostgreSQL major upgrade is a yearly dump and restore onto a new volume, rehearsed in the
+restore test first.
 
 ### 7.6 Cost
 
 | Item | Monthly (estimate, 2026-11-17 prices) |
 | --- | --- |
-| OVH VPS-2 | EUR 7.21 excluding VAT, about EUR 8.72 including 21 % VAT |
-| Backblaze B2 | USD 0 (under the 10 GB free tier) |
-| OVH daily VM backup | Included |
-| Domain name | About EUR 1 (registrar-dependent, not verified) |
+| OVH VPS-1 | Nothing more: the server and its daily backup are already paid for the other applications |
+| Domain name | Nothing more: subdomains of `pivotsoftwares.com` |
 | Uptime monitoring | Free tier (limits not verified) |
 | GitHub Actions and private GHCR images | Within the plan's free allowance (not verified); private packages count against Packages storage |
 | Google sign-in | No charge |
-| **Total** | **About EUR 10 a month**, plus 1 to 2 hours of the owner's time |
+| **Total** | **No added hosting cost**, plus 1 to 2 hours of the owner's time a month |
 
 ### 7.7 Single points of failure
 
 | Failure | Effect on users | Detection | Recovery |
 | --- | --- | --- | --- |
-| VPS or datacentre down | Fallback to upstream if the mode allows it, else CAN'T VERIFY; new sign-ins and token refreshes fail | Uptime monitor | OVH restores the host, or a rebuild elsewhere from the bootstrap script and B2 (RTO about 4 h) |
-| PostgreSQL down or corrupt | Same as above | Monitor | Restart; restore the pre-deploy dump or B2 |
+| VPS or datacentre down | Fallback to upstream if the mode allows it, else CAN'T VERIFY; new sign-ins and token refreshes fail | Uptime monitor | OVH restores the server from its daily backup (RTO about 4 h); without it, a rebuild from `deploy/` and the runbook, and drivers sign in again |
+| PostgreSQL down or corrupt | Same as above | Monitor | Restart; restore the nightly or pre-deploy dump |
 | A refresh job fails or upstream changes format | The area's data ages; after its maximum age, CAN'T VERIFY or fallback; the previous snapshot is kept | Admin alerts, `/health/data`, dead-man switch | Fix the parser, run again from the admin app |
 | Google outage | New sign-ins fail; signed-in users keep working with the API's own tokens | User reports | Wait |
 | Token signing key lost | Every user must sign in again | Sign-in errors | Restore the key from the password manager, or issue a new key |
@@ -1530,7 +1543,7 @@ ADR-0018, superseded by ADR-0026, and ADR-0026, dated 2026-11-18.
 | [0019](adr/0019-model-aggregates-per-bounded-context-and-keep-the-decision-engine-pure.md) | Aggregates per bounded context; the engine stays value objects and pure services | R7 without touching parity |
 | [0020](adr/0020-use-radzen-for-the-phone-screens-and-keep-leaflet-for-the-map.md) | Radzen for the phone screens, Leaflet kept for the map | R8; Radzen has no WMS-capable map |
 | [0021](adr/0021-map-the-canonical-layout-to-two-bounded-contexts.md) | One Domain, two Application projects, two persistence projects; supersedes ADR-0006 | The APK carries no server handlers |
-| [0022](adr/0022-host-on-one-ovh-vps-with-docker-compose-and-off-site-backups.md) | OVH VPS-2, Docker Compose, Caddy, PostgreSQL in a container, restic backups to B2 | Smallest operable footprint |
+| [0028](adr/0028-host-on-the-shared-ovh-server-with-ovh-backups-only.md) (supersedes 0022) | The shared OVH VPS-1 as it is, Docker Compose, the shared Caddy, PostgreSQL in a container, a 1 GB budget, OVH backups and local dumps only | No new server or provider; most server data is rebuilt by the jobs |
 | [0023](adr/0023-deploy-from-github-actions-through-an-ssh-forced-command.md) | GitHub Actions, private GHCR images, SSH forced command, migration bundles, expand and contract | Feedback in CI with a single-purpose key |
 | [0024](adr/0024-fall-back-to-upstream-services-when-the-api-cannot-answer.md) | Upstream fallback and honesty across the network boundary, remotely switchable | A single VPS must not reduce availability; Q1 |
 | [0025](adr/0025-test-the-api-path-with-api-mode-parity-and-testcontainers.md) | API-mode parity and Testcontainers PostgreSQL, no in-memory providers | Proof that the server path changes no verdict |
@@ -1547,7 +1560,7 @@ API-served data reaches the public only in stage S10, after the licence question
 | S1 | Done 2026-11-17 in code, awaiting the emulator run and the release: `ResidentCard`, `SavedPlaces` and `ParkingSession` aggregates with the `ToParkingCard()` and `ToParkedCar()` bridges; the card dialog builds its card through `ResidentCard`; no storage change | Parity, domain and emulator tests green; APK released; the only visible change is that the card form refuses reversed dates and an unknown municipality |
 | S2 | Radzen foundation in `ParkingTracker.Shared`, then one dialog per pull request (welcome, card, car, layers, status sheet). Progress: foundation (Radzen.Blazor 13.1.0, services, theme file, host page, bUnit interop), the welcome dialog, the card dialog, the car dialog (with the timer line), the layers popover and the status sheet (status block, chips, nearest spot, permission banner, search bar) are done in code, awaiting the emulator run; S2 is done | Each pull request: bUnit and emulator tests green, emulator selectors kept |
 | S3 | Budget spike done 2026-11-18 (see below; EF Core over budget, ADR-0026 chooses sqlite-net-pcl), then device database on sqlite-net-pcl, field encryption, settings migration, Home and Work places; spike code removed. Progress: the device database is done in code, awaiting the CI build, the emulator run and the budget measurement of the real database: `ParkingTracker.Persistence.Device` (schema steps, unit of work, `FieldCipher`, repositories of the three aggregates), the repository ports in `ParkingTracker.Application`, `DeviceSettingsStore` (the card, car and timer now go through the repositories), the start-up gate with `SettingsToDatabaseMigration`, the backup rules and the tests; Home and Work places are done in code too (the shortcut chips, `IPlacesStore`, `DevicePlacesStore`). Done 2026-11-19: the real device database measured +3.08 MB and about +40 ms against `main` before it (see "S3 budget measurement" below), within the budget. The spike code never reached `main` | Upgrade leg green; the real device database measured within 8 MB and 300 ms |
-| S4 | VPS bootstrap, DNS, Caddy, PostgreSQL, backups and a restore test before any real data; back-end skeleton (AppHost, ServiceDefaults, ApiService with health, OpenAPI and Scalar, persistence with migrations, Dockerfiles, `backend.yml`, `pt-deploy`); runbook | `/health/ready` green on the VPS through a deployment from `main`; a forced failed health check rolls back |
+| S4 | Provisioning on the shared OVH server (ADR-0028): DNS, the Caddy sites, PostgreSQL, nightly dumps and a restore test before any real data; back-end skeleton (AppHost, ServiceDefaults, ApiService with health, OpenAPI and Scalar, persistence with migrations, Dockerfiles, `backend.yml`, `pt-deploy`); runbook | `/health/ready` green on the VPS through a deployment from `main`; a forced failed health check rolls back |
 | S5 | Credential Manager spike; session exchange, refresh, sign-out, `/me`, erasure, rate limiting | Authentication tests green; the owner signs in from a debug build against the VPS |
 | S6 | Jobs host: region job, roadworks job and one pilot municipality; `RefreshRun`, snapshots, freshness, admin endpoints, alerts; a shadow job compares API answers with live upstream at sample points for two weeks | API-mode parity green; no verdict difference on fresh data |
 | S7 | The other 18 municipalities and the City document check | Every area fresh for 7 consecutive days |
