@@ -3,6 +3,8 @@
 # a later run; deployments never edit it. The API forwards to its container on the shared `web` network; until that
 # container runs, the site answers 503 over HTTPS with its own certificate. The admin app (S8) and the privacy notice
 # (S5) answer 503 until their stage. The access log drops the query string, because a query can hold a bounding box.
+# The API trusts X-Forwarded-* only on a request with the proxy key (ADR-0029): provision.sh replaces
+# PT_PROXY_KEY_PLACEHOLDER with the key it holds in secrets/app/proxy_key when it writes the block, so the key is never committed.
 
 (parking_tracker_common) {
 	encode zstd gzip
@@ -29,7 +31,9 @@ api.parking.pivotsoftwares.com {
 		respond 404
 	}
 	handle {
-		reverse_proxy parking-api:8080
+		reverse_proxy parking-api:8080 {
+			header_up X-PT-Proxy-Key PT_PROXY_KEY_PLACEHOLDER
+		}
 	}
 	import parking_tracker_unavailable
 }
