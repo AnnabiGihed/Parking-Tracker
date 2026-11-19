@@ -12,7 +12,7 @@ must be the Release build made with test hooks:
 dotnet publish src/Containers/UI/Hosting/ParkingTracker.App/ParkingTracker.App.csproj \
   -f net10.0-android -c Release -p:EnableTestHooks=true -o artifacts/hooks
 bash test/ParkingTracker.E2E.Tests/collect-apk.sh artifacts/hooks apk/ParkingTracker-test.apk
-node test/ParkingTracker.E2E.Tests/emulator-test.mjs   # reads apk/ParkingTracker-test.apk
+node test/ParkingTracker.E2E.Tests/run-emulator-test.mjs   # reads apk/ParkingTracker-test.apk
 ```
 
 The host builds only where the `maui-android` workload is installed; CI does it in `.github/workflows/android.yml`.
@@ -39,6 +39,13 @@ The host builds only where the `maui-android` workload is installed; CI does it 
 
 The report goes to `emulator-report/` (`summary.md`, `report.json`, screenshots, `logcat.txt`, `crash.txt`); the exit
 code is 1 when a check fails.
+
+CI runs the test through `run-emulator-test.mjs`. On a freshly booted emulator, Google Play services updates its own
+modules a few minutes after start; when that lands while the app is in the background, the location provider
+disappears, the system's GNSS code can deadlock and the system watchdog restarts the Android framework, app included.
+When the first run fails and its logcat holds `WATCHDOG KILLING SYSTEM PROCESS`, the wrapper waits for the system to
+boot again, uninstalls the app and runs the test once more; the first report is kept in `emulator-report/attempt-1/`.
+Any other failure, and a second restart, fail the check.
 
 ## Upgrade test
 
