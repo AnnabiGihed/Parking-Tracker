@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using ParkingTracker.Application.Features.Accounts.Abstractions;
+using ParkingTracker.Persistence.EntityFrameworkCore.Features.Accounts;
 using ParkingTracker.Persistence.EntityFrameworkCore.Features.Shared.Database;
 using Pivot.Framework.Infrastructure.Persistence.PostgreSQL.Extensions;
 
@@ -27,9 +29,11 @@ public static class PersistenceServiceCollectionExtensions
 	{
 		ArgumentNullException.ThrowIfNull(services);
 		ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
-		return services.AddPostgreSqlContext<ParkingDataDbContext>(
+		_ = services.AddPostgreSqlContext<ParkingDataDbContext>(
 			connectionString,
 			options => options.UseNpgsql(connectionString, npgsql => npgsql.UseNetTopologySuite()));
+		_ = services.AddScoped<IUserAccountRepository>(provider => new UserAccountRepository(provider.GetRequiredService<ParkingDataDbContext>()));
+		return services;
 	}
 	#endregion
 }
