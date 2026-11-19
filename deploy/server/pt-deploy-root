@@ -125,7 +125,7 @@ prepare_release() {
 	rm -f "$staging/.env"
 	(umask 077 && printf 'API_IMAGE=%s\nMIGRATOR_IMAGE=%s\nPT_SECRETS=%s\nRELEASE=%s\n' \
 		"$api_image" "$migrator_image" "$SECRETS_DIR" "$sha" >"$staging/.env")
-	if ! python3 "$COMPOSE_CHECK" --raw "$staging/compose.yaml" ||
+	if ! python3 "$COMPOSE_CHECK" --raw <"$staging/compose.yaml" ||
 		! compose "$staging" --profile migrate config --format json --no-env-resolution | python3 "$COMPOSE_CHECK"; then
 		rm -rf "$staging"
 		refuse "the compose.yaml of $sha asks for more than the shared server allows"

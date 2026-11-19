@@ -9,7 +9,6 @@ import os
 import shutil
 import subprocess
 import sys
-import tempfile
 import unittest
 from contextlib import redirect_stderr
 from pathlib import Path
@@ -182,10 +181,14 @@ class MainTests(unittest.TestCase):
         self.assertEqual(self.run_main("[1, 2]"), 2)
 
     def test_the_raw_mode_exits_1_on_a_forbidden_key(self) -> None:
-        with tempfile.TemporaryDirectory() as folder:
-            path = Path(folder) / "compose.yaml"
-            path.write_text("include:\n  - /etc/shadow\n", encoding="utf-8")
-            self.assertEqual(self.run_main("", ["--raw", str(path)]), 1)
+        self.assertEqual(self.run_main("include:\n  - /etc/shadow\n", ["--raw"]), 1)
+
+    def test_the_raw_mode_exits_0_on_the_repository_file(self) -> None:
+        self.assertEqual(self.run_main((DEPLOY_DIR / "compose.yaml").read_text(encoding="utf-8"), ["--raw"]), 0)
+
+    def test_a_file_argument_is_refused(self) -> None:
+        with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            pt_compose_check.main(["/etc/shadow"])
 
 
 class RepositoryComposeFileTests(unittest.TestCase):

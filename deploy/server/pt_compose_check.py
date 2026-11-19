@@ -4,13 +4,13 @@ pt-deploy-root runs this check on every release before starting it (ADR-0028). T
 repository inside the migrator image, so anyone who can merge to main writes it, and root runs it. The check is an
 allow-list: only the keys and values Parking Tracker uses pass; anything else is refused.
 
-Usage:
-  python3 pt_compose_check.py --raw compose.yaml   before rendering: refuse keys that make Compose read other files
-                                                   (include, extends, env_file, configs, build)
-  python3 pt_compose_check.py [rendered.json]      after `docker compose config --format json --no-env-resolution`,
-                                                   from a file or standard input: the allow-list
+Usage (the input always comes on standard input; the script opens no file):
+  python3 pt_compose_check.py --raw < compose.yaml   before rendering: refuse keys that make Compose read other files
+                                                     (include, extends, env_file, configs, build)
+  docker compose ... config --format json --no-env-resolution | python3 pt_compose_check.py
+                                                     after rendering: the allow-list
 Exit code 0 = accepted; 1 = refused, one line per finding on standard error; 2 = unreadable input.
-Side effects: none; the script only reads its input.
+Side effects: none; the script only reads standard input.
 
 provision.sh installs this file to /usr/local/sbin; a deployment never replaces it.
 """
@@ -130,15 +130,15 @@ def report(findings: list[str]) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run the raw check or the rendered check, as the arguments ask."""
+    """Run the raw check or the rendered check on standard input, as the arguments ask."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--raw", metavar="COMPOSE_FILE", help="check the unrendered compose.yaml for forbidden keys")
-    parser.add_argument("rendered", nargs="?", help="output of `docker compose config --format json`; stdin if omitted")
+    parser.add_argument("--raw", action="store_true",
+                        help="standard input is the unrendered compose.yaml; check it for forbidden keys")
     args = parser.parse_args(argv)
     try:
+        text = sys.stdin.read()
         if args.raw:
-            return report(raw_findings(Path(args.raw).read_text(encoding="utf-8")))
-        text = Path(args.rendered).read_text(encoding="utf-8") if args.rendered else sys.stdin.read()
+            return report(raw_findings(text))
         config = json.loads(text)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         print(f"pt-compose-check: cannot read the configuration: {error}", file=sys.stderr)

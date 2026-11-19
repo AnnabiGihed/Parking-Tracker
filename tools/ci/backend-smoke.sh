@@ -55,9 +55,12 @@ start() {
 
 expect_status() {
 	local curl_image=$1 path=$2 expected=$3 status="" tries=0
+	# shell:S5332 suppressed: the API serves plain HTTP inside the Docker network only, exactly as the shared Caddy
+	# reaches it in production; TLS ends at Caddy (ADR-0028), and this throw-away network has no Caddy. Gihed Annabi,
+	# 2026-11-19, PR 18.
 	while ((tries < 30)); do
 		status=$(docker run --rm --network web "$curl_image" -s -o /dev/null -w '%{http_code}' --max-time 5 \
-			"http://parking-api:8080$path" || true)
+			"http://parking-api:8080$path" || true) # NOSONAR shell:S5332, see the comment above
 		[[ $status == "$expected" ]] && { echo "$path -> $status"; return 0; }
 		tries=$((tries + 1))
 		sleep 2
