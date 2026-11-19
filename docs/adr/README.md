@@ -29,4 +29,4 @@
 | 25 | [Test the API path with API-mode parity and Testcontainers PostgreSQL, without in-memory providers](0025-test-the-api-path-with-api-mode-parity-and-testcontainers.md) | Accepted |
 | 26 | [Store the driver's data with sqlite-net-pcl on the phone](0026-store-the-drivers-data-with-sqlite-net-pcl-on-the-phone.md) | Accepted |
 | 27 | [Run the app on a developer PC, not in CI](0027-run-the-app-on-a-developer-pc-not-in-ci.md) | Accepted |
-| 28 | [Host on the shared OVH server, behind its Caddy, with OVH backups only](0028-host-on-the-shared-ovh-server-with-ovh-backups-only.md) | Proposed |
+| 28 | [Host on the shared OVH server, behind its Caddy, with OVH backups only](0028-host-on-the-shared-ovh-server-with-ovh-backups-only.md) | Accepted |

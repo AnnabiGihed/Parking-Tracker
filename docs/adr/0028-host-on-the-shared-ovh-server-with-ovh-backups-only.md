@@ -1,6 +1,6 @@
 # ADR-0028: Host on the shared OVH server, behind its Caddy, with OVH backups only
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-19
 - Deciders: Gihed Annabi
 - Supersedes: ADR-0022
