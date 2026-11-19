@@ -20,6 +20,12 @@ public sealed partial class CardDialog : ViewModelComponent<CardViewModel>
 	/// The format in which the view model holds a date: the value of a date input, so it does not depend on the culture.
 	/// </summary>
 	private const string StoredDateFormat = "yyyy-MM-dd";
+
+	/// <summary>
+	/// The format in which a date picker shows its date: the short date of the phone's culture, without the time of day the
+	/// default format of Radzen adds and that did not fit in the field.
+	/// </summary>
+	private const string DisplayDateFormat = "d";
 	#endregion
 
 	#region Properties

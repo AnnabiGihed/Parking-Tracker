@@ -24,6 +24,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The stylesheet tests read the shipped CSS: a component test cannot see how layers and colours combine on screen. -->
+    <None Include="..\..\..\..\..\src\Containers\UI\Core\ParkingTracker.Shared\wwwroot\css\*.css" LinkBase="Styles" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\src\Containers\UI\Core\ParkingTracker.Shared\ParkingTracker.Shared.csproj" />
   </ItemGroup>
 
