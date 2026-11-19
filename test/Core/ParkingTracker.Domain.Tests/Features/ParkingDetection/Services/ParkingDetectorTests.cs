@@ -1,6 +1,8 @@
 using ParkingTracker.Domain.Features.ParkingDetection.Services;
 using ParkingTracker.Domain.Features.ParkingDetection.ValueObjects;
+using ParkingTracker.Domain.Features.Shared.Services;
 using ParkingTracker.Domain.Features.Shared.ValueObjects;
+using ParkingTracker.Domain.Tests.Features.ParkingDetection.TestDoubles;
 using ParkingTracker.Domain.Tests.Features.Shared.TestDoubles;
 
 namespace ParkingTracker.Domain.Tests.Features.ParkingDetection.Services;
@@ -59,6 +61,128 @@ public sealed class ParkingDetectorTests
 	private static GpsFix FixWithoutSpeed(int seconds, double latitude)
 	{
 		return new GpsFix(new GeoPoint(latitude, Longitude), 8, null, Start.AddSeconds(seconds));
+	}
+
+	/// <summary>
+	/// Creates a track that starts at the start place and time and first drives a minute at 30 km/h.
+	/// </summary>
+	/// <returns>Track after a minute of driving.</returns>
+	private static SimulatedTrack DriveIntoTown()
+	{
+		return new SimulatedTrack(Start, new GeoPoint(Latitude, Longitude)).Move(60, 30);
+	}
+
+	/// <summary>
+	/// Replays a track as the background watcher does: the fixes arrive in time order, every 15 seconds the detector is
+	/// asked whether the user parked, and every parking it reports is acknowledged.
+	/// </summary>
+	/// <param name="track">The track to replay.</param>
+	/// <param name="secondsAfterTrack">How long to keep looking once the track ended.</param>
+	/// <returns>The parkings reported, with the moment of the look that found each.</returns>
+	private static List<(DateTimeOffset Time, GpsFix Fix)> Watch(SimulatedTrack track, int secondsAfterTrack = 0)
+	{
+		var detector = new ParkingDetector();
+		var reports = new List<(DateTimeOffset Time, GpsFix Fix)>();
+		var next = 0;
+		var end = track.Now.AddSeconds(secondsAfterTrack);
+		for (var now = Start; now <= end; now = now.AddSeconds(15))
+		{
+			for (; next < track.Fixes.Count && track.Fixes[next].Time <= now; next++)
+			{
+				detector.Observe(track.Fixes[next]);
+			}
+
+			var parked = detector.GetParkedFix(now);
+			if (parked is not null)
+			{
+				reports.Add((now, parked));
+				detector.AcknowledgeParked();
+			}
+		}
+
+		return reports;
+	}
+
+	/// <summary>
+	/// Moves along a stretch of stop-and-go traffic: rolling at 5 and 10 km/h with a short stop in between, repeated.
+	/// </summary>
+	/// <param name="track">The track to extend.</param>
+	/// <param name="minutes">How many minutes the slow traffic lasts.</param>
+	/// <returns>The extended track.</returns>
+	private static SimulatedTrack CrawlInTraffic(SimulatedTrack track, int minutes)
+	{
+		for (var minute = 0; minute < minutes; minute++)
+		{
+			track.Move(20, 5).Stand(10).Move(20, 10).Stand(10);
+		}
+
+		return track;
+	}
+	#endregion
+
+	#region Traffic Tests
+	/// <summary>
+	/// Verifies that five minutes of stop-and-go traffic at 5 to 10 km/h, then driving on, is never taken for a parking.
+	/// </summary>
+	[Fact]
+	public void GetParkedFix_SlowTraffic_ShouldNeverReportParked()
+	{
+		var track = CrawlInTraffic(DriveIntoTown(), 5).Move(60, 30);
+
+		Watch(track).Should().BeEmpty();
+	}
+
+	/// <summary>
+	/// Verifies that rolling slowly to a red light, waiting there and driving on is never taken for a parking.
+	/// </summary>
+	/// <param name="redSeconds">How long the light stays red.</param>
+	[Theory]
+	[InlineData(60)]
+	[InlineData(90)]
+	public void GetParkedFix_SlowTrafficThenRedLight_ShouldNeverReportParked(int redSeconds)
+	{
+		var track = CrawlInTraffic(DriveIntoTown(), 2).Move(10, 8).Stand(redSeconds).Move(10, 10).Move(60, 30);
+
+		Watch(track).Should().BeEmpty();
+	}
+	#endregion
+
+	#region Real Parking Tests
+	/// <summary>
+	/// Verifies that a car parked after slow traffic, with the user staying near it, is reported once, two minutes after it
+	/// stopped and where it stands.
+	/// </summary>
+	[Fact]
+	public void GetParkedFix_ParkedAndStayingNearTheCar_ShouldReportOnceAtTheCar()
+	{
+		var track = CrawlInTraffic(DriveIntoTown(), 1).Move(15, 8);
+		var parkedAt = track.Now;
+		var spot = track.Position;
+		track.Stand(300);
+
+		var reports = Watch(track);
+
+		reports.Should().ContainSingle();
+		(reports[0].Time - parkedAt).Should().BeGreaterThanOrEqualTo(ParkingDetector.StillFor - TimeSpan.FromSeconds(15))
+			.And.BeLessThanOrEqualTo(ParkingDetector.StillFor + TimeSpan.FromSeconds(15));
+		GeoMath.Distance(reports[0].Fix.Point, spot).Should().BeLessThanOrEqualTo(ParkingDetector.MovementThreshold);
+	}
+
+	/// <summary>
+	/// Verifies that a car parked by a user who then walks away is reported once, where the car stands, not where the
+	/// user walked to.
+	/// </summary>
+	[Fact]
+	public void GetParkedFix_ParkedAndWalkingAway_ShouldReportOnceAtTheCar()
+	{
+		var track = DriveIntoTown().Move(10, 10);
+		var spot = track.Position;
+		track.Stand(30).Move(600, 5).Stand(300);
+
+		var reports = Watch(track);
+
+		reports.Should().ContainSingle();
+		GeoMath.Distance(reports[0].Fix.Point, spot).Should().BeLessThanOrEqualTo(ParkingDetector.MovementThreshold);
 	}
 	#endregion
 

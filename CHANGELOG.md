@@ -50,6 +50,9 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
 
 ### Fixed
 
+- The parking alert no longer fires in slow traffic or at a red light. The phone now counts as parked only when it
+  stays within 15 m of the place where it stopped for 2 minutes, or when it stood still and then went no faster than
+  walking for 3 minutes; in that case the alert names the place where the car stopped, not where you walked to.
 - The card form refuses a card whose "valid from" date is after its "valid until" date, and a card whose municipality
   is not known, with a message, instead of saving a card that could never cover a spot.
 - The "valid from" and "valid until" dates of the card form can be picked again: the calendar opened behind the form,
