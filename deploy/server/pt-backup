@@ -18,11 +18,21 @@ readonly SECRETS_DIR=$APP_DIR/secrets
 readonly PROJECT=parking-tracker
 readonly KEEP_DAYS=7
 
+# The throw-away container of the restore test. It is a script-level variable, not a local one, because the EXIT
+# trap that removes it runs after restore_test has returned, when its locals are gone (set -u would stop the trap).
+scratch=""
+
 log() { echo "pt-backup: $*" >&2; }
 fail() { log "$*"; exit 1; }
 
 postgres_container() {
 	docker ps -q --filter "label=com.docker.compose.project=$PROJECT" --filter "label=com.docker.compose.service=postgres"
+}
+
+remove_scratch() {
+	if [[ -n $scratch ]]; then
+		docker rm -f "$scratch" >/dev/null 2>&1 || true
+	fi
 }
 
 ping_dead_man() {
@@ -46,7 +56,7 @@ dump() {
 }
 
 restore_test() {
-	local latest container image scratch
+	local latest container image
 	latest=$(find "$BACKUP_DIR" -maxdepth 1 -name 'nightly-*.dump' -printf '%T@ %p\n' | sort -rn | head -n 1 | cut -d' ' -f2-)
 	[[ -n $latest ]] || fail "no nightly dump to restore"
 	container=$(postgres_container)
@@ -56,7 +66,7 @@ restore_test() {
 	# No network, so trust authentication reaches nothing but this throw-away database.
 	docker run -d --name "$scratch" --network none --memory 256m --user postgres --cap-drop ALL \
 		--security-opt no-new-privileges:true -e POSTGRES_HOST_AUTH_METHOD=trust "$image" >/dev/null
-	trap 'docker rm -f "$scratch" >/dev/null 2>&1 || true' EXIT
+	trap remove_scratch EXIT
 	local tries=0
 	until docker exec "$scratch" pg_isready -U postgres >/dev/null 2>&1; do
 		((++tries < 60)) || fail "the throw-away database did not start"
@@ -64,7 +74,7 @@ restore_test() {
 	done
 	sleep 3
 	docker exec "$scratch" psql -U postgres -c 'CREATE DATABASE parkingdata' >/dev/null
-	docker exec -i "$scratch" pg_restore -U postgres -d parkingdata --no-owner --exit-on-error <"$latest"
+	docker exec -i "$scratch" pg_restore -U postgres -d parkingdata --no-owner --no-privileges --exit-on-error <"$latest"
 	local migrations
 	migrations=$(docker exec "$scratch" psql -U postgres -d parkingdata -tAc 'SELECT count(*) FROM "__EFMigrationsHistory"')
 	((migrations > 0)) || fail "the restored database has no migration history"
