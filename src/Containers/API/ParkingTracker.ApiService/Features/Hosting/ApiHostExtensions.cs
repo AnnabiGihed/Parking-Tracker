@@ -1,7 +1,8 @@
 using Asp.Versioning;
-using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.OpenApi;
+using ParkingTracker.ApiService.Features.RateLimiting;
+using ParkingTracker.ApiService.Features.ReverseProxy;
 using ParkingTracker.Persistence.EntityFrameworkCore;
 using ParkingTracker.ServiceDefaults.Features.Health;
 using ParkingTracker.ServiceDefaults.Features.Hosting;
@@ -18,8 +19,8 @@ namespace ParkingTracker.ApiService.Features.Hosting;
 /// Purpose     : The composition of the API host (ADR-0016, ADR-0023, ADR-0028). The registrations: the service defaults, the
 ///              connection string (from configuration or the server's secret file), the database context, the readiness check on
 ///              the database, API versioning, controllers and the OpenAPI document "v1". The pipeline: Pivot's exception handler
-///              first, forwarded headers from the proxy in front, the two health endpoints in every environment, and the interactive
-///              reference (OpenAPI document and Scalar) in Development only.
+///              first, the proxy-key filter and the forwarded headers (ADR-0029), routing, the rate limiter, the two health endpoints in
+///              every environment under their rate limit, and the interactive reference (OpenAPI document and Scalar) in Development only.
 /// </summary>
 public static class ApiHostExtensions
 {
@@ -71,7 +72,8 @@ public static class ApiHostExtensions
 		_ = builder.Services.AddPivotApiVersioning();
 		_ = builder.Services.AddControllers();
 		_ = builder.Services.AddSwaggerGen(options => options.SwaggerDoc(DocumentName, new OpenApiInfo { Title = "Parking Tracker API", Version = DocumentName }));
-		ConfigureForwardedHeaders(builder.Services);
+		_ = builder.Services.AddReverseProxyTrust(builder.Configuration);
+		_ = builder.Services.AddParkingRateLimiting();
 		return builder;
 	}
 
@@ -85,8 +87,11 @@ public static class ApiHostExtensions
 	{
 		ArgumentNullException.ThrowIfNull(app);
 		_ = app.UseMiddleware<ExceptionHandlerMiddleware>();
-		_ = app.UseForwardedHeaders();
-		_ = app.MapDefaultEndpoints();
+		_ = app.UseReverseProxyTrust();
+		_ = app.UseRouting();
+		_ = app.UseRateLimiter();
+		var health = app.MapGroup(string.Empty).RequireRateLimiting(RateLimitSettings.HealthPolicyName);
+		_ = health.MapDefaultEndpoints();
 		_ = app.MapControllers();
 		if (app.Environment.IsDevelopment())
 		{
@@ -112,21 +117,6 @@ public static class ApiHostExtensions
 			{
 				_ = registration.Tags.Add(HealthEndpoints.ReadyTag);
 			}
-		});
-	}
-
-	/// <summary>
-	/// Trusts the forwarded headers of any caller. The containers publish no port, so only the reverse proxy in front can reach
-	/// the API; without this the API would see the proxy as the client and the scheme as plain HTTP.
-	/// </summary>
-	/// <param name="services">The service collection.</param>
-	private static void ConfigureForwardedHeaders(IServiceCollection services)
-	{
-		_ = services.Configure<ForwardedHeadersOptions>(options =>
-		{
-			options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost;
-			options.KnownIPNetworks.Clear();
-			options.KnownProxies.Clear();
 		});
 	}
 	#endregion

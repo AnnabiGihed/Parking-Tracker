@@ -86,6 +86,8 @@ services:
     secrets:
       - source: api_connection
         target: ConnectionStrings__ParkingData
+      - source: proxy_key
+        target: ReverseProxy__Key
     tmpfs:
       - /tmp
     networks:
@@ -110,6 +112,8 @@ secrets:
     file: ${PT_SECRETS}/app/migrator_connection
   api_connection:
     file: ${PT_SECRETS}/app/api_connection
+  proxy_key:
+    file: ${PT_SECRETS}/app/proxy_key
 
 volumes:
   pgdata:

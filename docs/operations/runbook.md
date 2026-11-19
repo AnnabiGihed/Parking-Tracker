@@ -70,7 +70,15 @@ The script only adds: the `parking-deploy` account, the programs and the `sudoer
 Parking Tracker block in the shared Caddyfile (between its marker lines, validated before the reload) and the backup
 timers. It prints whether `sshd` limits sign-in with `AllowUsers` or `AllowGroups`; if it does, add `parking-deploy`
 there yourself. Run it again after any change to `deploy/server/` or `deploy/parking.Caddyfile`: a deployment never
-replaces the programs, the timers or the Caddy block.
+replaces the programs, the timers or the Caddy block. A change that adds a secret or a Caddy header needs the script
+from its branch on the server before the pull request is merged, because the deployment that follows the merge needs
+the secret file and the new block.
+
+The script also creates the proxy key, `secrets/app/proxy_key` (owner uid 1654, mode 0400), once: a rerun keeps it. It
+writes the same key into the Parking Tracker block of the shared Caddyfile (`header_up X-PT-Proxy-Key`), and the API
+reads it as `ReverseProxy__Key`. The API trusts `X-Forwarded-For`, `-Proto` and `-Host` only on a request that carries
+the key (ADR-0029), and in Production it refuses to start without it. Check that the shared Caddy sets no
+`trusted_proxies`.
 
 Check from your PC that the three names answer over HTTPS with a valid certificate (503 until the first deployment):
 
@@ -183,6 +191,9 @@ refresh. A container that reaches its limit is restarted by Docker; raising a li
 
 - **Database passwords:** replace the file under `secrets/postgres/` (keep the owner and mode 0400), run
   `provision.sh` again to rewrite the connection strings, then deploy: `sql/roles.sql` sets the new password.
+- **Proxy key:** delete `secrets/app/proxy_key`, run `provision.sh` again (it creates a new key and reloads Caddy with
+  it), then redeploy the current tag right after, so that the API reads the new key. Until that deployment finishes
+  the API holds the old key, forwarded client addresses are ignored and callers share one rate-limit bucket.
 - **Image read token:** replace `secrets/ghcr_token` (root, 0400); the next deployment uses it.
 - **Deploy key:** create a new pair, run `provision.sh --deploy-key` with the new public key, and replace
   `DEPLOY_SSH_KEY` in the `production` environment.

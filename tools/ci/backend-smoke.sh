@@ -7,7 +7,8 @@
 #   backend-smoke.sh start                   PostgreSQL, deploy/sql/roles.sql, the migrator, then the API; needs
 #                                            PT_SECRETS, API_IMAGE and MIGRATOR_IMAGE in the environment
 #   backend-smoke.sh check <curl image>      from a container on `web`, as the shared Caddy reaches the API:
-#                                            /health/live and /health/ready 200, /scalar and /swagger 404
+#                                            /health/live and /health/ready 200, /scalar and /swagger 404, and
+#                                            /health/live 200 with a forged X-Forwarded-For and no proxy key
 # Exit code 0 on success; 1 with an ::error:: line otherwise. Uses sudo for chown, as GitHub's runners allow.
 set -euo pipefail
 
@@ -38,6 +39,7 @@ prepare() {
 		"Host=postgres;Port=5432;Database=parkingdata;Username=pt_owner;Password=$owner_password;Maximum Pool Size=2"
 	write_secret "$dir/app/api_connection" "$DOTNET_APP_UID" \
 		"Host=postgres;Port=5432;Database=parkingdata;Username=pt_api;Password=$api_password;Maximum Pool Size=10"
+	write_secret "$dir/app/proxy_key" "$DOTNET_APP_UID" "$(openssl rand -hex 32)"
 	docker network inspect web >/dev/null 2>&1 || docker network create web >/dev/null
 }
 
@@ -55,11 +57,12 @@ start() {
 
 expect_status() {
 	local curl_image=$1 path=$2 expected=$3 status="" tries=0
+	shift 3
 	# The API answers inside the Docker network without TLS, as the shared Caddy reaches it in production (TLS ends at
 	# Caddy, ADR-0028); curl uses that protocol for an address without a scheme.
 	while ((tries < 30)); do
 		status=$(docker run --rm --network web "$curl_image" -s -o /dev/null -w '%{response_code}' --max-time 5 \
-			"parking-api:8080$path" || true)
+			"$@" "parking-api:8080$path" || true)
 		[[ $status == "$expected" ]] && { echo "$path -> $status"; return 0; }
 		tries=$((tries + 1))
 		sleep 2
@@ -73,6 +76,8 @@ check() {
 	expect_status "$curl_image" /health/ready 200
 	expect_status "$curl_image" /scalar 404
 	expect_status "$curl_image" /swagger/v1/swagger.json 404
+	# A caller on `web` that is not the proxy cannot set the client address: the header is ignored, not an error.
+	expect_status "$curl_image" /health/live 200 -H 'X-Forwarded-For: 203.0.113.9'
 }
 
 case "${1:-}" in

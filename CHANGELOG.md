@@ -32,6 +32,9 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
 
 ### Security
 
+- The API trusts a client's address only when it comes from the shared proxy, and limits health checks to 60 a
+  minute per address, so nobody can fake an address to get around the limits. The API also refuses new requests
+  while 64 are already being handled.
 - The residents' card (number and plate), the parked car's position and the saved places are kept in a local database on
   the phone, and their personal fields are encrypted one by one with a key that stays on the phone. The database, the
   key and the app's preferences are excluded from Android backup, so a restore on a new phone asks for the card

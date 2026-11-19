@@ -10,9 +10,9 @@
 #      reports whether sshd's AllowUsers or AllowGroups admit it;
 #   3. installs pt-deploy, pt-deploy-root, pt-backup and pt_compose_check.py, and the single sudoers line;
 #   4. creates /opt/apps/parking-tracker and the secret files: database passwords generated here (they never leave
-#      the server) and the GHCR read token, typed at a prompt;
-#   5. writes the Parking Tracker block into the shared Caddyfile between its marker lines, validates and reloads
-#      Caddy, and restores the previous file when Caddy rejects it;
+#      the server), the proxy key (generated once, never rotated by a rerun) and the GHCR read token, typed at a prompt;
+#   5. writes the Parking Tracker block into the shared Caddyfile between its marker lines, with the proxy key in
+#      place of its placeholder, validates and reloads Caddy, and restores the previous file when Caddy rejects it;
 #   6. installs and starts the nightly dump and monthly restore-test timers.
 # Exit code 0 when everything is in place; 1 with a message otherwise. Safe to run again.
 set -euo pipefail
@@ -28,9 +28,14 @@ readonly END_MARKER="# END Parking Tracker (ADR-0028)"
 readonly SUDOERS_FILE=/etc/sudoers.d/parking-tracker
 readonly POSTGRES_UID=999
 readonly DOTNET_APP_UID=1654
+readonly PROXY_KEY_PLACEHOLDER=PT_PROXY_KEY_PLACEHOLDER
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 readonly SCRIPT_DIR
 readonly DEPLOY_DIR=$SCRIPT_DIR/..
+
+# The Caddyfile candidate holds the proxy key, so every way out of the script removes it.
+caddy_candidate=""
+trap 'rm -f -- "$caddy_candidate"' EXIT
 
 step() { printf '\n== %s\n' "$*"; }
 fail() { echo "provision: $*" >&2; exit 1; }
@@ -122,6 +127,10 @@ create_folders_and_secrets() {
 		"Host=postgres;Port=5432;Database=parkingdata;Username=pt_owner;Password=$owner_password;Maximum Pool Size=2"
 	write_secret "$SECRETS_DIR/app/api_connection" "$DOTNET_APP_UID" \
 		"Host=postgres;Port=5432;Database=parkingdata;Username=pt_api;Password=$api_password;Maximum Pool Size=10"
+	if [[ ! -s $SECRETS_DIR/app/proxy_key ]]; then
+		write_secret "$SECRETS_DIR/app/proxy_key" "$DOTNET_APP_UID" "$(openssl rand -hex 32)"
+		echo "Generated proxy_key"
+	fi
 	if [[ ! -s $SECRETS_DIR/ghcr_token ]]; then
 		local token
 		read -r -s -p "GitHub token with read:packages only (input hidden): " token
@@ -133,16 +142,19 @@ create_folders_and_secrets() {
 	echo "Secrets in $SECRETS_DIR (database passwords generated on this server, never copied elsewhere)"
 }
 
-# Prints the Caddyfile with the Parking Tracker block replaced, or appended when the markers are absent.
+# Prints the Caddyfile with the Parking Tracker block replaced, or appended when the markers are absent. The proxy key
+# reaches the script through the environment, not the argument list, so that no process listing shows it.
 caddyfile_with_block() {
 	local current=$1 block=$2
-	python3 - "$current" "$block" "$BEGIN_MARKER" "$END_MARKER" <<'PYTHON'
+	PT_PROXY_KEY=$(cat "$SECRETS_DIR/app/proxy_key") python3 - "$current" "$block" "$BEGIN_MARKER" "$END_MARKER" "$PROXY_KEY_PLACEHOLDER" <<'PYTHON'
+import os
 import sys
 from pathlib import Path
 
-current, block, begin, end = sys.argv[1:5]
+current, block, begin, end, placeholder = sys.argv[1:6]
 text = Path(current).read_text(encoding="utf-8")
 new_block = Path(block).read_text(encoding="utf-8").rstrip("\n") + "\n"
+new_block = new_block.replace(placeholder, os.environ["PT_PROXY_KEY"])
 if begin in text and end in text:
     head, rest = text.split(begin, 1)
     _, tail = rest.split(end, 1)
@@ -158,6 +170,7 @@ install_caddy_sites() {
 	local block=$DEPLOY_DIR/parking.Caddyfile backup candidate
 	[[ -f $block ]] || fail "parking.Caddyfile is missing next to this folder"
 	candidate=$(mktemp)
+	caddy_candidate=$candidate
 	caddyfile_with_block "$PROXY_CADDYFILE" "$block" >"$candidate"
 	if cmp -s "$candidate" "$PROXY_CADDYFILE"; then
 		rm -f "$candidate"
@@ -166,6 +179,8 @@ install_caddy_sites() {
 	fi
 	backup="$PROXY_CADDYFILE.$(date +%Y%m%d%H%M%S).bak"
 	cp -p "$PROXY_CADDYFILE" "$backup"
+	# The backup is ours and may hold the key; the live file belongs to another project and keeps its mode.
+	chmod 600 "$backup"
 	# Written in place: the proxy bind-mounts the single file, and a new inode would stay invisible to it.
 	cat "$candidate" >"$PROXY_CADDYFILE"
 	rm -f "$candidate"
