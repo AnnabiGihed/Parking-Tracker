@@ -36,7 +36,7 @@ public sealed class ParkingDataDbContextMigrationTests
 
 	#region Migration Tests
 	/// <summary>
-	/// Verifies that InitialCreate applies on an empty database and that the PostGIS extension exists afterwards.
+	/// Verifies that the migrations apply on an empty database and that the PostGIS extension exists afterwards.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
@@ -48,7 +48,9 @@ public sealed class ParkingDataDbContextMigrationTests
 		await context.Database.MigrateAsync();
 
 		var applied = await context.Database.GetAppliedMigrationsAsync();
-		applied.Should().ContainSingle().Which.Should().EndWith("_InitialCreate");
+		applied.Should().HaveCount(2);
+		applied.First().Should().EndWith("_InitialCreate");
+		applied.Last().Should().EndWith("_AddAccounts");
 		var extensions = await context.Database.SqlQueryRaw<string>("SELECT extname AS \"Value\" FROM pg_extension").ToListAsync();
 		extensions.Should().Contain("postgis");
 	}
@@ -77,7 +79,7 @@ public sealed class ParkingDataDbContextMigrationTests
 
 		await context.Database.MigrateAsync();
 
-		(await context.Database.GetAppliedMigrationsAsync()).Should().ContainSingle();
+		(await context.Database.GetAppliedMigrationsAsync()).Should().HaveCount(2);
 	}
 
 	/// <summary>
@@ -94,7 +96,7 @@ public sealed class ParkingDataDbContextMigrationTests
 		await using var connection = new NpgsqlConnection(database.ApiConnectionString);
 		await connection.OpenAsync();
 		await using var read = new NpgsqlCommand("SELECT count(*) FROM \"__EFMigrationsHistory\"", connection);
-		(await read.ExecuteScalarAsync()).Should().Be(1L);
+		(await read.ExecuteScalarAsync()).Should().Be(2L);
 		await using var create = new NpgsqlCommand("CREATE TABLE intruder (id int)", connection);
 		var act = async () => await create.ExecuteNonQueryAsync().ConfigureAwait(false);
 		(await act.Should().ThrowAsync<PostgresException>()).Which.SqlState.Should().Be(PostgresErrorCodes.InsufficientPrivilege);

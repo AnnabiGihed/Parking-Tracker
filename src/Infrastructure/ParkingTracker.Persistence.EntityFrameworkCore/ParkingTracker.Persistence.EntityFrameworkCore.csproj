@@ -5,6 +5,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\Core\ParkingTracker.Application\ParkingTracker.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- The server database (ADR-0010): PostgreSQL with PostGIS through Pivot's PostgreSQL package. -->
     <PackageReference Include="Pivot.Framework.Infrastructure.Persistence.PostgreSQL" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NetTopologySuite" />
