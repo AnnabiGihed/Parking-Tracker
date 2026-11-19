@@ -12,6 +12,7 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
 
 ### Added
 
+- The privacy notice is published at <https://parking.pivotsoftwares.com/privacy>.
 - Home and Work shortcut chips under the search bar: tap one to see that place on the map and check it, or set it
   from an address or your position. The places stay on the phone, encrypted.
 

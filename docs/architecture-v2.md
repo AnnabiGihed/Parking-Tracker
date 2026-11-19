@@ -1354,9 +1354,9 @@ or `422`. A family revocation answered with `401`, or a nonce consumed by a fail
 
 Other rules: TLS only; PostgreSQL never reachable from the internet; secrets in files readable only by root and
 mounted into the containers, never in `appsettings*.json`, images or build arguments; logs never contain e-mails,
-tokens or precise coordinates (a user reference is the account ID). A privacy notice on `parking.pivotsoftwares.com`
-and in the app states the table above, which the Google consent screen also needs. A short data-protection note goes
-with ADR-0015. Upstream attribution is shown in the app's about screen.
+tokens or precise coordinates (a user reference is the account ID). A privacy notice at
+`https://parking.pivotsoftwares.com/privacy` and in the app states the table above, which the Google consent screen
+also needs. A short data-protection note goes with ADR-0015. Upstream attribution is shown in the app's about screen.
 
 ### 6.4 Observability
 

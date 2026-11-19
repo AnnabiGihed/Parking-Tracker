@@ -11,7 +11,7 @@ server's administrator account (`ubuntu`).
 | Piece | Where | Notes |
 | --- | --- | --- |
 | API, migrator, PostgreSQL with PostGIS | Docker Compose project `parking-tracker` in `/opt/apps/parking-tracker` | Memory limits 224, 128 (deployments only) and 256 MB |
-| Public names | `api.parking.pivotsoftwares.com`, `admin.parking.pivotsoftwares.com`, `parking.pivotsoftwares.com` | The shared Caddy; admin and the apex answer 503 until stages S8 and S5 |
+| Public names | `api.parking.pivotsoftwares.com`, `admin.parking.pivotsoftwares.com`, `parking.pivotsoftwares.com` | The shared Caddy; admin answers 503 until stage S8, the apex serves the privacy notice |
 | Images | `ghcr.io/annabigihed/parking-tracker-api` and `-migrator`, private | Built and pushed by `.github/workflows/backend.yml` |
 | Deploy account | `parking-deploy`, key restricted to `/usr/local/bin/pt-deploy` | Not in the `docker` group; one `sudoers` line for `pt-deploy-root` |
 | Secrets | `/opt/apps/parking-tracker/secrets` | Database passwords are generated on the server and never leave it |
@@ -69,10 +69,10 @@ sudo bash ~/deploy/server/provision.sh --deploy-key ~/parking-deploy.pub
 The script only adds: the `parking-deploy` account, the programs and the `sudoers` line, the folders and secrets, the
 Parking Tracker block in the shared Caddyfile (between its marker lines, validated before the reload) and the backup
 timers. It prints whether `sshd` limits sign-in with `AllowUsers` or `AllowGroups`; if it does, add `parking-deploy`
-there yourself. Run it again after any change to `deploy/server/` or `deploy/parking.Caddyfile`: a deployment never
-replaces the programs, the timers or the Caddy block. A change that adds a secret or a Caddy header needs the script
-from its branch on the server before the pull request is merged, because the deployment that follows the merge needs
-the secret file and the new block.
+there yourself. Run it again after any change to `deploy/server/`, `deploy/parking.Caddyfile` or `deploy/site/`: a
+deployment never replaces the programs, the timers or the Caddy block. A change that adds a secret or a Caddy header
+needs the script from its branch on the server before the pull request is merged, because the deployment that follows
+the merge needs the secret file and the new block.
 
 The script also creates the proxy key, `secrets/app/proxy_key` (owner uid 1654, mode 0400), once: a rerun keeps it. It
 writes the same key into the Parking Tracker block of the shared Caddyfile (`header_up X-PT-Proxy-Key`), and the API
@@ -80,7 +80,15 @@ reads it as `ReverseProxy__Key`. The API trusts `X-Forwarded-For`, `-Proto` and 
 the key (ADR-0029), and in Production it refuses to start without it. Check that the shared Caddy sets no
 `trusted_proxies`.
 
-Check from your PC that the three names answer over HTTPS with a valid certificate (503 until the first deployment):
+The apex, `https://parking.pivotsoftwares.com`, serves the privacy notice: `/privacy` answers with the page,
+`/` redirects to it and any other path answers 404. The page is `deploy/site/privacy-notice.html`; the script copies it
+into the Caddy block (braces escaped; a page with the heredoc marker or a backslash is refused) and fails when the file
+is missing from the copied `deploy/` folder. To change the notice, edit that file, merge it, copy `deploy/` again
+and rerun `provision.sh`. The Google consent screens use `https://parking.pivotsoftwares.com` as the home page,
+`https://parking.pivotsoftwares.com/privacy` as the privacy policy and `pivotsoftwares.com` as the authorized domain.
+
+Check from your PC that the three names answer over HTTPS with a valid certificate (the API and admin answer 503 until
+their deployment):
 
 ```bash
 curl -sS -o /dev/null -w '%{http_code}\n' https://api.parking.pivotsoftwares.com/health/ready
