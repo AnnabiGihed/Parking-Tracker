@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ParkingTracker.Persistence.EntityFrameworkCore.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The server database (ADR-0010): PostgreSQL with PostGIS through Pivot's PostgreSQL package. -->
+    <PackageReference Include="Pivot.Framework.Infrastructure.Persistence.PostgreSQL" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NetTopologySuite" />
+    <!-- Design time only: the migration commands and the migration bundle need it, the running API does not. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

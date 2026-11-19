@@ -1,0 +1,297 @@
+name: Back end
+
+# Builds, checks and deploys the back end (ADR-0023, ADR-0028; docs/operations/runbook.md):
+#   1. scripts  - the deploy scripts: ShellCheck, the command-parsing tests and the Compose checker's tests
+#   2. build    - the API and migrator images from their Dockerfiles; pull requests build only
+#   3. smoke    - starts PostgreSQL, the migrator and the API from deploy/compose.yaml on the runner, as in production,
+#                 and checks /health/live and /health/ready (200) and that /scalar and /swagger are not mapped (404)
+#   4. publish  - main only: pushes ghcr.io/annabigihed/parking-tracker-{api,migrator} tagged sha-<12> and
+#                 1.<run_number>, with SBOM and provenance; a tag that already exists is not pushed again
+#   5. deploy   - main only, environment `production`: `deploy sha-<12>` through the forced command on the server; a
+#                 manual run with `drill` deploys the same way but must roll back (S4's rollback proof)
+# Nothing here runs the phone app (ADR-0027). Pull requests and forks never reach `production` or `packages: write`.
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**/*.md", "docs/**"]
+  pull_request:
+    branches: [main]
+    paths-ignore: ["**/*.md", "docs/**"]
+  workflow_dispatch:
+    inputs:
+      drill:
+        description: Deploy, then poll a path that is never healthy, so the release must roll back
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  REGISTRY: ghcr.io/annabigihed
+  # curlimages/curl:8.17.0, by digest; the smoke test calls the API from the `web` network with it
+  CURL_IMAGE: curlimages/curl@sha256:935d9100e9ba842cdb060de42472c7ca90cfe9a7c96e4dacb55e79e560b3ff40
+
+jobs:
+  scripts:
+    name: Deploy scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Python 3.12
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: ShellCheck
+        run: >
+          shellcheck -x -P deploy/server deploy/server/pt-deploy deploy/server/pt-deploy-root
+          deploy/server/pt-backup deploy/server/provision.sh deploy/tests/test_pt_deploy.sh tools/ci/backend-smoke.sh
+
+      - name: Command-parsing tests
+        run: bash deploy/tests/test_pt_deploy.sh
+
+      - name: Compose checker tests
+        run: python -m unittest discover -s deploy/tests -v
+
+  build:
+    name: Build the images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # The Pivot feed token reaches the restore as a BuildKit secret, never as a build argument or a layer.
+      - name: Build the API image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: src/Containers/API/ParkingTracker.ApiService/Dockerfile
+          tags: parking-tracker-api:smoke
+          load: true
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+          secrets: |
+            github_packages_user=${{ github.actor }}
+            github_packages_token=${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build the migrator image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: src/Infrastructure/ParkingTracker.Persistence.EntityFrameworkCore/Dockerfile.migrator
+          tags: parking-tracker-migrator:smoke
+          load: true
+          cache-from: type=gha,scope=migrator
+          cache-to: type=gha,scope=migrator,mode=max
+          secrets: |
+            github_packages_user=${{ github.actor }}
+            github_packages_token=${{ secrets.GITHUB_TOKEN }}
+
+      - name: Save the images for the smoke test
+        run: docker save parking-tracker-api:smoke parking-tracker-migrator:smoke | gzip >"$RUNNER_TEMP/images.tar.gz"
+
+      - name: Upload the images
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: backend-images
+          path: ${{ runner.temp }}/images.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+
+  smoke:
+    name: Smoke test
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download the images
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: backend-images
+          path: ${{ runner.temp }}
+
+      - name: Load the images
+        run: gunzip -c "$RUNNER_TEMP/images.tar.gz" | docker load
+
+      # Throw-away secrets for this run only, owned like on the server (999 postgres, 1654 the .NET images).
+      - name: Prepare the secrets and the shared network
+        run: bash tools/ci/backend-smoke.sh prepare "$RUNNER_TEMP/secrets"
+
+      - name: Start PostgreSQL, apply the roles, migrate and start the API
+        env:
+          PT_SECRETS: ${{ runner.temp }}/secrets
+          API_IMAGE: parking-tracker-api:smoke
+          MIGRATOR_IMAGE: parking-tracker-migrator:smoke
+        run: bash tools/ci/backend-smoke.sh start
+
+      - name: Check the endpoints
+        run: bash tools/ci/backend-smoke.sh check "$CURL_IMAGE"
+
+      - name: Record the memory use (the baseline for S6)
+        if: always()
+        run: docker stats --no-stream --format 'table {{.Name}}\t{{.MemUsage}}' | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Show the container logs
+        if: failure()
+        env:
+          PT_SECRETS: ${{ runner.temp }}/secrets
+          API_IMAGE: parking-tracker-api:smoke
+          MIGRATOR_IMAGE: parking-tracker-migrator:smoke
+        run: docker compose -f deploy/compose.yaml logs --no-color
+
+  publish:
+    name: Publish the images
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    needs: [scripts, smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Name the release
+        id: tag
+        run: echo "tag=sha-${GITHUB_SHA::12}" >>"$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Sign in to GHCR
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # A manual re-run of the same commit (the drill) must not move an existing tag to a rebuilt image; each image is
+      # checked on its own, so a half-published release only gets the missing one.
+      - name: Check which images are already published
+        id: existing
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          for image in api migrator; do
+            if docker buildx imagetools inspect "$REGISTRY/parking-tracker-$image:$TAG" >/dev/null 2>&1; then
+              echo "$image=true" >>"$GITHUB_OUTPUT"
+              echo "parking-tracker-$image:$TAG is already published; it is not pushed again."
+            else
+              echo "$image=false" >>"$GITHUB_OUTPUT"
+            fi
+          done
+
+      - name: Push the API image
+        if: steps.existing.outputs.api != 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: src/Containers/API/ParkingTracker.ApiService/Dockerfile
+          push: true
+          sbom: true
+          provenance: mode=max
+          tags: |
+            ${{ env.REGISTRY }}/parking-tracker-api:${{ steps.tag.outputs.tag }}
+            ${{ env.REGISTRY }}/parking-tracker-api:1.${{ github.run_number }}
+          cache-from: type=gha,scope=api
+          secrets: |
+            github_packages_user=${{ github.actor }}
+            github_packages_token=${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push the migrator image
+        if: steps.existing.outputs.migrator != 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: src/Infrastructure/ParkingTracker.Persistence.EntityFrameworkCore/Dockerfile.migrator
+          push: true
+          sbom: true
+          provenance: mode=max
+          tags: |
+            ${{ env.REGISTRY }}/parking-tracker-migrator:${{ steps.tag.outputs.tag }}
+            ${{ env.REGISTRY }}/parking-tracker-migrator:1.${{ github.run_number }}
+          cache-from: type=gha,scope=migrator
+          secrets: |
+            github_packages_user=${{ github.actor }}
+            github_packages_token=${{ secrets.GITHUB_TOKEN }}
+
+  deploy:
+    name: Deploy to the server
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    # Two deployments never overlap, and one that started is never cancelled.
+    concurrency:
+      group: backend-deploy-production
+      cancel-in-progress: false
+    steps:
+      - name: Deploy through the forced command
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          RELEASE: ${{ needs.publish.outputs.tag }}
+          DRILL: ${{ github.event_name == 'workflow_dispatch' && inputs.drill }}
+        run: |
+          set -euo pipefail
+          for name in DEPLOY_HOST DEPLOY_KNOWN_HOSTS DEPLOY_SSH_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name is missing in the production environment (docs/operations/runbook.md)."
+              exit 1
+            fi
+          done
+          [[ $RELEASE =~ ^sha-[0-9a-f]{12}$ ]] || { echo "::error::unexpected release name"; exit 1; }
+          install -d -m 700 "$RUNNER_TEMP/ssh"
+          printf '%s\n' "$DEPLOY_SSH_KEY" >"$RUNNER_TEMP/ssh/key"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" >"$RUNNER_TEMP/ssh/known_hosts"
+          chmod 600 "$RUNNER_TEMP/ssh/key" "$RUNNER_TEMP/ssh/known_hosts"
+          command="deploy $RELEASE"
+          if [ "$DRILL" = "true" ]; then
+            command="$command drill"
+          fi
+          status=0
+          ssh -i "$RUNNER_TEMP/ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/ssh/known_hosts" -o ConnectTimeout=20 \
+            "parking-deploy@$DEPLOY_HOST" "$command" || status=$?
+          rm -rf "$RUNNER_TEMP/ssh"
+          if [ "$DRILL" = "true" ]; then
+            # The drill passes only when the health gate refused the release and the server rolled back to the release
+            # before it: pt-deploy-root's exit code 3. Any other failure (pull, migration, refusal) is exit 1 or 2.
+            if [ "$status" -eq 3 ]; then
+              echo "Drill: the release rolled back, as it must." | tee -a "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "::error::Drill: expected a rollback (exit 3), got exit $status."
+            exit 1
+          fi
+          exit "$status"

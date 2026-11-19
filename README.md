@@ -127,6 +127,26 @@ upgrade test and the budget check run on your PC with the APKs CI built
 [ADR-0027](docs/adr/0027-run-the-app-on-a-developer-pc-not-in-ci.md)). On a PC you need the .NET SDK named in
 `global.json`.
 
+## Run the back end locally
+
+The back end (the parking data API, [docs/architecture-v2.md](docs/architecture-v2.md)) runs on your PC through the
+Aspire AppHost. You need the .NET SDK named in `global.json`, Docker running, and the Pivot.Framework feed credentials
+in `GITHUB_PACKAGES_USER` and `GITHUB_PACKAGES_TOKEN` (a token with `read:packages`) for the first restore.
+
+```bash
+dotnet tool restore
+dotnet run --project src/Containers/Aspire/Hosting/ParkingTracker.AppHost --launch-profile https
+```
+
+In Visual Studio, set `ParkingTracker.AppHost` as the startup project and use the `https` profile. The dashboard opens
+at `https://localhost:17214`. The first run downloads the `postgis/postgis` image, generates the database password
+and keeps it in the AppHost's user secrets, and the `migrate` resource applies the migrations before the API starts.
+The API's reference page (Scalar, Development only) is the "API reference" link on the `api` resource. The tests that
+need PostgreSQL start their own container through Testcontainers, so `dotnet test` also needs Docker.
+
+The server side (provisioning, deployment, rollback, backups) is in the
+[back-end runbook](docs/operations/runbook.md).
+
 ## Check the street data
 
 ```bash

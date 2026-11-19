@@ -1,0 +1,46 @@
+# BEGIN Parking Tracker (ADR-0028)
+# provision.sh writes this block into the shared proxy's Caddyfile, between these two marker lines, and replaces it on
+# a later run; deployments never edit it. The API forwards to its container on the shared `web` network; until that
+# container runs, the site answers 503 over HTTPS with its own certificate. The admin app (S8) and the privacy notice
+# (S5) answer 503 until their stage. The access log drops the query string, because a query can hold a bounding box.
+
+(parking_tracker_common) {
+	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000"
+	log {
+		format filter {
+			request>uri regexp \?.*$ ""
+		}
+	}
+}
+
+(parking_tracker_unavailable) {
+	handle_errors 502 503 504 {
+		respond "Parking Tracker: not deployed yet, or restarting." 503
+	}
+}
+
+api.parking.pivotsoftwares.com {
+	import parking_tracker_common
+	request_body {
+		max_size 256KB
+	}
+	handle /api/v1/admin/* {
+		respond 404
+	}
+	handle {
+		reverse_proxy parking-api:8080
+	}
+	import parking_tracker_unavailable
+}
+
+admin.parking.pivotsoftwares.com {
+	import parking_tracker_common
+	respond "Parking Tracker administration: not available yet." 503
+}
+
+parking.pivotsoftwares.com {
+	import parking_tracker_common
+	respond "Parking Tracker: the privacy notice comes with sign-in." 503
+}
+# END Parking Tracker (ADR-0028)

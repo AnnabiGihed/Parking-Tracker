@@ -1,0 +1,318 @@
+#!/usr/bin/env bash
+# Root helper of pt-deploy (ADR-0023, ADR-0028): deploys, rolls back and reports a Parking Tracker release.
+#
+# Usage (through pt-deploy and its sudoers line only):
+#   pt-deploy-root deploy sha-<12 hex> [force] [drill]
+#   pt-deploy-root rollback
+#   pt-deploy-root status
+#
+# A deployment, under a lock so that two never overlap:
+#   1. refuses between 02:30 and 05:00 Brussels time (the job window) unless `force`;
+#   2. pulls the API and migrator images by tag with the read-only GHCR token and records their digests;
+#   3. copies /deploy (compose.yaml, sql/) out of the migrator image into a staging folder, refuses anything but
+#      regular files (a symlink could make root write elsewhere), writes the .env, and refuses the release when
+#      pt_compose_check.py finds anything outside its allow-list, before and after Compose renders the file; only then
+#      the folder becomes releases/<sha>;
+#   4. starts PostgreSQL, applies sql/roles.sql, dumps the database to backups/pre-deploy (keeps 5) and runs the
+#      migrator; a failure here leaves the running release untouched;
+#   5. starts the new API and polls /health/ready through the shared Caddy for 90 seconds, checking that the running
+#      container is the pulled image; `drill` polls a path that is never healthy, to prove the rollback;
+#   6. on success moves the `current` and `previous` links, appends to releases.log and removes images and release
+#      folders no longer needed; when the API does not start or is not healthy, starts the fallback release's API
+#      again (the running release; for a drill of the running release, the one before it) and makes it `current`.
+# Deploying the running release again is refused, except as a drill.
+# Exit codes: 0 done, 1 failed, 2 refused, 3 rolled back to the fallback release after the health gate (the only
+# result a drill accepts).
+#
+# provision.sh installs this file to /usr/local/sbin; a deployment never replaces it.
+set -euo pipefail
+
+readonly APP_DIR=/opt/apps/parking-tracker
+readonly RELEASES_DIR=$APP_DIR/releases
+readonly SECRETS_DIR=$APP_DIR/secrets
+readonly PRE_DEPLOY_DIR=$APP_DIR/backups/pre-deploy
+readonly RELEASES_LOG=$APP_DIR/releases.log
+readonly DOCKER_CONFIG_DIR=$APP_DIR/.docker
+readonly LOCK_FILE=/run/lock/parking-tracker-deploy.lock
+readonly COMPOSE_CHECK=/usr/local/sbin/pt_compose_check.py
+readonly REGISTRY=ghcr.io/annabigihed
+readonly PROJECT=parking-tracker
+readonly HEALTH_URL=https://api.parking.pivotsoftwares.com/health/ready
+readonly DRILL_URL=https://api.parking.pivotsoftwares.com/health/drill-is-never-healthy
+readonly HEALTH_TIMEOUT_SECONDS=90
+readonly KEEP_PRE_DEPLOY_DUMPS=5
+readonly KEEP_RELEASE_DIRS=5
+readonly EXIT_ROLLED_BACK=3
+
+log() { echo "pt-deploy: $*" >&2; }
+fail() { log "$*"; exit 1; }
+refuse() { log "refused: $*"; exit 2; }
+rolled_back() { log "$*"; exit "$EXIT_ROLLED_BACK"; }
+
+# Validates the arguments again, independently of pt-deploy; returns 1 for anything pt-deploy would refuse.
+valid_arguments() {
+	local joined="$*"
+	[[ $joined =~ ^[a-z0-9\ -]{1,40}$ ]] || return 1
+	case "${1:-}" in
+		deploy)
+			(($# >= 2 && $# <= 4)) || return 1
+			[[ $2 =~ ^sha-[0-9a-f]{12}$ ]] || return 1
+			local seen=" " option
+			for option in "${@:3}"; do
+				[[ $option == force || $option == drill ]] || return 1
+				[[ $seen != *" $option "* ]] || return 1
+				seen+="$option "
+			done
+			;;
+		rollback | status) (($# == 1)) || return 1 ;;
+		*) return 1 ;;
+	esac
+}
+
+# True when a time given as HHMM falls in the job window, 02:30 to 04:59, when the refresh jobs run (ADR-0013).
+in_job_window() {
+	local hhmm=$((10#$1))
+	((hhmm >= 230 && hhmm < 500))
+}
+
+brussels_hhmm() { TZ=Europe/Brussels date +%H%M; }
+
+compose() {
+	local release_dir=$1
+	shift
+	docker compose -p "$PROJECT" --project-directory "$release_dir" -f "$release_dir/compose.yaml" \
+		--env-file "$release_dir/.env" "$@"
+}
+
+release_of_link() {
+	local link=$APP_DIR/$1
+	if [[ -L $link ]]; then
+		basename "$(readlink -f "$link")"
+	fi
+}
+
+pull_digest() {
+	local image=$1
+	docker --config "$DOCKER_CONFIG_DIR" pull --quiet "$image" >/dev/null
+	docker image inspect --format '{{index .RepoDigests 0}}' "$image"
+}
+
+login_registry() {
+	[[ -s $SECRETS_DIR/ghcr_token ]] || fail "$SECRETS_DIR/ghcr_token is missing; run provision.sh"
+	docker --config "$DOCKER_CONFIG_DIR" login ghcr.io --username parking-tracker --password-stdin \
+		<"$SECRETS_DIR/ghcr_token" >/dev/null
+}
+
+# Builds releases/<sha> from the migrator image's /deploy in a staging folder and moves it into place only once every
+# check passed, so a failed or refused release never touches the folder of a running one.
+prepare_release() {
+	local sha=$1 release_dir=$2 api_image=$3 migrator_image=$4
+	local staging=$RELEASES_DIR/.staging-$sha
+	rm -rf "$staging"
+	install -d -m 700 "$staging"
+	local container
+	container=$(docker create "$migrator_image")
+	docker cp "$container:/deploy/." "$staging/" >/dev/null
+	docker rm "$container" >/dev/null
+	if [[ -n $(find "$staging" ! -type f ! -type d -print -quit) ]]; then
+		rm -rf "$staging"
+		refuse "the /deploy folder of $sha holds something other than regular files and folders"
+	fi
+	if [[ ! -f $staging/compose.yaml || ! -f $staging/sql/roles.sql ]]; then
+		rm -rf "$staging"
+		fail "the migrator image of $sha has no /deploy/compose.yaml or /deploy/sql/roles.sql"
+	fi
+	rm -f "$staging/.env"
+	(umask 077 && printf 'API_IMAGE=%s\nMIGRATOR_IMAGE=%s\nPT_SECRETS=%s\nRELEASE=%s\n' \
+		"$api_image" "$migrator_image" "$SECRETS_DIR" "$sha" >"$staging/.env")
+	if ! python3 "$COMPOSE_CHECK" --raw "$staging/compose.yaml" ||
+		! compose "$staging" --profile migrate config --format json --no-env-resolution | python3 "$COMPOSE_CHECK"; then
+		rm -rf "$staging"
+		refuse "the compose.yaml of $sha asks for more than the shared server allows"
+	fi
+	rm -rf "$release_dir"
+	mv "$staging" "$release_dir"
+}
+
+# Starts the fallback release's API after a failed start or health gate, and exits 3, or 1 when even that fails.
+fall_back() {
+	local sha=$1 release_dir=$2 fallback=$3 drill=$4 reason=$5
+	if [[ -z $fallback ]]; then
+		compose "$release_dir" stop api || true
+		record failed "$sha"
+		fail "$sha $reason and there is no earlier release; the API is stopped"
+	fi
+	if ! compose "$RELEASES_DIR/$fallback" up -d --no-deps api; then
+		record failed "$sha; the fallback $fallback did not start either"
+		fail "$sha $reason, and $fallback did not start either; run 'status' and see the runbook"
+	fi
+	ln -sfn "$RELEASES_DIR/$fallback" "$APP_DIR/current"
+	# After a drill the drilled release is good, so `rollback` may return to it; a release that really failed is never
+	# linked as `previous`.
+	if $drill; then
+		ln -sfn "$release_dir" "$APP_DIR/previous"
+	fi
+	record rolled-back "$sha -> $fallback"
+	rolled_back "$sha $reason; $fallback runs again (the schema stays migrated)"
+}
+
+dump_before_deploy() {
+	local release_dir=$1 sha=$2
+	install -d -m 700 "$PRE_DEPLOY_DIR"
+	local exists
+	exists=$(compose "$release_dir" exec -T postgres psql -U postgres -d postgres -tAc \
+		"SELECT 1 FROM pg_database WHERE datname = 'parkingdata'")
+	[[ $exists == 1 ]] || return 0
+	local file
+	file="$PRE_DEPLOY_DIR/$(date -u +%Y%m%dT%H%M%SZ)-$sha.dump"
+	compose "$release_dir" exec -T postgres pg_dump -U postgres -Fc parkingdata >"$file"
+	chmod 600 "$file"
+	find "$PRE_DEPLOY_DIR" -maxdepth 1 -name '*.dump' -printf '%T@ %p\n' | sort -rn |
+		tail -n +$((KEEP_PRE_DEPLOY_DUMPS + 1)) | cut -d' ' -f2- | xargs -r rm -f
+}
+
+# Waits until the API container runs the expected image and the URL answers 200 through Caddy.
+healthy_within_timeout() {
+	local release_dir=$1 expected_image=$2 url=$3
+	local expected_id deadline container running_id
+	expected_id=$(docker image inspect --format '{{.Id}}' "$expected_image")
+	deadline=$((SECONDS + HEALTH_TIMEOUT_SECONDS))
+	while ((SECONDS < deadline)); do
+		container=$(compose "$release_dir" ps -q api || true)
+		running_id=""
+		if [[ -n $container ]]; then
+			running_id=$(docker inspect --format '{{.Image}}' "$container" || true)
+		fi
+		if [[ $running_id == "$expected_id" ]] && curl -fsS --max-time 5 -o /dev/null "$url"; then
+			return 0
+		fi
+		sleep 3
+	done
+	return 1
+}
+
+record() {
+	printf '%s %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" >>"$RELEASES_LOG"
+}
+
+clean_up() {
+	local keep_current keep_previous
+	keep_current=$(release_of_link current)
+	keep_previous=$(release_of_link previous)
+	local -a in_use=()
+	local dir
+	for dir in "$keep_current" "$keep_previous"; do
+		[[ -n $dir && -f $RELEASES_DIR/$dir/.env ]] &&
+			mapfile -t -O "${#in_use[@]}" in_use < <(grep -E '^(API|MIGRATOR)_IMAGE=' "$RELEASES_DIR/$dir/.env" | cut -d= -f2-)
+	done
+	local image
+	while read -r image; do
+		[[ -z $image ]] && continue
+		printf '%s\n' "${in_use[@]}" | grep -qxF "$image" || docker image rm "$image" >/dev/null 2>&1 || true
+	done < <(docker image ls --digests --format '{{.Repository}}@{{.Digest}}' "$REGISTRY/parking-tracker-*")
+	# Release folders are named sha-<12 hex>, so the names need no quoting beyond what find prints.
+	find "$RELEASES_DIR" -mindepth 1 -maxdepth 1 -type d -name 'sha-*' -printf '%T@ %f\n' | sort -rn | cut -d' ' -f2 |
+		grep -vxF -e "${keep_current:-none}" -e "${keep_previous:-none}" |
+		tail -n +$((KEEP_RELEASE_DIRS + 1)) | while read -r dir; do rm -rf "${RELEASES_DIR:?}/$dir"; done
+}
+
+deploy() {
+	local sha=$1 force=false drill=false option
+	for option in "${@:2}"; do
+		[[ $option == force ]] && force=true
+		[[ $option == drill ]] && drill=true
+	done
+	if ! $force && in_job_window "$(brussels_hhmm)"; then
+		refuse "02:30 to 05:00 Brussels time is the job window; add 'force' to deploy anyway"
+	fi
+	# The release a failure falls back to: the running one, or, for a drill of the running release, the one before it.
+	# Either way it is a different image from the one under test.
+	local current fallback
+	current=$(release_of_link current)
+	fallback=$current
+	if [[ -n $current && $current == "$sha" ]]; then
+		$drill || refuse "$sha is already running; only a drill deploys the running release again"
+		fallback=$(release_of_link previous)
+	fi
+	if $drill && [[ -z $fallback ]]; then
+		refuse "a drill needs an earlier release than $sha to roll back to"
+	fi
+
+	login_registry
+	local api_image migrator_image
+	api_image=$(pull_digest "$REGISTRY/parking-tracker-api:$sha")
+	migrator_image=$(pull_digest "$REGISTRY/parking-tracker-migrator:$sha")
+	local release_dir=$RELEASES_DIR/$sha
+	prepare_release "$sha" "$release_dir" "$api_image" "$migrator_image"
+
+	# Until the new API starts, a failure leaves the running release as it is.
+	compose "$release_dir" up -d --wait postgres || fail "PostgreSQL did not become healthy for $sha; nothing else changed"
+	compose "$release_dir" exec -T postgres psql -v ON_ERROR_STOP=1 -U postgres -d postgres -f - \
+		<"$release_dir/sql/roles.sql" >/dev/null || fail "sql/roles.sql of $sha failed; the running release is unchanged"
+	dump_before_deploy "$release_dir" "$sha"
+	compose "$release_dir" --profile migrate run --rm migrator ||
+		fail "the migration of $sha failed; the running release is unchanged"
+
+	if ! compose "$release_dir" up -d --no-deps api; then
+		fall_back "$sha" "$release_dir" "$fallback" "$drill" "did not start"
+	fi
+	local url=$HEALTH_URL
+	$drill && url=$DRILL_URL
+	if ! healthy_within_timeout "$release_dir" "$api_image" "$url"; then
+		fall_back "$sha" "$release_dir" "$fallback" "$drill" "was not healthy within ${HEALTH_TIMEOUT_SECONDS}s"
+	fi
+	ln -sfn "$release_dir" "$APP_DIR/current"
+	if [[ -n $current && $current != "$sha" ]]; then
+		ln -sfn "$RELEASES_DIR/$current" "$APP_DIR/previous"
+	fi
+	record deployed "$sha $api_image"
+	clean_up
+	log "$sha is live"
+}
+
+rollback() {
+	local current previous
+	current=$(release_of_link current)
+	previous=$(release_of_link previous)
+	[[ -n $previous && -d $RELEASES_DIR/$previous ]] || refuse "there is no previous release"
+	compose "$RELEASES_DIR/$previous" up -d --no-deps api || fail "$previous did not start; $current may be stopped"
+	ln -sfn "$RELEASES_DIR/$previous" "$APP_DIR/current"
+	ln -sfn "$RELEASES_DIR/$current" "$APP_DIR/previous"
+	record rollback "$current -> $previous"
+	local image
+	image=$(grep -E '^API_IMAGE=' "$RELEASES_DIR/$previous/.env" | cut -d= -f2-)
+	if healthy_within_timeout "$RELEASES_DIR/$previous" "$image" "$HEALTH_URL"; then
+		log "$previous runs again and is healthy; $current is the previous release now"
+	else
+		fail "$previous runs again but is not healthy within ${HEALTH_TIMEOUT_SECONDS}s; run 'status'"
+	fi
+}
+
+status() {
+	local current previous
+	current=$(release_of_link current)
+	previous=$(release_of_link previous)
+	echo "current:  ${current:-none}"
+	echo "previous: ${previous:-none}"
+	[[ -n $current ]] && grep -E '^(API|MIGRATOR)_IMAGE=' "$RELEASES_DIR/$current/.env"
+	[[ -n $current ]] && compose "$RELEASES_DIR/$current" ps
+	if curl -fsS --max-time 5 -o /dev/null "$HEALTH_URL"; then echo "health:   ready"; else echo "health:   not ready"; fi
+	tail -n 5 "$RELEASES_LOG" 2>/dev/null || true
+}
+
+main() {
+	valid_arguments "$@" || refuse "use: deploy sha-<12 hex> [force] [drill] | rollback | status"
+	[[ $EUID -eq 0 ]] || refuse "run through pt-deploy (sudo)"
+	install -d -m 700 "$RELEASES_DIR"
+	exec 9>"$LOCK_FILE"
+	flock -n 9 || refuse "another deployment is running"
+	case "$1" in
+		deploy) deploy "${@:2}" ;;
+		rollback) rollback ;;
+		status) status ;;
+	esac
+}
+
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+	main "$@"
+fi

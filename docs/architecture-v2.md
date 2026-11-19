@@ -302,15 +302,17 @@ ADR: [0015](adr/0015-require-sign-in-and-keep-the-drivers-data-on-the-phone.md).
 
 **Decision:** REST over HTTPS with JSON, controllers on Pivot's `ApiController` (`HandleResult`, `HandleFailure`,
 ProblemDetails), `AddPivotApiVersioning()` with the URL segment as the documented form (`/api/v1/...`). The OpenAPI
-document comes from Swashbuckle (registered by Pivot's `WithSwagger`) and is checked by a snapshot test. Scalar
-renders it in Development only (decided by default, 10.2). Transport records live in `ParkingTracker.Contracts`.
+document comes from Swashbuckle and is checked by a snapshot test. Scalar renders it in Development only (decided
+by default, 10.2). Transport records live in `ParkingTracker.Contracts`. Pivot 2.1.0's `WithSwagger` is an option of
+`AddKeycloakAuthentication` and needs Keycloak settings, which ADR-0014 excludes, so the API calls Swashbuckle's
+`AddSwaggerGen()` itself: the same generator, without Pivot's helper (S4).
 
 **Options:** A REST, URL versioning, Swashbuckle and Scalar; B gRPC (`Pivot.Framework.Containers.Grpc`); C REST with
 `Microsoft.AspNetCore.OpenApi` and a generated client.
 
 **Why A:** works through Caddy and from the admin app, readable in Scalar, payloads map one-to-one onto the value
 objects. B needs HTTP/2 end to end and gRPC-Web for the admin app. C adds a second OpenAPI generator next to the
-Swashbuckle one that Pivot's `WithSwagger` already registers.
+Swashbuckle one that Pivot's packages already bring.
 
 **Accepted negatives:** JSON polygons are larger than binary (mitigated by Brotli and gzip and by the bundle endpoint);
 no reference page in Production.
@@ -599,17 +601,18 @@ run instructions in `README.md`.
 
 ### 4.4 Solution layout
 
-The canonical Pivot tree, adapted as 3.13 decides. `new` marks a project that does not exist yet.
+The canonical Pivot tree, adapted as 3.13 decides. `new` marks a project that does not exist yet; `S4` marks what
+stage S4 added.
 
 ```text
 ParkingTracker.slnx                               everything that builds on a PC (the MAUI host stays out, as today)
-deploy/                                           new  compose.yaml, Caddyfile, pt-deploy scripts, VPS bootstrap
+deploy/                                           S4   compose.yaml, Caddy block, role SQL, pt-deploy, provisioning
 src/
   Containers/
-    API/ParkingTracker.ApiService                 new  ASP.NET Core, Pivot Containers.API, token exchange, Dockerfile
+    API/ParkingTracker.ApiService                 S4   ASP.NET Core, Pivot Containers.API, health, Dockerfile (token exchange S5)
     Jobs/ParkingTracker.RefreshJobs               new  Hangfire server, recurring jobs, outbox drain, Dockerfile
-    Aspire/Defaults/ParkingTracker.ServiceDefaults  new  OpenTelemetry, health checks, resilience (server hosts)
-    Aspire/Hosting/ParkingTracker.AppHost         new  local composition only, never deployed
+    Aspire/Defaults/ParkingTracker.ServiceDefaults  S4   OpenTelemetry, health checks, resilience (server hosts)
+    Aspire/Hosting/ParkingTracker.AppHost         S4   local composition only, never deployed
     UI/
       Core/ParkingTracker.Shared                  phone Razor components (moves to Radzen)
       Core/ParkingTracker.ViewModels              phone view models (adds Account, Places)
@@ -624,12 +627,12 @@ src/
   Infrastructure/
     ParkingTracker.Infrastructure                 upstream clients and parsers (jobs and phone fallback),
                                                   the phone's API client, embedded reference data
-    ParkingTracker.Persistence.EntityFrameworkCore  new  ParkingDataDbContext, PostgreSQL + PostGIS, migrations,
+    ParkingTracker.Persistence.EntityFrameworkCore  S4   ParkingDataDbContext, PostgreSQL + PostGIS, migrations,
                                                   migration bundle Dockerfile
     ParkingTracker.Persistence.Device             new  sqlite-net repositories and rows, field encryption, schema steps
 test/                                             mirrors src/, one test project per source project, plus:
   ParkingTracker.E2E.Tests                        emulator and upgrade tests (existing), API-mode scenario added
-  ParkingTracker.Api.E2E.Tests                    new  API, jobs and admin against Testcontainers PostgreSQL
+  ParkingTracker.Api.E2E.Tests                    S4   API (jobs and admin later) against Testcontainers PostgreSQL
   fixtures/                                       parity fixtures (existing) and recorded WFS pages for the jobs
 ```
 
@@ -656,7 +659,9 @@ All `Pivot.Framework.*` packages stay pinned together at 2.1.0 in `Directory.Pac
 | App (MAUI) | as today, plus the device persistence | `Radzen.Blazor`, the AndroidX Credentials and Google Identity bindings (to verify, A6) |
 
 Deliberately not referenced: `Pivot.Framework.Infrastructure.Scheduling` (3.6) and every `Pivot.Framework.Authentication.*`
-package (3.7).
+package (3.7). `Pivot.Framework.Containers.API` 2.1.0 still brings `Authentication.AspNetCore`, `Authentication.Caching`
+(Redis), `RabbitMQ.Client` and `Microsoft.Data.SqlClient` as transitive dependencies (seen in S4); nothing calls them,
+and ADR-0014's "not used" holds. Splitting them out of Containers.API is an upstream question for Pivot.Framework.
 
 ## 5. Data and integration design
 
@@ -1443,7 +1448,8 @@ into scripts, no environment or `packages: write` for fork pull requests.
 | `deploy` | On `main` after `smoke`; environment `production` (holds the SSH key and `known_hosts`); `concurrency` without cancel; runs `ssh parking-deploy@<vps> deploy sha-<12>` | `contents: read` |
 
 On the server, `~parking-deploy/.ssh/authorized_keys` restricts the key to the forced command `pt-deploy`, which
-accepts only `deploy sha-<12 hex>`, `rollback` and `status`, and runs one validated root helper through a single
+accepts only `deploy sha-<12 hex>` (with the options `force` for the job window and `drill` for the rollback proof),
+`rollback` and `status`, and runs one validated root helper through a single
 `sudoers` line; `parking-deploy` is not in the `docker` group (ADR-0028; RaidManager's `deploy` account is another).
 The server pulls private images with a token limited to `read:packages`.
 
@@ -1471,7 +1477,7 @@ sequenceDiagram
             D-->>GH: exit 0, append to releases.log
         else unhealthy
             D->>H: compose up with the previous release
-            D-->>GH: exit 1, application rolled back, schema stays migrated
+            D-->>GH: exit 3, application rolled back, schema stays migrated
         end
     end
 ```
@@ -1479,8 +1485,13 @@ sequenceDiagram
 Rules: hosts never migrate at start-up; migrations follow expand and contract, so the previous release always runs on
 the new schema; a schema rollback is a manual restore of the pre-deploy dump; `pt-deploy` refuses to deploy between
 02:30 and 05:00 unless forced; API changes stay backward compatible with the app versions in use, because phones
-update late. Everything on the VPS outside the secrets and volumes comes from `deploy/` at the release tag, so hand
-edits are overwritten. The runbook lives in `docs/operations/runbook.md` (written in stage S4).
+update late. The release's `compose.yaml` and role SQL travel inside the migrator image (`/deploy`), so hand edits
+on the server are overwritten; the root helper refuses anything but regular files in it and checks the Compose file
+against an allow-list before running it (`deploy/server/pt_compose_check.py`: only the keys this project uses, a
+non-root user, read-only, no capability, the project's own volume and networks, secrets from its own folder). The
+programs, the timers and the Caddy block are installed only by `deploy/server/provision.sh`, never by a deployment.
+The drill (`deploy sha-<12> drill`) polls a path that is never healthy, so the release must fall back to the one
+before it. The runbook is [docs/operations/runbook.md](operations/runbook.md).
 
 ### 7.5 PostgreSQL operations and backups
 
@@ -1560,7 +1571,7 @@ API-served data reaches the public only in stage S10, after the licence question
 | S1 | Done 2026-11-17 in code, awaiting the emulator run and the release: `ResidentCard`, `SavedPlaces` and `ParkingSession` aggregates with the `ToParkingCard()` and `ToParkedCar()` bridges; the card dialog builds its card through `ResidentCard`; no storage change | Parity, domain and emulator tests green; APK released; the only visible change is that the card form refuses reversed dates and an unknown municipality |
 | S2 | Radzen foundation in `ParkingTracker.Shared`, then one dialog per pull request (welcome, card, car, layers, status sheet). Progress: foundation (Radzen.Blazor 13.1.0, services, theme file, host page, bUnit interop), the welcome dialog, the card dialog, the car dialog (with the timer line), the layers popover and the status sheet (status block, chips, nearest spot, permission banner, search bar) are done in code, awaiting the emulator run; S2 is done | Each pull request: bUnit and emulator tests green, emulator selectors kept |
 | S3 | Budget spike done 2026-11-18 (see below; EF Core over budget, ADR-0026 chooses sqlite-net-pcl), then device database on sqlite-net-pcl, field encryption, settings migration, Home and Work places; spike code removed. Progress: the device database is done in code, awaiting the CI build, the emulator run and the budget measurement of the real database: `ParkingTracker.Persistence.Device` (schema steps, unit of work, `FieldCipher`, repositories of the three aggregates), the repository ports in `ParkingTracker.Application`, `DeviceSettingsStore` (the card, car and timer now go through the repositories), the start-up gate with `SettingsToDatabaseMigration`, the backup rules and the tests; Home and Work places are done in code too (the shortcut chips, `IPlacesStore`, `DevicePlacesStore`). Done 2026-11-19: the real device database measured +3.08 MB and about +40 ms against `main` before it (see "S3 budget measurement" below), within the budget. The spike code never reached `main` | Upgrade leg green; the real device database measured within 8 MB and 300 ms |
-| S4 | Provisioning on the shared OVH server (ADR-0028): DNS, the Caddy sites, PostgreSQL, nightly dumps and a restore test before any real data; back-end skeleton (AppHost, ServiceDefaults, ApiService with health, OpenAPI and Scalar, persistence with migrations, Dockerfiles, `backend.yml`, `pt-deploy`); runbook | `/health/ready` green on the VPS through a deployment from `main`; a forced failed health check rolls back |
+| S4 | Provisioning on the shared OVH server (ADR-0028): DNS, the Caddy sites, PostgreSQL, nightly dumps and a restore test before any real data; back-end skeleton (AppHost, ServiceDefaults, ApiService with health, OpenAPI and Scalar, persistence with migrations, Dockerfiles, `backend.yml`, `pt-deploy`); runbook. Progress: DNS done 2026-11-19; the skeleton, `deploy/`, `backend.yml` and the runbook are done in code, awaiting the owner's one-time setup (runbook), the first deployment and the drill. Moved to S6: the `Hangfire.PostgreSql` check on .NET 10, `/health/data` and the restore test's data queries; to S5: the anonymous `401` smoke check, and trusting forwarded headers only from the shared Caddy (the API trusts any sender on `web` until rate limiting uses the client address) | `/health/ready` green on the VPS through a deployment from `main`; a forced failed health check rolls back |
 | S5 | Credential Manager spike; session exchange, refresh, sign-out, `/me`, erasure, rate limiting | Authentication tests green; the owner signs in from a debug build against the VPS |
 | S6 | Jobs host: region job, roadworks job and one pilot municipality; `RefreshRun`, snapshots, freshness, admin endpoints, alerts; a shadow job compares API answers with live upstream at sample points for two weeks | API-mode parity green; no verdict difference on fresh data |
 | S7 | The other 18 municipalities and the City document check | Every area fresh for 7 consecutive days |

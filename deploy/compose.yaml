@@ -1,0 +1,123 @@
+# Parking Tracker on the shared OVH server (ADR-0028), deployed by pt-deploy (ADR-0023).
+#
+# The file travels inside the migrator image (/deploy) and is checked by pt_compose_check.py before every deployment.
+# The check is an allow-list: only the keys used here pass, every service names a non-root user, runs read-only with
+# all capabilities dropped and no-new-privileges, mounts only this project's named volume, joins only `data` or `web`,
+# and reads secrets only from the project's secrets folder. A new key here needs the check changed first.
+#
+# Variables, written by pt-deploy-root into the release's .env:
+#   API_IMAGE, MIGRATOR_IMAGE  images by digest
+#   PT_SECRETS                 folder of the secret files (/opt/apps/parking-tracker/secrets on the server)
+#
+# Memory: 256 + 224 MB while running, the migrator's 128 MB only during a deployment (ADR-0028 budget).
+name: parking-tracker
+
+x-hardened: &hardened
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+
+services:
+  postgres:
+    <<: *hardened
+    # postgis/postgis:17-3.5
+    image: postgis/postgis@sha256:01a6a70e41e6c4467c8f55f6063555ed72db2d6662cd0d571040d42eadaeb6f6
+    # Started as postgres from the beginning, so the entrypoint needs no capability to switch users.
+    user: postgres
+    restart: unless-stopped
+    command:
+      - postgres
+      - -c
+      - shared_buffers=48MB
+      - -c
+      - max_connections=30
+      - -c
+      - maintenance_work_mem=32MB
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+      - pt_owner_password
+      - pt_api_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    tmpfs:
+      - /var/run/postgresql
+      - /tmp
+    networks: [data]
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  migrator:
+    <<: *hardened
+    image: ${MIGRATOR_IMAGE:?MIGRATOR_IMAGE is not set}
+    # The .NET images' non-root app user, stated so that the check does not depend on the image's USER line.
+    user: "1654:1654"
+    profiles: [migrate]
+    restart: "no"
+    environment:
+      PARKING_DATA_CONNECTION_FILE: /run/secrets/parking_data_connection
+      # The bundle is a single-file executable that unpacks itself; the root file system is read-only.
+      DOTNET_BUNDLE_EXTRACT_BASE_DIR: /tmp
+    secrets:
+      - source: migrator_connection
+        target: parking_data_connection
+    tmpfs:
+      - /tmp
+    networks: [data]
+    mem_limit: 128m
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *hardened
+    image: ${API_IMAGE:?API_IMAGE is not set}
+    user: "1654:1654"
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      DOTNET_gcServer: "0"
+      DOTNET_GCConserveMemory: "7"
+    secrets:
+      - source: api_connection
+        target: ConnectionStrings__ParkingData
+    tmpfs:
+      - /tmp
+    networks:
+      web:
+        aliases: [parking-api]
+      data: {}
+    mem_limit: 224m
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+# Compose secrets are plain bind mounts outside Swarm: each file is owned by the user of the container that reads it
+# (999 for postgres, 1654 for the .NET images) with mode 0400, as provision.sh creates them.
+secrets:
+  postgres_password:
+    file: ${PT_SECRETS:?PT_SECRETS is not set}/postgres/postgres_password
+  pt_owner_password:
+    file: ${PT_SECRETS}/postgres/pt_owner_password
+  pt_api_password:
+    file: ${PT_SECRETS}/postgres/pt_api_password
+  migrator_connection:
+    file: ${PT_SECRETS}/app/migrator_connection
+  api_connection:
+    file: ${PT_SECRETS}/app/api_connection
+
+volumes:
+  pgdata:
+    name: parking-tracker-pgdata
+
+networks:
+  # The shared Caddy's network; it exists on the server (RaidManager ADR-0027).
+  web:
+    external: true
+  data:
+    internal: true

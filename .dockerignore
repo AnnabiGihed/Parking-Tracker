@@ -1,0 +1,15 @@
+# Build context of the back-end images (repository root). Only what the API and the migrator need goes in.
+**/bin/
+**/obj/
+artifacts/
+.git/
+.github/
+.vs/
+test/
+signing/
+**/node_modules/
+docs/
+*.jks
+*.keystore
+# The Android host is not part of the back end and needs the MAUI workload.
+src/Containers/UI/Hosting/ParkingTracker.App/

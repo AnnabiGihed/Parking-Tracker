@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Support code of the tests that need the server database (ADR-0025): one postgis/postgis container with the two roles of the
+       server (an owner that migrates, a less-privileged one that serves), shared by the persistence tests and the host tests. -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <!-- References xunit for IAsyncLifetime only; dotnet test must not run it as a test assembly. -->
+    <IsTestProject>false</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+  </ItemGroup>
+
+</Project>

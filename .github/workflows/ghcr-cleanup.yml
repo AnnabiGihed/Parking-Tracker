@@ -1,0 +1,35 @@
+name: GHCR clean-up
+
+# Keeps about the 10 newest releases of each back-end image in GitHub Container Registry (ADR-0023), so that private
+# packages stay within the storage allowance. Each release is three package versions (the image index, the image and
+# its SBOM and provenance attestations), so 30 versions are kept. The server keeps its current and previous release on
+# its own disk.
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ghcr-cleanup
+  cancel-in-progress: false
+
+jobs:
+  clean-up:
+    name: Delete old image versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      packages: write
+    strategy:
+      matrix:
+        package: [parking-tracker-api, parking-tracker-migrator]
+    steps:
+      - name: Keep the 30 newest versions of ${{ matrix.package }}
+        uses: actions/delete-package-versions@e5bc658cc4c965c472efe991f8beea3981499c55 # v5.0.0
+        with:
+          package-name: ${{ matrix.package }}
+          package-type: container
+          min-versions-to-keep: 30

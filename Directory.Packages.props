@@ -10,6 +10,32 @@
     <PackageVersion Include="Pivot.Framework.Domain" Version="$(PivotFrameworkVersion)" />
     <PackageVersion Include="Pivot.Framework.Application" Version="$(PivotFrameworkVersion)" />
     <PackageVersion Include="Pivot.Framework.Tools.DependencyInjection" Version="$(PivotFrameworkVersion)" />
+    <PackageVersion Include="Pivot.Framework.Containers.API" Version="$(PivotFrameworkVersion)" />
+    <PackageVersion Include="Pivot.Framework.Infrastructure.Persistence.PostgreSQL" Version="$(PivotFrameworkVersion)" />
+  </ItemGroup>
+
+  <ItemGroup Label="Back end (ADR-0010, ADR-0016)">
+    <!-- Same Npgsql provider line as Pivot.Framework.Infrastructure.Persistence.PostgreSQL 2.1.0 (10.0.3). -->
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL.NetTopologySuite" Version="10.0.3" />
+    <!-- Pivot 2.1.0 brings EF Core 10.0.13 while the design-time package needs 10.0.15; pinned so the host loads one version (MSB3277). -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.15" />
+    <!-- The generator Pivot.Framework.Authentication.AspNetCore 2.1.0 brings, declared because the API calls it. -->
+    <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.3.1" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="3.0.2" />
+  </ItemGroup>
+
+  <ItemGroup Label="Service defaults and local composition (Aspire, development only)">
+    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.6.5" />
+    <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.11.0" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.11.0" />
+    <!-- Not below the 1.20.1 Pivot.Framework.Containers.API 2.1.0 depends on. -->
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.21.0" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.21.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.21.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.21.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.21.0" />
   </ItemGroup>
 
   <ItemGroup Label="Analyzers (shared set, referenced in Directory.Build.props)">
@@ -34,6 +60,8 @@
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />
     <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.15" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.15" />
+    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.17.0" />
   </ItemGroup>
 
   <ItemGroup Label="Phone screens (ADR-0020)">
