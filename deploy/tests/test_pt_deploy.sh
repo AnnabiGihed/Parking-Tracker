@@ -79,7 +79,11 @@ done
 first_release_clean_up() {
 	(
 		set -euo pipefail
-		release_of_link() { [[ $1 == current ]] && echo sha-0123456789ab; return 0; }
+		release_of_link() {
+			local link=$1
+			[[ $link == current ]] && echo sha-0123456789ab
+			return 0
+		}
 		docker() { return 0; }
 		clean_up
 	)
