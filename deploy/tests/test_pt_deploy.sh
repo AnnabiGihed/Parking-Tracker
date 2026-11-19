@@ -90,5 +90,26 @@ first_release_clean_up() {
 }
 check "clean_up succeeds after a first release" accept first_release_clean_up
 
+# Regression: pt-backup's EXIT trap runs after restore_test has returned; it once read a local variable there, failed
+# under set -u and left the throw-away container behind. pt-backup declares the same read-only names as pt-deploy-root,
+# so it is sourced in a separate bash.
+restore_test_trap_after_return() {
+	local marker
+	marker=$(mktemp)
+	rm -f "$marker"
+	# remove_scratch silences docker's output, so the stub leaves a file behind instead of printing.
+	bash -c '
+		set -euo pipefail
+		source "$1"
+		marker=$2
+		docker() { if [[ $1 == rm && $3 == parking-tracker-restore-test-1 ]]; then touch "$marker"; fi; return 0; }
+		start_scratch() { scratch=parking-tracker-restore-test-1; trap remove_scratch EXIT; }
+		start_scratch
+	' _ "$SERVER_DIR/pt-backup" "$marker"
+	local status=$?
+	[[ -f $marker ]] && rm -f "$marker" && ((status == 0))
+}
+check "pt-backup removes the restore-test container after the function returned" accept restore_test_trap_after_return
+
 echo "pt-deploy tests: $passes passed, $failures failed"
 ((failures == 0))
