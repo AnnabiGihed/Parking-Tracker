@@ -1,0 +1,18 @@
+@namespace ParkingTracker.Shared.Features.Places.Components
+@inherits ViewModelComponent<PlacesViewModel>
+<div class="place-chips" role="group" aria-label="Saved places">
+    <span class="place-chip">
+        <RadzenButton id="placeHome" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" class="place-go" Click="OnGoHomeAsync"><Icon Name="home" />Home</RadzenButton>
+        @if (ViewModel.Home is not null)
+        {
+            <RadzenButton id="placeHomeEdit" ButtonStyle="ButtonStyle.Base" Variant="Variant.Text" Size="ButtonSize.Small" class="place-edit" aria-label="Edit home" Click="OnEditHome"><Icon Name="edit" /></RadzenButton>
+        }
+    </span>
+    <span class="place-chip">
+        <RadzenButton id="placeWork" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" class="place-go" Click="OnGoWorkAsync"><Icon Name="work" />Work</RadzenButton>
+        @if (ViewModel.Work is not null)
+        {
+            <RadzenButton id="placeWorkEdit" ButtonStyle="ButtonStyle.Base" Variant="Variant.Text" Size="ButtonSize.Small" class="place-edit" aria-label="Edit work" Click="OnEditWork"><Icon Name="edit" /></RadzenButton>
+        }
+    </span>
+</div>

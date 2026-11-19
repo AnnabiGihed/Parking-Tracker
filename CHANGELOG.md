@@ -10,6 +10,11 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
 
 ## [Unreleased]
 
+### Added
+
+- Home and Work shortcut chips under the search bar: tap one to see that place on the map and check it, or set it
+  from an address or your position. The places stay on the phone, encrypted.
+
 ### Changed
 
 - The welcome screen is built with the Radzen component library, the first screen of the move to Radzen. Its texts

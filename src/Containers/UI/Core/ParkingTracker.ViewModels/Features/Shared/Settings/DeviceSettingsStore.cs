@@ -36,7 +36,7 @@ namespace ParkingTracker.ViewModels.Features.Shared.Settings;
 ///              before the screens and must not cache "no card" while the old values are still being moved. A change made before the
 ///              one-time move has finished also removes the old copy of the value, so that the next launch cannot bring deleted data back.
 /// </summary>
-public sealed partial class DeviceSettingsStore : ISettingsStore
+public sealed partial class DeviceSettingsStore : ISettingsStore, IDisposable
 {
 	#region Fields
 	/// <summary>
@@ -85,6 +85,11 @@ public sealed partial class DeviceSettingsStore : ISettingsStore
 	private readonly ILogger<DeviceSettingsStore> logger;
 
 	/// <summary>
+	/// Tells this store that another store removed the stale encrypted rows, so that it forgets the card and the unreadable states.
+	/// </summary>
+	private readonly DeviceDataResetNotice resetNotice;
+
+	/// <summary>
 	/// Guards <see cref="cachedCard"/>, <see cref="isCardCached"/>, <see cref="cardUnreadableCode"/> and <see cref="sessionUnreadableCode"/>.
 	/// </summary>
 	private readonly Lock cacheGate = new();
@@ -123,6 +128,7 @@ public sealed partial class DeviceSettingsStore : ISettingsStore
 	/// <param name="gate">The start-up gate that finishes before the saved values are read.</param>
 	/// <param name="referenceData">The municipalities that a saved card is checked against.</param>
 	/// <param name="logger">The log.</param>
+	/// <param name="resetNotice">Tells this store that the stale encrypted rows were removed; the store listens until it is disposed.</param>
 	/// <exception cref="ArgumentNullException">An argument is <see langword="null"/>.</exception>
 	public DeviceSettingsStore(
 		ISettingsStore inner,
@@ -133,7 +139,8 @@ public sealed partial class DeviceSettingsStore : ISettingsStore
 		IDeviceDatabaseInitializer initializer,
 		IStartupGate gate,
 		IReferenceData referenceData,
-		ILogger<DeviceSettingsStore> logger)
+		ILogger<DeviceSettingsStore> logger,
+		DeviceDataResetNotice resetNotice)
 	{
 		ArgumentNullException.ThrowIfNull(inner);
 		ArgumentNullException.ThrowIfNull(cards);
@@ -144,6 +151,7 @@ public sealed partial class DeviceSettingsStore : ISettingsStore
 		ArgumentNullException.ThrowIfNull(gate);
 		ArgumentNullException.ThrowIfNull(referenceData);
 		ArgumentNullException.ThrowIfNull(logger);
+		ArgumentNullException.ThrowIfNull(resetNotice);
 		this.inner = inner;
 		this.cards = cards;
 		this.sessions = sessions;
@@ -153,6 +161,8 @@ public sealed partial class DeviceSettingsStore : ISettingsStore
 		this.gate = gate;
 		this.referenceData = referenceData;
 		this.logger = logger;
+		this.resetNotice = resetNotice;
+		resetNotice.StaleRowsRemoved += OnStaleRowsRemoved;
 	}
 	#endregion
 
@@ -374,7 +384,32 @@ public sealed partial class DeviceSettingsStore : ISettingsStore
 	public Task SavePermissionSnoozeUntilAsync(DateTimeOffset until) => inner.SavePermissionSnoozeUntilAsync(until);
 	#endregion
 
+	#region IDisposable Implementation
+	/// <inheritdoc />
+	public void Dispose()
+	{
+		resetNotice.StaleRowsRemoved -= OnStaleRowsRemoved;
+	}
+	#endregion
+
 	#region Private Helpers
+	/// <summary>
+	/// Forgets the card that was read and every remembered unreadable state, after the stale encrypted rows were removed: the next read
+	/// goes to the repository.
+	/// </summary>
+	/// <param name="sender">The notice.</param>
+	/// <param name="e">Not used.</param>
+	private void OnStaleRowsRemoved(object? sender, EventArgs e)
+	{
+		lock (cacheGate)
+		{
+			cachedCard = null;
+			isCardCached = false;
+			cardUnreadableCode = null;
+			sessionUnreadableCode = null;
+		}
+	}
+
 	/// <summary>
 	/// Reads the open parking session. A session that exists but cannot be read is not "none": the call throws
 	/// <see cref="SavedDataUnreadableException"/>, and a permanent failure is remembered until the car is saved or cleared.
@@ -437,6 +472,7 @@ public sealed partial class DeviceSettingsStore : ISettingsStore
 		places.Remove(scope);
 		await CommitAsync(scope).ConfigureAwait(false);
 		ForgetUnreadableSession();
+		resetNotice.Raise();
 		return await cards.UpdateAsync(scope, aggregate).ConfigureAwait(false);
 	}
 

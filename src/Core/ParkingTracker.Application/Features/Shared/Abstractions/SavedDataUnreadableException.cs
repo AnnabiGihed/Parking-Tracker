@@ -21,6 +21,11 @@ public sealed class SavedDataUnreadableException : InvalidOperationException
 	/// What the user is told when the saved parked car cannot be read.
 	/// </summary>
 	public const string CarMessage = "Your saved parked car could not be read.";
+
+	/// <summary>
+	/// What the user is told when the saved Home and Work places cannot be read.
+	/// </summary>
+	public const string PlacesMessage = "Your saved places could not be read. Please set them again.";
 	#endregion
 
 	#region Constructors
