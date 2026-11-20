@@ -3,12 +3,15 @@
 #
 # Usage:
 #   backend-smoke.sh prepare <secrets dir>   throw-away passwords and connection strings, owned like on the server
-#                                            (999 for postgres, 1654 for the .NET images), and the `web` network
+#                                            (999 for postgres, 1654 for the .NET images), the token signing keys and the
+#                                            subject hash key as provision.sh makes them, and the `web` network
 #   backend-smoke.sh start                   PostgreSQL, deploy/sql/roles.sql, the migrator, then the API; needs
 #                                            PT_SECRETS, API_IMAGE and MIGRATOR_IMAGE in the environment
 #   backend-smoke.sh check <curl image>      from a container on `web`, as the shared Caddy reaches the API:
 #                                            /health/live and /health/ready 200, /scalar and /swagger 404, and
-#                                            /health/live 200 with a forged X-Forwarded-For and no proxy key
+#                                            /health/live 200 with a forged X-Forwarded-For and no proxy key, GET /api/v1/me 401
+#                                            without a token, and POST /api/v1/sessions/challenges 200 (the nonce is written
+#                                            as the less-privileged database role, so a missing grant fails here)
 # Exit code 0 on success; 1 with an ::error:: line otherwise. Uses sudo for chown, as GitHub's runners allow.
 set -euo pipefail
 
@@ -40,6 +43,13 @@ prepare() {
 	write_secret "$dir/app/api_connection" "$DOTNET_APP_UID" \
 		"Host=postgres;Port=5432;Database=parkingdata;Username=pt_api;Password=$api_password;Maximum Pool Size=10"
 	write_secret "$dir/app/proxy_key" "$DOTNET_APP_UID" "$(openssl rand -hex 32)"
+	local signing_key subject_key
+	signing_key=$(openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256) || error "openssl could not make a signing key"
+	subject_key=$(openssl rand -base64 32) || error "openssl could not make a subject hash key"
+	[[ -n $signing_key && -n $subject_key ]] || error "a generated secret is empty"
+	write_secret "$dir/app/token_signing_key_current.pem" "$DOTNET_APP_UID" "$signing_key"
+	write_secret "$dir/app/token_signing_key_previous.pem" "$DOTNET_APP_UID" ""
+	write_secret "$dir/app/subject_hash_key" "$DOTNET_APP_UID" "$subject_key"
 	docker network inspect web >/dev/null 2>&1 || docker network create web >/dev/null
 }
 
@@ -78,6 +88,9 @@ check() {
 	expect_status "$curl_image" /swagger/v1/swagger.json 404
 	# A caller on `web` that is not the proxy cannot set the client address: the header is ignored, not an error.
 	expect_status "$curl_image" /health/live 200 -H 'X-Forwarded-For: 203.0.113.9'
+	# Every endpoint but the health, challenge and sign-in ones needs a token; the challenge works without one.
+	expect_status "$curl_image" /api/v1/me 401
+	expect_status "$curl_image" /api/v1/sessions/challenges 200 -X POST
 }
 
 case "${1:-}" in

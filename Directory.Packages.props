@@ -26,6 +26,12 @@
     <PackageVersion Include="Scalar.AspNetCore" Version="3.0.2" />
   </ItemGroup>
 
+  <ItemGroup Label="Sign-in and API tokens (ADR-0014): the versions Pivot.Framework.Containers.API 2.1.0 already brings, declared because the API calls them">
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.19.2" />
+    <PackageVersion Include="Microsoft.IdentityModel.Protocols.OpenIdConnect" Version="8.19.2" />
+  </ItemGroup>
+
   <ItemGroup Label="Service defaults and local composition (Aspire, development only)">
     <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.6.5" />
     <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.11.0" />

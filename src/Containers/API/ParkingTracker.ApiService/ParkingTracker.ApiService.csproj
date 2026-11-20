@@ -7,10 +7,16 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Aspire\Defaults\ParkingTracker.ServiceDefaults\ParkingTracker.ServiceDefaults.csproj" />
     <ProjectReference Include="..\..\..\Infrastructure\ParkingTracker.Persistence.EntityFrameworkCore\ParkingTracker.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\Core\ParkingTracker.Backend.Application\ParkingTracker.Backend.Application.csproj" />
+    <ProjectReference Include="..\..\..\Core\ParkingTracker.Contracts\ParkingTracker.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Pivot.Framework.Containers.API" />
+    <!-- Sign-in and API tokens (ADR-0014): JWT bearer for the API own tokens, the token handlers and the OpenID metadata reader for Google. -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
+    <PackageReference Include="Microsoft.IdentityModel.Protocols.OpenIdConnect" />
     <!-- Pivot's WithSwagger needs Keycloak (ADR-0014 excludes it), so the host registers the generator itself (ADR-0016). -->
     <PackageReference Include="Swashbuckle.AspNetCore" />
     <PackageReference Include="Scalar.AspNetCore" />

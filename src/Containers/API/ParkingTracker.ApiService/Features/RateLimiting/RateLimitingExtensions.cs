@@ -8,7 +8,8 @@ namespace ParkingTracker.ApiService.Features.RateLimiting;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : Registers the rate limits of the API: a global concurrency limit and the per-address policy of the health endpoints.
+/// Purpose     : Registers the rate limits of the API: a global concurrency limit, the per-address policy of the health endpoints, the per-address
+///              sliding window of the session endpoints and the per-account token bucket of the authenticated endpoints.
 ///              A refusal answers 429 with a Retry-After header in seconds and a problem document.
 /// </summary>
 public static class RateLimitingExtensions
@@ -38,11 +39,45 @@ public static class RateLimitingExtensions
 					Window = RateLimitSettings.HealthWindow,
 					QueueLimit = 0,
 				}));
+			_ = options.AddPolicy(RateLimitSettings.SessionPolicyName, context => RateLimitPartition.GetSlidingWindowLimiter(
+				ClientAddressKey.From(context.Connection.RemoteIpAddress),
+				_ => new SlidingWindowRateLimiterOptions
+				{
+					PermitLimit = RateLimitSettings.SessionPermitsPerWindow,
+					Window = RateLimitSettings.SessionWindow,
+					SegmentsPerWindow = RateLimitSettings.SessionSegmentsPerWindow,
+					QueueLimit = 0,
+				}));
+			_ = options.AddPolicy(RateLimitSettings.AccountPolicyName, context => RateLimitPartition.GetTokenBucketLimiter(
+				AccountKey(context),
+				_ => new TokenBucketRateLimiterOptions
+				{
+					TokenLimit = RateLimitSettings.AccountBurst,
+					TokensPerPeriod = RateLimitSettings.AccountTokensPerPeriod,
+					ReplenishmentPeriod = RateLimitSettings.AccountReplenishmentPeriod,
+					AutoReplenishment = true,
+					QueueLimit = 0,
+				}));
 		});
 	}
 	#endregion
 
 	#region Private Helpers
+	/// <summary>
+	/// Builds the bucket key of a request of the per-account policy: the <c>sub</c> claim of the signed-in user, so one account has
+	/// one bucket whatever its address; a request without a user falls back to its client address, so a flood of bad tokens is
+	/// limited as well.
+	/// </summary>
+	/// <param name="context">The request.</param>
+	/// <returns>The key, prefixed so that an account and an address never share a bucket.</returns>
+	private static string AccountKey(HttpContext context)
+	{
+		var subject = context.User.Identity?.IsAuthenticated == true ? context.User.FindFirst("sub")?.Value : null;
+		return string.IsNullOrEmpty(subject)
+			? $"address:{ClientAddressKey.From(context.Connection.RemoteIpAddress)}"
+			: $"account:{subject}";
+	}
+
 	/// <summary>
 	/// Answers a refused request with 429, the Retry-After header and a problem document.
 	/// </summary>

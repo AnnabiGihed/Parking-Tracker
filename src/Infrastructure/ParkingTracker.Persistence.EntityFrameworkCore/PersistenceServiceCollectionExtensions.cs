@@ -1,8 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using ParkingTracker.Application.Features.Accounts.Abstractions;
+using Microsoft.Extensions.Logging;
+using ParkingTracker.Backend.Application.Features.Accounts.Abstractions;
 using ParkingTracker.Persistence.EntityFrameworkCore.Features.Accounts;
 using ParkingTracker.Persistence.EntityFrameworkCore.Features.Shared.Database;
+using Pivot.Framework.Domain.Repositories;
 using Pivot.Framework.Infrastructure.Persistence.PostgreSQL.Extensions;
 
 namespace ParkingTracker.Persistence.EntityFrameworkCore;
@@ -33,6 +35,8 @@ public static class PersistenceServiceCollectionExtensions
 			connectionString,
 			options => options.UseNpgsql(connectionString, npgsql => npgsql.UseNetTopologySuite()));
 		_ = services.AddScoped<IUserAccountRepository>(provider => new UserAccountRepository(provider.GetRequiredService<ParkingDataDbContext>()));
+		_ = services.AddScoped<IUnitOfWork>(provider => new ParkingDataUnitOfWork(provider.GetRequiredService<ParkingDataDbContext>(), provider.GetRequiredService<ILogger<ParkingDataUnitOfWork>>()));
+		_ = services.AddScoped<ISignInChallengeStore>(provider => new SignInChallengeStore(provider.GetRequiredService<ParkingDataDbContext>()));
 		return services;
 	}
 	#endregion

@@ -111,5 +111,138 @@ restore_test_trap_after_return() {
 }
 check "pt-backup removes the restore-test container after the function returned" accept restore_test_trap_after_return
 
+# provision.sh: the secrets of the sign-in are created once and never replaced by a rerun, an existing empty secret stops the
+# script, a rotation moves the current key to the previous one and recreates the API container. The script is copied with its
+# application folder pointed at a temporary one and the root check removed, so the functions run as the current user; chown
+# records its calls instead of changing owners, docker records its arguments instead of running, and the current release is
+# named by a function because a symbolic link needs rights that a developer PC may not give.
+provision_copy() {
+	local work=$1
+	sed -e "s|^readonly APP_DIR=.*|readonly APP_DIR=$work/app|" -e 's|\[\[ \$EUID -eq 0 \]\]|true|' "$SERVER_DIR/provision.sh" >"$work/provision.sh"
+}
+
+provision_secrets_scenario() {
+	local work status=0
+	work=$(mktemp -d)
+	provision_copy "$work"
+	bash -c '
+		set -euo pipefail
+		source "$1/provision.sh"
+		work=$1
+		chown() { echo "$*" >>"$work/chown.log"; }
+		docker() { echo "$*" >>"$work/docker.log"; }
+		app=$APP_DIR/secrets/app
+		mkdir -p "$app"
+		create_token_secrets >/dev/null
+		grep -q "BEGIN PRIVATE KEY" "$app/token_signing_key_current.pem"
+		openssl pkey -in "$app/token_signing_key_current.pem" -noout -text | grep -q prime256v1
+		[[ ! -s $app/token_signing_key_previous.pem ]]
+		[[ $(base64 -d <"$app/subject_hash_key" | wc -c) -eq 32 ]]
+		for name in token_signing_key_current.pem token_signing_key_previous.pem subject_hash_key; do
+			grep -q "^1654:1654 $app/$name\." "$work/chown.log"
+			case "$(uname -s)" in MINGW* | MSYS* | CYGWIN*) ;; *) [[ $(stat -c %a "$app/$name") == 400 ]] ;; esac
+		done
+		[[ -z $(ls -A "$app" | grep -v -e "^token_signing_key_" -e "^subject_hash_key$" || true) ]]
+		before=$(cat "$app"/token_signing_key_current.pem "$app"/subject_hash_key | sha256sum)
+		create_token_secrets >/dev/null
+		[[ $before == "$(cat "$app"/token_signing_key_current.pem "$app"/subject_hash_key | sha256sum)" ]]
+		[[ ! -s $app/token_signing_key_previous.pem ]]
+		old_current=$(cat "$app/token_signing_key_current.pem")
+		subject_key=$(cat "$app/subject_hash_key")
+		release=$APP_DIR/releases/sha-0123456789ab
+		mkdir -p "$release"
+		current_release_dir() { echo "$release"; }
+		rotate_signing_key >/dev/null
+		[[ $(cat "$app/token_signing_key_previous.pem") == "$old_current" ]]
+		[[ $(cat "$app/token_signing_key_current.pem") != "$old_current" ]]
+		grep -q "BEGIN PRIVATE KEY" "$app/token_signing_key_current.pem"
+		[[ $(cat "$app/subject_hash_key") == "$subject_key" ]]
+		grep -qF -e "compose -p parking-tracker --project-directory $release -f $release/compose.yaml --env-file $release/.env up -d --force-recreate --no-deps api" "$work/docker.log"
+		[[ -z $(ls -A "$app" | grep -v -e "^token_signing_key_" -e "^subject_hash_key$" || true) ]]
+		create_token_secrets >/dev/null
+		[[ $(cat "$app/token_signing_key_previous.pem") == "$old_current" ]]
+	' _ "$work" || status=$?
+	rm -rf "$work"
+	return "$status"
+}
+check "provision.sh creates the sign-in secrets once with owner and mode, keeps them on a rerun, rotates the key and recreates the API" accept provision_secrets_scenario
+
+provision_rotation_before_a_release() {
+	local work status=0
+	work=$(mktemp -d)
+	provision_copy "$work"
+	bash -c '
+		set -euo pipefail
+		source "$1/provision.sh"
+		work=$1
+		chown() { :; }
+		docker() { echo "$*" >>"$work/docker.log"; }
+		app=$APP_DIR/secrets/app
+		mkdir -p "$app"
+		create_token_secrets >/dev/null
+		rotate_signing_key >/dev/null
+		[[ ! -e $work/docker.log ]]
+	' _ "$work" || status=$?
+	rm -rf "$work"
+	return "$status"
+}
+check "provision.sh rotates without touching Docker when no release is deployed yet" accept provision_rotation_before_a_release
+
+provision_rotation_when_the_recreate_fails() {
+	local work status=0
+	work=$(mktemp -d)
+	provision_copy "$work"
+	bash -c '
+		set -uo pipefail
+		source "$1/provision.sh"
+		chown() { :; }
+		docker() { return 1; }
+		app=$APP_DIR/secrets/app
+		mkdir -p "$app"
+		current_release_dir() { echo "$APP_DIR/releases/sha-0123456789ab"; }
+		create_token_secrets >/dev/null
+		rotate_signing_key
+	' _ "$work" || status=$?
+	rm -rf "$work"
+	return "$status"
+}
+check "provision.sh fails loudly when the API cannot be recreated after a rotation" refuse provision_rotation_when_the_recreate_fails
+
+provision_with_an_empty_secret() {
+	local file=$1 work status=0
+	work=$(mktemp -d)
+	provision_copy "$work"
+	bash -c '
+		set -uo pipefail
+		source "$1/provision.sh"
+		chown() { :; }
+		app=$APP_DIR/secrets/app
+		mkdir -p "$app"
+		create_token_secrets >/dev/null
+		: >"$app/$2"
+		create_token_secrets
+	' _ "$work" "$file" || status=$?
+	rm -rf "$work"
+	return "$status"
+}
+check "provision.sh refuses an existing empty subject_hash_key" refuse provision_with_an_empty_secret subject_hash_key
+check "provision.sh refuses an existing empty current signing key" refuse provision_with_an_empty_secret token_signing_key_current.pem
+
+provision_rotation_without_a_key() {
+	local work status=0
+	work=$(mktemp -d)
+	provision_copy "$work"
+	bash -c '
+		source "$1/provision.sh"
+		mkdir -p "$APP_DIR/secrets/app"
+		rotate_signing_key
+	' _ "$work" || status=$?
+	rm -rf "$work"
+	return "$status"
+}
+check "provision.sh refuses to rotate when there is no current signing key" refuse provision_rotation_without_a_key
+
+check "provision.sh refuses --rotate-signing-key with --deploy-key" refuse bash "$SERVER_DIR/provision.sh" --rotate-signing-key --deploy-key x
+
 echo "pt-deploy tests: $passes passed, $failures failed"
 ((failures == 0))

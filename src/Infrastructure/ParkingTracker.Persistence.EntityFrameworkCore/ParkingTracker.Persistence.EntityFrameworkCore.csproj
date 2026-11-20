@@ -5,7 +5,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Core\ParkingTracker.Application\ParkingTracker.Application.csproj" />
+    <ProjectReference Include="..\..\Core\ParkingTracker.Backend.Application\ParkingTracker.Backend.Application.csproj" />
   </ItemGroup>
 
   <ItemGroup>
