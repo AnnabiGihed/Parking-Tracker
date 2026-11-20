@@ -143,6 +143,34 @@ public sealed class SavedPlaces : LightweightAggregateRoot<SavedPlacesId>
 	}
 
 	/// <summary>
+	/// Changes the name and the place of a favourite; it keeps its identifier and its position in the list.
+	/// </summary>
+	/// <param name="id">The identifier of the favourite.</param>
+	/// <param name="label">The new label.</param>
+	/// <param name="point">The new place.</param>
+	/// <param name="addressText">The new address in words; <see langword="null"/> when unknown.</param>
+	/// <returns>Success, a not-found failure when no favourite has the identifier, or the failure of the new values; the favourite then stays as it was.</returns>
+	/// <exception cref="ArgumentNullException"><paramref name="id"/> is <see langword="null"/>.</exception>
+	public Result UpdateFavourite(SavedPlaceId id, string? label, GeoPoint point, string? addressText)
+	{
+		ArgumentNullException.ThrowIfNull(id);
+		var index = places.FindIndex(candidate => candidate.Id == id && candidate.Kind == PlaceKind.Favourite);
+		if (index < 0)
+		{
+			return Result.Failure(SavedPlacesErrors.PlaceNotFound, ResultExceptionType.NotFound);
+		}
+
+		var changed = SavedPlace.Create(id, PlaceKind.Favourite, label, point, addressText);
+		if (changed.IsFailure)
+		{
+			return Result.Failure(changed.Error, changed.ResultExceptionType);
+		}
+
+		places[index] = changed.Value;
+		return Result.Success();
+	}
+
+	/// <summary>
 	/// Removes a saved place of any kind.
 	/// </summary>
 	/// <param name="id">The identifier of the place.</param>

@@ -3,4 +3,8 @@
 <div class="place-chips" role="group" aria-label="Saved places">
     <RadzenChip id="placeHome" ChipStyle="BadgeStyle.Base" Size="ChipSize.Medium" class="place-go" Click="OnGoHomeAsync"><span class="place-label"><Icon Name="home" /><span>@(ViewModel.Home is null ? "Set home" : "Home")</span></span></RadzenChip>
     <RadzenChip id="placeWork" ChipStyle="BadgeStyle.Base" Size="ChipSize.Medium" class="place-go" Click="OnGoWorkAsync"><span class="place-label"><Icon Name="work" /><span>@(ViewModel.Work is null ? "Set work" : "Work")</span></span></RadzenChip>
+    @foreach (var favourite in ViewModel.Favourites)
+    {
+        <RadzenChip @key="favourite.Id" ChipStyle="BadgeStyle.Base" Size="ChipSize.Medium" class="place-go place-favourite" Click="() => OnGoFavouriteAsync(favourite)"><span class="place-label"><Icon Name="star" /><span class="place-name">@favourite.Label</span></span></RadzenChip>
+    }
 </div>

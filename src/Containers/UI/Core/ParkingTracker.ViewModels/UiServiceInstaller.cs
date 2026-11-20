@@ -43,6 +43,7 @@ public sealed class UiServiceInstaller : IServiceInstaller
 		services.AddScoped<CarViewModel>();
 		services.AddScoped<PlacesViewModel>();
 		services.AddScoped<PlacePickerViewModel>();
+		services.AddScoped<FavouritesViewModel>();
 		services.AddScoped<MenuViewModel>();
 		services.AddScoped<ParkedOnScreenResponder>();
 		services.AddScoped<MapLayersViewModel>();

@@ -51,6 +51,7 @@ public sealed class DialogBridgeTests : UiTestContext
 
 		await host.WaitForAssertionAsync(() => host.Find("#fakeBody").TextContent.Should().Be("Hello"));
 		host.Find(".rz-dialog-title").TextContent.Should().Be("Fake");
+		host.Find(".rz-dialog").ClassList.Should().Contain(DialogBridge.SheetClass);
 		Resolve<IBackNavigation>().CanGoBack.Should().BeTrue();
 	}
 

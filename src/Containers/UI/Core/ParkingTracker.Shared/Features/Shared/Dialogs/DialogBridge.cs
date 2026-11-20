@@ -7,7 +7,7 @@ namespace ParkingTracker.Shared.Features.Shared.Dialogs;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : Lets a view model drive a Radzen dialog without referencing Radzen (ADR-0020, ADR-0030): it opens the dialog through
+/// Purpose     : Lets a view model drive a Radzen dialog without referencing Radzen (ADR-0020, ADR-0030): it opens the dialog, styled as a bottom sheet, through
 ///              <see cref="DialogService"/> when the view model says it is open and closes it when it says it is not, and when the
 ///              user closes the dialog (the close button, the mask, the escape key) it calls the view model's <c>Close</c>. While the
 ///              dialog is open the back button of the phone closes it. It draws nothing itself; its content is shown in the dialog.
@@ -43,16 +43,23 @@ public sealed class DialogBridge : ComponentBase, IDisposable
 	public string Title { get; set; } = string.Empty;
 
 	/// <summary>
-	/// Gets or sets the width of the dialog, as a CSS length.
+	/// Gets or sets the width of the dialog, as a CSS length; the sheet style limits it to 480px and centres it.
 	/// </summary>
 	[Parameter]
-	public string Width { get; set; } = "480px";
+	public string Width { get; set; } = "100%";
 
 	/// <summary>
 	/// Gets or sets the content of the dialog.
 	/// </summary>
 	[Parameter]
 	public RenderFragment? ChildContent { get; set; }
+	#endregion
+
+	#region Constants
+	/// <summary>
+	/// The class that styles the dialog as a bottom sheet, like the dialogs of the app itself (see <c>.app-sheet</c> in style.css).
+	/// </summary>
+	public const string SheetClass = "app-sheet";
 	#endregion
 
 	#region Fields
@@ -129,7 +136,7 @@ public sealed class DialogBridge : ComponentBase, IDisposable
 		backRegistration = BackNavigation.Register(ViewModel.Close);
 
 		// The task ends when the dialog closes, which this bridge learns from OnClose, so it is not awaited.
-		_ = DialogService.OpenAsync(Title, _ => ChildContent ?? (_ => { }), new DialogOptions { Width = Width });
+		_ = DialogService.OpenAsync(Title, _ => ChildContent ?? (_ => { }), new DialogOptions { Width = Width, CssClass = SheetClass });
 	}
 
 	/// <summary>

@@ -1,6 +1,7 @@
 using Bunit;
 using NSubstitute;
 using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
+using ParkingTracker.Domain.Features.SavedPlaces.Aggregates;
 using ParkingTracker.Domain.Features.SavedPlaces.ValueObjects;
 using ParkingTracker.Shared.Features.SpotCheck.Components;
 using ParkingTracker.Shared.Tests.Features.Shared.TestDoubles;
@@ -24,7 +25,7 @@ public sealed class AppMenuTests : UiTestContext
 	/// <summary>
 	/// A saved home.
 	/// </summary>
-	private static readonly PlaceShortcut SavedHome = new(PlaceKind.Home, "Home", Here, "Rue de la Loi 1");
+	private static readonly PlaceShortcut SavedHome = new(SavedPlaceId.New(), PlaceKind.Home, "Home", Here, "Rue de la Loi 1");
 
 	/// <summary>
 	/// Renders the search bar and the Radzen host that draws the dialogs, and taps the menu button.
@@ -64,18 +65,18 @@ public sealed class AppMenuTests : UiTestContext
 	}
 
 	/// <summary>
-	/// Verifies that the menu lists Home, Work and the parking card, each with "Not set" while nothing is saved.
+	/// Verifies that the menu lists Home, Work, the favourite places and the parking card, with "Not set" or "None yet" while nothing is saved.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
-	public async Task Menu_NothingSaved_ShouldListThreeItemsWithNotSet()
+	public async Task Menu_NothingSaved_ShouldListTheFourItems()
 	{
 		var host = await OpenMenuAsync();
 
 		host.Find("#appMenu .app-menu-name").TextContent.Should().Be("Parking Tracker");
-		host.FindAll("#appMenu .app-menu-item").Should().HaveCount(3);
-		host.FindAll("#appMenu .app-menu-title").Select(title => title.TextContent).Should().Equal("Home", "Work", "Parking card");
-		host.FindAll("#appMenu .app-menu-sub").Select(text => text.TextContent).Should().AllBe("Not set");
+		host.FindAll("#appMenu .app-menu-item").Should().HaveCount(4);
+		host.FindAll("#appMenu .app-menu-title").Select(title => title.TextContent).Should().Equal("Home", "Work", "Favourite places", "Parking card");
+		host.FindAll("#appMenu .app-menu-sub").Select(text => text.TextContent).Should().Equal("Not set", "Not set", "None yet", "Not set");
 	}
 
 	/// <summary>
@@ -90,7 +91,7 @@ public sealed class AppMenuTests : UiTestContext
 
 		var host = await OpenMenuAsync();
 
-		host.FindAll("#appMenu .app-menu-sub").Select(text => text.TextContent).Should().Equal("Rue de la Loi 1", "Not set", "Not set");
+		host.FindAll("#appMenu .app-menu-sub").Select(text => text.TextContent).Should().Equal("Rue de la Loi 1", "Not set", "None yet", "Not set");
 	}
 	#endregion
 
@@ -128,6 +129,24 @@ public sealed class AppMenuTests : UiTestContext
 		var picker = Resolve<PlacePickerViewModel>();
 		await host.WaitForAssertionAsync(() => picker.IsActive.Should().BeTrue());
 		picker.Kind.Should().Be(PlaceKind.Work);
+	}
+
+	/// <summary>
+	/// Verifies that the favourite places entry shows how many are saved, and that a tap closes the menu and opens the list.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Favourites_Tap_ShouldCloseTheMenuAndOpenTheList()
+	{
+		Places.GetPlacesAsync(Arg.Any<CancellationToken>()).Returns([new PlaceShortcut(SavedPlaceId.New(), PlaceKind.Favourite, "Bakery", Here, "Rue 1")]);
+		await Resolve<PlacesViewModel>().LoadAsync();
+		var host = await OpenMenuAsync();
+		host.Find("#menuFavourites .app-menu-sub").TextContent.Should().Be("1 saved");
+
+		await host.Find("#menuFavourites").ClickAsync();
+
+		await host.WaitForAssertionAsync(() => Resolve<FavouritesViewModel>().IsOpen.Should().BeTrue());
+		await host.WaitForAssertionAsync(() => host.FindAll("#appMenu").Should().BeEmpty());
 	}
 
 	/// <summary>

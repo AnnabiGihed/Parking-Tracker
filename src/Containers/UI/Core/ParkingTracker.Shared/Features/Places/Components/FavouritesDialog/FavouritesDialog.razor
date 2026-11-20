@@ -1,0 +1,34 @@
+@namespace ParkingTracker.Shared.Features.Places.Components
+@inherits ViewModelComponent<FavouritesViewModel>
+@using ParkingTracker.Shared.Features.Shared.Dialogs
+<DialogBridge ViewModel="ViewModel" Title="Favourite places">
+    <div id="favouritesDialog" class="favourites">
+        @if (ViewModel.IsEmpty)
+        {
+            <p id="favouritesEmpty" class="favourites-empty">No favourite places yet. Add the places you go to often, and one tap shows them on the map.</p>
+        }
+        else
+        {
+            <ul id="favouritesList" class="favourites-list">
+                @foreach (var favourite in ViewModel.Favourites)
+                {
+                    <li class="favourite-row" @key="favourite.Id">
+                        <button type="button" class="favourite-main" @onclick="() => OnShowAsync(favourite)">
+                            <Icon Name="star" />
+                            <span class="favourite-text">
+                                <span class="favourite-label">@favourite.Label</span>
+                                <span class="favourite-address">@FavouritesViewModel.AddressOf(favourite)</span>
+                            </span>
+                        </button>
+                        <RadzenButton ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Base" Variant="Variant.Text" class="favourite-edit icon-btn" title="@("Edit " + favourite.Label)" aria-label="@("Edit " + favourite.Label)" Click="() => OnEdit(favourite)"><Icon Name="edit" /></RadzenButton>
+                    </li>
+                }
+            </ul>
+        }
+        <RadzenButton id="favouriteAdd" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Primary" class="favourite-add" Text="Add a favourite" Disabled="!ViewModel.CanAdd" Click="OnAdd" />
+        @if (ViewModel.AddDisabledReason is { } reason)
+        {
+            <p id="favouriteAddReason" class="favourites-reason" role="status">@reason</p>
+        }
+    </div>
+</DialogBridge>

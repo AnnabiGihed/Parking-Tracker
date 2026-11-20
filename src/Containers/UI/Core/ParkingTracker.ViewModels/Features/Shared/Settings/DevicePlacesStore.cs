@@ -3,18 +3,18 @@ using ParkingTracker.Application.Features.ParkingSessions.Abstractions;
 using ParkingTracker.Application.Features.ResidentCards.Abstractions;
 using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
 using ParkingTracker.Application.Features.Shared.Abstractions;
+using ParkingTracker.Domain.Features.SavedPlaces.Aggregates;
 using ParkingTracker.Domain.Features.SavedPlaces.ValueObjects;
 using ParkingTracker.Domain.Features.Shared.ValueObjects;
 using Pivot.Framework.Domain.Shared;
 using PlaceList = ParkingTracker.Domain.Features.SavedPlaces.Aggregates.SavedPlaces;
-using SavedPlace = ParkingTracker.Domain.Features.SavedPlaces.Aggregates.SavedPlace;
 
 namespace ParkingTracker.ViewModels.Features.Shared.Settings;
 
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : The <see cref="IPlacesStore"/> of the app (ADR-0026): the Home and Work places go through the repository of the saved
+/// Purpose     : The <see cref="IPlacesStore"/> of the app (ADR-0026): the Home, Work and favourite places go through the repository of the saved
 ///              places list and the device unit of work, with their coordinates encrypted per field. Like <see cref="DeviceSettingsStore"/>,
 ///              every read and write first waits for the start-up gate and makes sure the schema exists, outside any scope. A place that
 ///              exists but cannot be read is never read as "none": the read throws <see cref="SavedDataUnreadableException"/>; a write
@@ -151,15 +151,56 @@ public sealed partial class DevicePlacesStore : IPlacesStore
 	public async Task<Result> SavePlaceAsync(PlaceKind kind, GeoPoint point, string? addressText, CancellationToken cancellationToken = default)
 	{
 		ThrowIfNotShortcut(kind);
+		return await ChangeAsync(list => kind == PlaceKind.Home ? list.SetHome(kind.ToString(), point, addressText) : list.SetWork(kind.ToString(), point, addressText), cancellationToken).ConfigureAwait(false);
+	}
+
+	/// <inheritdoc />
+	public async Task ClearPlaceAsync(PlaceKind kind, CancellationToken cancellationToken = default)
+	{
+		ThrowIfNotShortcut(kind);
+		await RemoveAsync(list => FindShortcut(list, kind), cancellationToken).ConfigureAwait(false);
+	}
+
+	/// <inheritdoc />
+	public Task<Result> AddFavouriteAsync(string label, GeoPoint point, string? addressText, CancellationToken cancellationToken = default)
+	{
+		return ChangeAsync(list => list.AddFavourite(label, point, addressText), cancellationToken);
+	}
+
+	/// <inheritdoc />
+	public Task<Result> UpdateFavouriteAsync(SavedPlaceId id, string label, GeoPoint point, string? addressText, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(id);
+		return ChangeAsync(list => list.UpdateFavourite(id, label, point, addressText), cancellationToken);
+	}
+
+	/// <inheritdoc />
+	public Task RemoveFavouriteAsync(SavedPlaceId id, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(id);
+		return RemoveAsync(list => list.Places.FirstOrDefault(place => place.Id == id && place.Kind == PlaceKind.Favourite), cancellationToken);
+	}
+	#endregion
+
+	#region Private Helpers
+	/// <summary>
+	/// Applies one change to the list and writes it: the change runs on the stored list (or a new one), and nothing is written when it fails.
+	/// </summary>
+	/// <param name="change">The change of the domain.</param>
+	/// <param name="cancellationToken">Cancels the write.</param>
+	/// <returns>A task with success, or the failure of the change.</returns>
+	/// <exception cref="InvalidOperationException">The database refused the change.</exception>
+	private async Task<Result> ChangeAsync(Func<PlaceList, Result> change, CancellationToken cancellationToken)
+	{
 		await EnsureReadyAsync().ConfigureAwait(false);
 		var scope = await unitOfWork.BeginAsync(cancellationToken).ConfigureAwait(false);
 		await using (scope.ConfigureAwait(false))
 		{
 			var list = await LoadForWriteAsync(cancellationToken).ConfigureAwait(false) ?? PlaceList.Create();
-			var set = kind == PlaceKind.Home ? list.SetHome(kind.ToString(), point, addressText) : list.SetWork(kind.ToString(), point, addressText);
-			if (set.IsFailure)
+			var changed = change(list);
+			if (changed.IsFailure)
 			{
-				return set;
+				return changed;
 			}
 
 			var staged = await places.UpdateAsync(scope, list, cancellationToken).ConfigureAwait(false);
@@ -174,16 +215,21 @@ public sealed partial class DevicePlacesStore : IPlacesStore
 		}
 	}
 
-	/// <inheritdoc />
-	public async Task ClearPlaceAsync(PlaceKind kind, CancellationToken cancellationToken = default)
+	/// <summary>
+	/// Removes one place from the list and writes it; nothing happens when the place is not saved.
+	/// </summary>
+	/// <param name="find">Finds the place in the stored list.</param>
+	/// <param name="cancellationToken">Cancels the write.</param>
+	/// <returns>A task that completes when the place is removed.</returns>
+	/// <exception cref="InvalidOperationException">The database refused the change.</exception>
+	private async Task RemoveAsync(Func<PlaceList, SavedPlace?> find, CancellationToken cancellationToken)
 	{
-		ThrowIfNotShortcut(kind);
 		await EnsureReadyAsync().ConfigureAwait(false);
 		var scope = await unitOfWork.BeginAsync(cancellationToken).ConfigureAwait(false);
 		await using (scope.ConfigureAwait(false))
 		{
 			var list = await LoadForWriteAsync(cancellationToken).ConfigureAwait(false);
-			var place = list is null ? null : FindShortcut(list, kind);
+			var place = list is null ? null : find(list);
 			if (list is null || place is null)
 			{
 				return;
@@ -202,9 +248,7 @@ public sealed partial class DevicePlacesStore : IPlacesStore
 			await CommitAsync(scope, cancellationToken).ConfigureAwait(false);
 		}
 	}
-	#endregion
 
-	#region Private Helpers
 	/// <summary>
 	/// Reads the list for a write: a list that is unreadable for good is replaced by the write, so it counts as "none" here; a key
 	/// that cannot be read now still throws, so that nothing is written meanwhile.
@@ -276,16 +320,31 @@ public sealed partial class DevicePlacesStore : IPlacesStore
 	}
 
 	/// <summary>
-	/// Maps the home and the work place of a list to shortcuts, home first.
+	/// Maps the places of a list to shortcuts: home, work, then the favourites in the order they were saved.
 	/// </summary>
 	/// <param name="list">The list.</param>
-	/// <returns>The shortcuts; empty when neither is saved.</returns>
+	/// <returns>The shortcuts; empty when no place is saved.</returns>
 	private static List<PlaceShortcut> ToShortcuts(PlaceList list)
 	{
-		return new[] { list.Home, list.Work }
-			.OfType<SavedPlace>()
-			.Select(place => new PlaceShortcut(place.Kind, place.Label, place.Point, place.AddressText))
+		return list.Places
+			.OrderBy(place => RankOf(place.Kind))
+			.Select(place => new PlaceShortcut(place.Id, place.Kind, place.Label, place.Point, place.AddressText))
 			.ToList();
+	}
+
+	/// <summary>
+	/// Gives the place of a kind in the order the places are listed: home, work, then favourites.
+	/// </summary>
+	/// <param name="kind">The kind.</param>
+	/// <returns>The rank; favourites share the last one, so they keep the order they were saved in.</returns>
+	private static int RankOf(PlaceKind kind)
+	{
+		return kind switch
+		{
+			PlaceKind.Home => 0,
+			PlaceKind.Work => 1,
+			_ => 2,
+		};
 	}
 
 	/// <summary>

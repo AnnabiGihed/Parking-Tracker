@@ -17,6 +17,8 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
   from an address or your position. The places stay on the phone, encrypted.
 - A side menu, opened from the button at the start of the search bar, with Home, Work and your parking card and what
   is saved under each.
+- Favourite places in the side menu, saved with the same pin-and-confirm picker (with a name you choose, up to 40
+  characters, and at most 20 places) and shown as shortcuts under the search bar.
 
 ### Changed
 

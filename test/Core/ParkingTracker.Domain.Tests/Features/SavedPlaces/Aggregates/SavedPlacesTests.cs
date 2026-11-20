@@ -180,6 +180,96 @@ public sealed class SavedPlacesTests
 	}
 	#endregion
 
+	#region Update Favourite Tests
+	/// <summary>
+	/// Verifies that updating a favourite changes its name and place but keeps its identifier and its position.
+	/// </summary>
+	[Fact]
+	public void UpdateFavourite_ValidValues_ShouldKeepIdentifierAndPosition()
+	{
+		var list = SavedPlacesList.Create();
+		var first = list.AddFavourite("Bakery", Centre, null).Value;
+		list.AddFavourite("Park", Centre, null);
+		var moved = new GeoPoint(50.84, 4.36);
+
+		var result = list.UpdateFavourite(first, " Baker ", moved, " Rue 2 ");
+
+		result.IsSuccess.Should().BeTrue();
+		list.Places.Select(place => place.Label).Should().Equal("Baker", "Park");
+		list.Places.First().Id.Should().Be(first);
+		list.Places.First().Point.Should().Be(moved);
+		list.Places.First().AddressText.Should().Be("Rue 2");
+	}
+
+	/// <summary>
+	/// Verifies that an unknown identifier and a home are a not-found failure.
+	/// </summary>
+	[Fact]
+	public void UpdateFavourite_UnknownOrNotAFavourite_ShouldFailWithNotFound()
+	{
+		var list = SavedPlacesList.Create();
+		list.SetHome("Home", Centre, null);
+		var withoutId = () => list.UpdateFavourite(null!, "A", Centre, null); // null on purpose: proves the guard clause rejects it
+
+		var unknown = list.UpdateFavourite(SavedPlaceId.New(), "A", Centre, null);
+		var home = list.UpdateFavourite(list.Home!.Id, "A", Centre, null);
+
+		unknown.Error.Should().Be(SavedPlacesErrors.PlaceNotFound);
+		unknown.ResultExceptionType.Should().Be(ResultExceptionType.NotFound);
+		home.Error.Should().Be(SavedPlacesErrors.PlaceNotFound);
+		list.Home.Label.Should().Be("Home");
+		withoutId.Should().Throw<ArgumentNullException>();
+	}
+
+	/// <summary>
+	/// Verifies that a refused update leaves the favourite as it was.
+	/// </summary>
+	[Fact]
+	public void UpdateFavourite_Refused_ShouldKeepTheFavourite()
+	{
+		var list = SavedPlacesList.Create();
+		var id = list.AddFavourite("Bakery", Centre, null).Value;
+
+		list.UpdateFavourite(id, " ", Centre, null).Error.Should().Be(SavedPlacesErrors.LabelRequired);
+		list.UpdateFavourite(id, "Far", Antwerp, null).Error.Should().Be(SavedPlacesErrors.PointOutsideBrussels);
+		list.UpdateFavourite(id, new string('x', SavedPlace.MaximumLabelLength + 1), Centre, null).Error.Should().Be(SavedPlacesErrors.LabelTooLong);
+
+		list.Places.Single().Label.Should().Be("Bakery");
+	}
+	#endregion
+
+	#region Label Length Tests
+	/// <summary>
+	/// Verifies that a label of 40 characters is accepted and one of 41 is refused when a place is created.
+	/// </summary>
+	[Fact]
+	public void AddFavourite_LabelLength_ShouldBeLimitedToForty()
+	{
+		var list = SavedPlacesList.Create();
+
+		list.AddFavourite(new string('x', SavedPlace.MaximumLabelLength), Centre, null).IsSuccess.Should().BeTrue();
+		var tooLong = list.AddFavourite(new string('x', SavedPlace.MaximumLabelLength + 1), Centre, null);
+
+		tooLong.Error.Should().Be(SavedPlacesErrors.LabelTooLong);
+		list.Places.Should().ContainSingle();
+	}
+
+	/// <summary>
+	/// Verifies that a stored label longer than the limit is still restored as it is, so stored data always loads.
+	/// </summary>
+	[Fact]
+	public void Restore_LongStoredLabel_ShouldKeepIt()
+	{
+		var longLabel = new string('x', SavedPlace.MaximumLabelLength + 10);
+		var stored = new StoredPlace(SavedPlaceId.New(), PlaceKind.Favourite, longLabel, Centre, null);
+
+		var result = SavedPlacesList.Restore(SavedPlacesId.New(), [stored]);
+
+		result.IsSuccess.Should().BeTrue();
+		result.Value.Places.Single().Label.Should().Be(longLabel);
+	}
+	#endregion
+
 	#region Remove Tests
 	/// <summary>
 	/// Verifies that a saved place can be removed.

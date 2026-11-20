@@ -89,7 +89,10 @@ button, input, select { font: inherit; color: inherit; }
 .chip-float.late { color: var(--pay); }
 /* the Home and Work shortcuts sit in .top, which lets taps through to the map, so they take taps back; they use the surface,
    text and shadow of the search bar so they read on the map in the light and the dark scheme */
-.place-chips { pointer-events: auto; display: flex; gap: 8px; }
+.place-chips { pointer-events: auto; display: flex; gap: 8px; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; padding: 2px 2px 8px; }
+.place-chips::-webkit-scrollbar { display: none; }
+.place-chips .rz-chip.place-go { flex: none; }
+.place-chips .rz-chip.place-favourite .place-name { max-width: 14ch; overflow: hidden; text-overflow: ellipsis; }
 .place-chips .rz-chip.place-go, .place-chips .rz-chip.place-go:not(.rz-state-disabled):hover, .place-chips .rz-chip.place-go:not(.rz-state-disabled):active {
   background-color: var(--surface); color: var(--fg); box-shadow: var(--shadow); border-radius: 999px; font-weight: 600; cursor: pointer; }
 .place-chips .rz-chip.place-go .place-label { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; white-space: nowrap; }
@@ -117,6 +120,8 @@ button, input, select { font: inherit; color: inherit; }
 .place-confirm-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
 .place-confirm-actions .rz-button { min-width: 88px; }
 .place-confirm-actions .rz-button.place-cancel { background: transparent; color: var(--fg); border-color: var(--line); box-shadow: inset 0 0 0 1px var(--line); }
+.place-confirm-name { display: flex; flex-direction: column; gap: 4px; }
+.place-confirm-name .rz-textbox { background: var(--surface-2); color: var(--fg); border-color: var(--line); }
 .picking .controls, .picking .cta, .picking .sheet, .picking .popover { display: none; }
 
 /* ---------- right controls ---------- */
@@ -233,6 +238,17 @@ button, input, select { font: inherit; color: inherit; }
   max-height: 92vh; overflow-y: auto; margin: 0; border-radius: 24px 24px 0 0; box-shadow: var(--shadow); }
 @media (min-width: 720px) { .sheet-dialog { border-radius: 24px; } }
 .sheet-dialog form, .dialog-form, .welcome { padding: 18px 18px 22px; padding-bottom: max(22px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 12px; }
+/* Radzen dialogs opened by the DialogBridge look like the sheets above: anchored to the bottom, rounded on top, scrolling inside.
+   Radzen.Blazor.js sets left, transform and width inline, and below 768px default-base.css makes a dialog full height with
+   "inset-block-start: 0 !important; width: 100% !important; border-radius: 0" on .rz-dialog:not(.rz-dialog-confirm):not(.rz-dialog-alert),
+   so this selector repeats those :not() parts to win on specificity; it applies to this class only. */
+.rz-dialog.app-sheet:not(.rz-dialog-confirm):not(.rz-dialog-alert) { position: fixed !important; inset-block-start: auto !important; inset-block-end: 0 !important;
+  inset-inline: 0 !important; margin-inline: auto !important; transform: none !important; width: min(480px, 100%) !important; max-width: 100vw; height: auto !important;
+  min-height: 0; /* 85vh first for webviews that do not know dvh, which follows the visible height when the keyboard opens */
+  max-height: 85vh; max-height: 85dvh; display: flex; flex-direction: column; background: var(--surface); color: var(--fg);
+  border-radius: 24px 24px 0 0; box-shadow: var(--shadow); padding-bottom: env(safe-area-inset-bottom); overflow: hidden; }
+.app-sheet .rz-dialog-titlebar { flex: none; background: var(--surface); color: var(--fg); }
+.app-sheet .rz-dialog-content { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; background: var(--surface); color: var(--fg); padding-bottom: max(16px, env(safe-area-inset-bottom)); }
 .dialog-head { display: flex; justify-content: space-between; align-items: center; }
 .dialog-head h2 { margin: 0; font-size: 20px; }
 .field { display: flex; flex-direction: column; gap: 5px; }
@@ -308,3 +324,18 @@ button.scan { width: 100%; margin-bottom: 8px; background: transparent; text-ali
 .app-menu-text { display: flex; flex-direction: column; min-width: 0; }
 .app-menu-title { font-weight: 600; color: var(--fg); }
 .app-menu-sub { font-size: 13px; font-weight: 400; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- favourite places: the list in the dialog ---------- */
+.favourites { display: flex; flex-direction: column; gap: 12px; color: var(--fg); }
+.favourites-list { list-style: none; margin: 0; padding: 0; max-height: min(55vh, 420px); overflow-y: auto; overscroll-behavior: contain; }
+.favourite-row { display: flex; align-items: center; gap: 4px; }
+.favourite-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 10px; border: 0; border-radius: 12px;
+  background: transparent; color: var(--fg); text-align: left; cursor: pointer; }
+.favourite-main:hover { background: var(--surface-2); }
+.favourite-main:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+.favourite-main .ic { flex: none; width: 24px; height: 24px; color: var(--brand); }
+.favourite-text { display: flex; flex-direction: column; min-width: 0; }
+.favourite-label { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.favourite-address { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.favourites-empty, .favourites-reason { margin: 0; font-size: 14px; color: var(--muted); }
+.favourite-add.rz-button { align-self: stretch; }

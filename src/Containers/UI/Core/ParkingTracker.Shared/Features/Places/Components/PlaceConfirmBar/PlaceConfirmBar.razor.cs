@@ -7,9 +7,9 @@ namespace ParkingTracker.Shared.Features.Places.Components;
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
 /// Purpose     : The bar at the bottom of the map while a place is chosen in the picker (ADR-0030): the label of the place, the hint to
-///              drag the pin, Cancel and Save, and Remove when the place of this kind is already saved. Save is disabled for a place
-///              outside the Brussels box, with the reason shown. It colours itself with the variables of the app, so that it reads in
-///              the light and the dark scheme.
+///              drag the pin, a required name box for a favourite, Cancel and Save, and Remove when the place is already saved. Save is
+///              disabled for a place outside the Brussels box, with the reason shown. It colours itself with the variables of the app,
+///              so that it reads in the light and the dark scheme.
 /// </summary>
 public sealed partial class PlaceConfirmBar : ViewModelComponent<PlacePickerViewModel>
 {
@@ -21,6 +21,12 @@ public sealed partial class PlaceConfirmBar : ViewModelComponent<PlacePickerView
 	#endregion
 
 	#region Event Handlers
+	/// <summary>
+	/// Handles a change of the name of a favourite.
+	/// </summary>
+	/// <param name="name">The text in the name box.</param>
+	private void OnNameChanged(string name) => ViewModel.FavouriteName = name;
+
 	/// <summary>
 	/// Handles "Cancel".
 	/// </summary>

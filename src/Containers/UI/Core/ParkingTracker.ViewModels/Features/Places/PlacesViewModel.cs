@@ -9,7 +9,7 @@ namespace ParkingTracker.ViewModels.Features.Places;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : The saved Home and Work places behind the shortcut chips and the side menu: it reads them, and a tap on a saved place
+/// Purpose     : The saved Home, Work and favourite places behind the shortcut chips, the side menu and the favourites list: it reads them, and a tap on a saved place
 ///              moves the map there and checks the spot like a search result. Setting, changing or removing a place is done in the map
 ///              picker (<see cref="PlacePickerViewModel"/>), which asks this view model to read the places again. A failed read is told
 ///              in the toast and never thrown to the screen.
@@ -69,6 +69,11 @@ public sealed class PlacesViewModel : ViewModelBase
 	/// Gets the saved work place, or <see langword="null"/> when none is saved.
 	/// </summary>
 	public PlaceShortcut? Work { get; private set; }
+
+	/// <summary>
+	/// Gets the saved favourites in the order they were saved; empty when none is saved.
+	/// </summary>
+	public IReadOnlyList<PlaceShortcut> Favourites { get; private set; } = [];
 	#endregion
 
 	#region Public Methods
@@ -92,11 +97,19 @@ public sealed class PlacesViewModel : ViewModelBase
 	}
 
 	/// <summary>
-	/// Gets the saved place of a kind.
+	/// Gets the saved place of a kind that exists once.
 	/// </summary>
-	/// <param name="kind">Home or work.</param>
-	/// <returns>The place, or <see langword="null"/> when it is not set.</returns>
-	public PlaceShortcut? PlaceOf(PlaceKind kind) => kind == PlaceKind.Home ? Home : Work;
+	/// <param name="kind">Home or work; there are several favourites, so that kind has no single place.</param>
+	/// <returns>The place, or <see langword="null"/> when it is not set or the kind is favourite.</returns>
+	public PlaceShortcut? PlaceOf(PlaceKind kind)
+	{
+		return kind switch
+		{
+			PlaceKind.Home => Home,
+			PlaceKind.Work => Work,
+			_ => null,
+		};
+	}
 
 	/// <summary>
 	/// Handles a tap on a chip whose place is saved: shows the place on the map and checks the spot there.
@@ -105,7 +118,19 @@ public sealed class PlacesViewModel : ViewModelBase
 	/// <returns>A task that completes when the place was shown; at once when the place is not saved.</returns>
 	public Task ShowAsync(PlaceKind kind)
 	{
-		return PlaceOf(kind) is { } place ? spot.ShowSearchResultAsync(place.Point) : Task.CompletedTask;
+		return PlaceOf(kind) is { } place ? ShowAsync(place) : Task.CompletedTask;
+	}
+
+	/// <summary>
+	/// Shows a saved place, such as a favourite, on the map and checks the spot there.
+	/// </summary>
+	/// <param name="place">The saved place.</param>
+	/// <returns>A task that completes when the place was shown.</returns>
+	/// <exception cref="ArgumentNullException"><paramref name="place"/> is <see langword="null"/>.</exception>
+	public Task ShowAsync(PlaceShortcut place)
+	{
+		ArgumentNullException.ThrowIfNull(place);
+		return spot.ShowSearchResultAsync(place.Point);
 	}
 	#endregion
 
@@ -118,6 +143,7 @@ public sealed class PlacesViewModel : ViewModelBase
 	{
 		Home = places.FirstOrDefault(place => place.Kind == PlaceKind.Home);
 		Work = places.FirstOrDefault(place => place.Kind == PlaceKind.Work);
+		Favourites = places.Where(place => place.Kind == PlaceKind.Favourite).ToList();
 		NotifyChanged();
 	}
 	#endregion

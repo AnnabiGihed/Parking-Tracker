@@ -14,6 +14,18 @@
                 }
             </div>
         </div>
+        @if (ViewModel.IsFavourite)
+        {
+            <div class="place-confirm-name">
+                <RadzenLabel Text="Name" Component="placeName" />
+                <RadzenTextBox Name="placeName" id="placeName" Value="@ViewModel.FavouriteName" ValueChanged="OnNameChanged" Immediate="true" MaxLength="PlacePickerViewModel.MaxNameLength"
+                               Placeholder="For example Bakery" autocomplete="off" Disabled="ViewModel.State == PlacePickerState.Saving" Style="width:100%" />
+                @if (!ViewModel.HasName)
+                {
+                    <span id="placeNameError" class="place-confirm-error" role="alert">Give the favourite a name.</span>
+                }
+            </div>
+        }
         <div class="place-confirm-actions">
             @if (ViewModel.HasSavedPlace)
             {

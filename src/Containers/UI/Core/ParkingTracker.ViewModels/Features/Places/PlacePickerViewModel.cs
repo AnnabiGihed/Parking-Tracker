@@ -16,13 +16,14 @@ namespace ParkingTracker.ViewModels.Features.Places;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : The map mode that sets Home or Work, like the place pickers of Waze and Google Maps (ADR-0030). The user searches an
+/// Purpose     : The map mode that sets Home, Work or a favourite place, like the place pickers of Waze and Google Maps (ADR-0030). The user searches an
 ///              address (one match goes straight to the map, several are listed), uses the position, or taps the map; the chosen place
 ///              gets a pin that can be dragged, and only a tap on Save writes it, so nothing is ever saved before the user confirms.
 ///              While it is open the map is not moved to the position of the user, whether the position is followed or not; the
 ///              following state is kept and works again when the picker closes.
 ///              A place outside the Brussels box cannot be saved; the domain still validates, and its refusal is told in the toast.
-///              A saved place is opened with its pin, so that it can be moved or removed. Every failure is told in the toast and never
+///              A favourite also has a name, which the user can change, and which is required; a new favourite is offered the name of the
+///              match. A saved place, or a favourite chosen from the list, is opened with its pin, so that it can be moved, renamed or removed. Every failure is told in the toast and never
 ///              thrown to the screen.
 /// </summary>
 public sealed class PlacePickerViewModel : ViewModelBase
@@ -52,6 +53,11 @@ public sealed class PlacePickerViewModel : ViewModelBase
 	/// What the user is told when the database refused to save or remove a place.
 	/// </summary>
 	public const string WriteFailedText = "Your places could not be saved. Please try again.";
+
+	/// <summary>
+	/// The most characters the name of a favourite may have.
+	/// </summary>
+	public const int MaxNameLength = SavedPlace.MaximumLabelLength;
 	#endregion
 
 	#region Fields
@@ -89,6 +95,21 @@ public sealed class PlacePickerViewModel : ViewModelBase
 	/// The text in the search box.
 	/// </summary>
 	private string searchText = string.Empty;
+
+	/// <summary>
+	/// The name of the favourite being set.
+	/// </summary>
+	private string favouriteName = string.Empty;
+
+	/// <summary>
+	/// Whether the name was filled by the picker from a match, so that a later match may replace it; a name the user typed is kept.
+	/// </summary>
+	private bool nameIsSuggested = true;
+
+	/// <summary>
+	/// The favourite being changed; <see langword="null"/> when a new place is set.
+	/// </summary>
+	private SavedPlaceId? editedFavourite;
 	#endregion
 
 	#region Constructors
@@ -135,7 +156,42 @@ public sealed class PlacePickerViewModel : ViewModelBase
 	/// <summary>
 	/// Gets the title of the picker header.
 	/// </summary>
-	public string Title => Kind == PlaceKind.Home ? "Set home" : "Set work";
+	public string Title => Kind switch
+	{
+		PlaceKind.Home => "Set home",
+		PlaceKind.Work => "Set work",
+		PlaceKind.Favourite => editedFavourite is null ? "Add a favourite" : "Edit favourite",
+		_ => throw new InvalidOperationException("The picker has no title for this kind of place."),
+	};
+
+	/// <summary>
+	/// Gets a value indicating whether a favourite is being set, which has a name.
+	/// </summary>
+	public bool IsFavourite => Kind == PlaceKind.Favourite;
+
+	/// <summary>
+	/// Gets or sets the name of the favourite being set; typing it replaces the name that was offered.
+	/// </summary>
+	public string FavouriteName
+	{
+		get
+		{
+			return favouriteName;
+		}
+
+		set
+		{
+			var typed = value ?? string.Empty;
+			if (string.Equals(favouriteName, typed, StringComparison.Ordinal))
+			{
+				return;
+			}
+
+			favouriteName = typed;
+			nameIsSuggested = false;
+			NotifyChanged();
+		}
+	}
 
 	/// <summary>
 	/// Gets or sets the text in the search box; a change closes the list of matches.
@@ -190,21 +246,27 @@ public sealed class PlacePickerViewModel : ViewModelBase
 	public bool IsOutsideBrussels => Candidate is { } point && !IsInsideBrussels(point);
 
 	/// <summary>
-	/// Gets a value indicating whether Save is enabled: a place is chosen, inside Brussels, and nothing is being written.
+	/// Gets a value indicating whether Save is enabled: a place is chosen, inside Brussels, a favourite has a name, and nothing is being written.
 	/// </summary>
-	public bool CanSave => State == PlacePickerState.Confirming && Candidate is not null && !IsOutsideBrussels;
+	public bool CanSave => State == PlacePickerState.Confirming && Candidate is not null && !IsOutsideBrussels && (!IsFavourite || HasName);
 
 	/// <summary>
-	/// Gets a value indicating whether the kind being set has a saved place, which can be removed.
+	/// Gets a value indicating whether the favourite has a name that is not blank.
 	/// </summary>
-	public bool HasSavedPlace => places.PlaceOf(Kind) is not null;
+	public bool HasName => !string.IsNullOrWhiteSpace(favouriteName);
+
+	/// <summary>
+	/// Gets a value indicating whether the place being set is saved already, so that it can be removed.
+	/// </summary>
+	public bool HasSavedPlace => IsFavourite ? editedFavourite is not null : places.PlaceOf(Kind) is not null;
 	#endregion
 
 	#region Public Methods
 	/// <summary>
-	/// Opens the picker for a kind of place. A place that is already saved is shown with its pin, so that it can be moved or removed.
+	/// Opens the picker for a kind of place. A home or work place that is already saved is shown with its pin, so that it can be moved
+	/// or removed; the favourite kind always starts a new favourite.
 	/// </summary>
-	/// <param name="kind">Home or work.</param>
+	/// <param name="kind">Home, work or favourite.</param>
 	public void Start(PlaceKind kind)
 	{
 		if (State == PlacePickerState.Saving)
@@ -212,23 +274,33 @@ public sealed class PlacePickerViewModel : ViewModelBase
 			return;
 		}
 
-		Kind = kind;
-
-		// Following the position would pan the map back to the user and hide the pin of the place being chosen.
-		spot.SuspendFollowing();
-		searchText = string.Empty;
-		Matches = [];
-		Candidate = null;
-		CandidateLabel = string.Empty;
-		candidateAddress = null;
-		State = PlacePickerState.Searching;
+		Begin(kind, null);
 		if (places.PlaceOf(kind) is { } saved)
 		{
-			Choose(saved.Point, string.IsNullOrEmpty(saved.AddressText) ? SavedPositionLabel : saved.AddressText, saved.AddressText);
+			Choose(saved.Point, string.IsNullOrEmpty(saved.AddressText) ? SavedPositionLabel : saved.AddressText, saved.AddressText, null);
 			return;
 		}
 
 		NotifyChanged();
+	}
+
+	/// <summary>
+	/// Opens the picker on a saved favourite, with its pin and its name, so that it can be renamed, moved or removed.
+	/// </summary>
+	/// <param name="favourite">The favourite to change.</param>
+	/// <exception cref="ArgumentNullException"><paramref name="favourite"/> is <see langword="null"/>.</exception>
+	public void Edit(PlaceShortcut favourite)
+	{
+		ArgumentNullException.ThrowIfNull(favourite);
+		if (State == PlacePickerState.Saving)
+		{
+			return;
+		}
+
+		Begin(PlaceKind.Favourite, favourite.Id);
+		favouriteName = favourite.Label;
+		nameIsSuggested = false;
+		Choose(favourite.Point, string.IsNullOrEmpty(favourite.AddressText) ? SavedPositionLabel : favourite.AddressText, favourite.AddressText, null);
 	}
 
 	/// <summary>
@@ -285,7 +357,7 @@ public sealed class PlacePickerViewModel : ViewModelBase
 		}
 
 		Matches = [];
-		Choose(position, MyPositionLabel, null);
+		Choose(position, MyPositionLabel, null, MyPositionLabel);
 	}
 
 	/// <summary>
@@ -300,7 +372,7 @@ public sealed class PlacePickerViewModel : ViewModelBase
 		}
 
 		Matches = [];
-		Choose(point, MovedLabel, null);
+		Choose(point, MovedLabel, null, null);
 	}
 
 	/// <summary>
@@ -335,7 +407,7 @@ public sealed class PlacePickerViewModel : ViewModelBase
 		NotifyChanged();
 		try
 		{
-			var saved = await store.SavePlaceAsync(kind, point, candidateAddress, cancellationToken).ConfigureAwait(false);
+			var saved = await WriteAsync(kind, point, cancellationToken).ConfigureAwait(false);
 			if (saved.IsFailure)
 			{
 				ReturnToConfirming(RefusalText(kind, saved.Error));
@@ -350,7 +422,7 @@ public sealed class PlacePickerViewModel : ViewModelBase
 
 		await places.LoadAsync(cancellationToken).ConfigureAwait(false);
 		Leave();
-		toast.Show($"{kind} saved.");
+		toast.Show($"{NameOf(kind)} saved.");
 	}
 
 	/// <summary>
@@ -366,9 +438,14 @@ public sealed class PlacePickerViewModel : ViewModelBase
 		}
 
 		var kind = Kind;
+		if (kind == PlaceKind.Favourite && editedFavourite is null)
+		{
+			return;
+		}
+
 		try
 		{
-			await store.ClearPlaceAsync(kind, cancellationToken).ConfigureAwait(false);
+			await DeleteAsync(kind, cancellationToken).ConfigureAwait(false);
 		}
 		catch (InvalidOperationException failure)
 		{
@@ -378,7 +455,7 @@ public sealed class PlacePickerViewModel : ViewModelBase
 
 		await places.LoadAsync(cancellationToken).ConfigureAwait(false);
 		Leave();
-		toast.Show($"{kind} removed.");
+		toast.Show($"{NameOf(kind)} removed.");
 	}
 
 	/// <summary>
@@ -396,6 +473,28 @@ public sealed class PlacePickerViewModel : ViewModelBase
 	#endregion
 
 	#region Private Helpers
+	/// <summary>
+	/// Starts the picker over: nothing is chosen yet.
+	/// </summary>
+	/// <param name="kind">Home, work or favourite.</param>
+	/// <param name="favourite">The favourite being changed, or <see langword="null"/> for a new place.</param>
+	private void Begin(PlaceKind kind, SavedPlaceId? favourite)
+	{
+		Kind = kind;
+		editedFavourite = favourite;
+		favouriteName = string.Empty;
+		nameIsSuggested = true;
+
+		// Following the position would pan the map back to the user and hide the pin of the place being chosen.
+		spot.SuspendFollowing();
+		searchText = string.Empty;
+		Matches = [];
+		Candidate = null;
+		CandidateLabel = string.Empty;
+		candidateAddress = null;
+		State = PlacePickerState.Searching;
+	}
+
 	/// <summary>
 	/// Tells whether a point lies inside the Brussels box, edges included.
 	/// </summary>
@@ -420,14 +519,79 @@ public sealed class PlacePickerViewModel : ViewModelBase
 	/// <summary>
 	/// Words the reason why a place was refused.
 	/// </summary>
-	/// <param name="kind">Home or work.</param>
+	/// <param name="kind">Home, work or favourite.</param>
 	/// <param name="error">The error of the domain.</param>
 	/// <returns>The text for the toast.</returns>
 	private static string RefusalText(PlaceKind kind, Error error)
 	{
 		return string.Equals(error.Code, SavedPlacesErrors.PointOutsideBrussels.Code, StringComparison.Ordinal)
-			? $"{kind} has to be inside the Brussels-Capital Region."
+			? $"{NameOf(kind)} has to be inside the Brussels-Capital Region."
 			: error.Message;
+	}
+
+	/// <summary>
+	/// Builds the short address that is saved with a confirmed match: its label and locality, such as "Rue de la Gare · 1040 Etterbeek",
+	/// instead of the long display name of the service.
+	/// </summary>
+	/// <param name="match">The match.</param>
+	/// <param name="typed">What the user typed, used when the match has no name at all.</param>
+	/// <returns>The label and the locality, the label alone, or the display name when the match has no label.</returns>
+	private static string SavedAddressOf(AddressMatch match, string typed)
+	{
+		if (string.IsNullOrWhiteSpace(match.Label))
+		{
+			return FirstText(match.DisplayName, null, typed);
+		}
+
+		return string.IsNullOrWhiteSpace(match.Locality) ? match.Label : $"{match.Label} · {match.Locality}";
+	}
+
+	/// <summary>
+	/// Gives the word the user reads for a kind of place in the toast.
+	/// </summary>
+	/// <param name="kind">Home, work or favourite.</param>
+	/// <returns>The name of the kind.</returns>
+	private static string NameOf(PlaceKind kind)
+	{
+		return kind switch
+		{
+			PlaceKind.Favourite => "Favourite",
+			_ => kind.ToString(),
+		};
+	}
+
+	/// <summary>
+	/// Writes the chosen place to the store: Home and Work replace the saved one, a new favourite is added, an edited favourite is changed.
+	/// </summary>
+	/// <param name="kind">Home, work or favourite.</param>
+	/// <param name="point">Where the place is.</param>
+	/// <param name="cancellationToken">Cancels the write.</param>
+	/// <returns>A task with success, or the refusal of the domain.</returns>
+	/// <exception cref="InvalidOperationException">The database refused the change.</exception>
+	private Task<Result> WriteAsync(PlaceKind kind, GeoPoint point, CancellationToken cancellationToken)
+	{
+		if (kind != PlaceKind.Favourite)
+		{
+			return store.SavePlaceAsync(kind, point, candidateAddress, cancellationToken);
+		}
+
+		return editedFavourite is { } id
+			? store.UpdateFavouriteAsync(id, favouriteName, point, candidateAddress, cancellationToken)
+			: store.AddFavouriteAsync(favouriteName, point, candidateAddress, cancellationToken);
+	}
+
+	/// <summary>
+	/// Removes the place being set from the store.
+	/// </summary>
+	/// <param name="kind">Home, work or favourite.</param>
+	/// <param name="cancellationToken">Cancels the write.</param>
+	/// <returns>A task that completes when the place is removed.</returns>
+	/// <exception cref="InvalidOperationException">The database refused the change.</exception>
+	private Task DeleteAsync(PlaceKind kind, CancellationToken cancellationToken)
+	{
+		return kind == PlaceKind.Favourite && editedFavourite is { } id
+			? store.RemoveFavouriteAsync(id, cancellationToken)
+			: store.ClearPlaceAsync(kind, cancellationToken);
 	}
 
 	/// <summary>
@@ -484,7 +648,8 @@ public sealed class PlacePickerViewModel : ViewModelBase
 	/// <param name="typed">What the user typed, used when the match has no name.</param>
 	private void ChooseMatch(AddressMatch match, string typed)
 	{
-		Choose(match.Point, FirstText(match.Label, match.DisplayName, typed), FirstText(match.DisplayName, match.Label, typed));
+		var label = FirstText(match.Label, match.DisplayName, typed);
+		Choose(match.Point, label, SavedAddressOf(match, typed), label);
 	}
 
 	/// <summary>
@@ -493,8 +658,14 @@ public sealed class PlacePickerViewModel : ViewModelBase
 	/// <param name="point">Where the place is.</param>
 	/// <param name="label">The words that name it on the confirm bar.</param>
 	/// <param name="address">The address in words to save with it; <see langword="null"/> when it has none.</param>
-	private void Choose(GeoPoint point, string label, string? address)
+	/// <param name="suggestedName">The name to offer a new favourite; <see langword="null"/> keeps the name as it is.</param>
+	private void Choose(GeoPoint point, string label, string? address, string? suggestedName)
 	{
+		if (suggestedName is not null && nameIsSuggested)
+		{
+			favouriteName = suggestedName.Length > MaxNameLength ? suggestedName[..MaxNameLength].TrimEnd() : suggestedName;
+		}
+
 		Candidate = point;
 		CandidateLabel = label;
 		candidateAddress = address;
@@ -523,6 +694,9 @@ public sealed class PlacePickerViewModel : ViewModelBase
 		Candidate = null;
 		CandidateLabel = string.Empty;
 		candidateAddress = null;
+		editedFavourite = null;
+		favouriteName = string.Empty;
+		nameIsSuggested = true;
 		Matches = [];
 		searchText = string.Empty;
 		NotifyChanged();
