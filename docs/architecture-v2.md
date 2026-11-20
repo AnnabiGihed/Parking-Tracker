@@ -347,12 +347,12 @@ ADR: [0017](adr/0017-build-a-public-admin-web-app-with-google-sign-in-and-an-all
 ### 3.11 On-device database
 
 **Decision:** SQLite through sqlite-net-pcl, with no EF Core and no Pivot persistence package on the phone. One
-hand-written repository per aggregate (`ResidentCard`, `SavedPlaces`, `ParkingSession`) maps the aggregate to row types
-and back; a small device unit of work commits the staged changes in one `RunInTransactionAsync` call and returns a
-`Result`. The schema is versioned in a `schema_version` table and changed by ordered, numbered steps. The card number,
-the plate and the coordinates of home, work and the parked car are encrypted per field with AES-GCM; the 256-bit key
-is kept in MAUI `SecureStorage` (Android Keystore). The database file, its journal files and the key are excluded from
-Android backup. The budget of 8 MB and 300 ms on the API 34 emulator stays.
+hand-written repository per aggregate (`ResidentCard`, `SavedPlaces`, `ParkingSession`, `Vehicle`) maps the aggregate to
+row types and back; a small device unit of work commits the staged changes in one `RunInTransactionAsync` call and
+returns a `Result`. The schema is versioned in a `schema_version` table and changed by ordered, numbered steps. The card
+number, the plate and the coordinates of home, work and the parked car are encrypted per field with AES-GCM; the 256-bit
+key is kept in MAUI `SecureStorage` (Android Keystore). The database file, its journal files and the key are excluded
+from Android backup. The budget of 8 MB and 300 ms on the API 34 emulator stays.
 
 **Options:** A EF Core and Pivot's EF Core persistence with field encryption (ADR-0018); B sqlite-net-pcl with
 hand-written repositories; C keep `SecureStorage` and `Preferences`; D SQLCipher for the whole file.
@@ -721,6 +721,7 @@ public Result PublishDataset(SourceKind source, DatasetSnapshotId snapshot, int 
 | `ResidentCard` (`LightweightAggregateRoot<ResidentCardId>`) | `MunicipalityCode`, optional `SectorCode`, `CardPeriod`, mailles, lims, tolerance codes, `CardNumber` and `LicencePlate` (encrypted) | Valid from before valid to; a sector only for a street-list municipality; mailles only for a maille municipality and only with its prefixes; lims only from the municipality's list; plate in capitals; `ToParkingCard()` returns the existing `ParkingCard` record | `pt.card` |
 | `SavedPlaces` (`LightweightAggregateRoot<SavedPlacesId>`, one per device) | child entities `SavedPlace` (`PlaceKind`: Home, Work, Favourite; label; `GeoPoint`, encrypted; address text) | At most one Home and one Work; at most 20 favourites; a point must be inside the Brussels box | new (R5) |
 | `ParkingSession` (`LightweightAggregateRoot<ParkingSessionId>`) | position (encrypted), parked at, decision headline, optional `ParkingTimer` | One open session; a timer between 5 and 1,440 minutes, after the parking moment; `End()` closes it; `ToParkedCar()` keeps the shape the view models use | `pt.car`, `pt.timer` |
+| `Vehicle` (`LightweightAggregateRoot<VehicleId>`, one per device, ADR-0031) | make code from `VehicleMakes`, model, model year, `FuelType`, `EuroNorm`, `ChargingConnector` set, battery kWh, range km, optional `LicencePlate` (encrypted, apart from the card's plate) | Make from the curated list or "Other"; model at most 60 characters; year from 1950 to the current year plus one (the caller passes the year); plugs, battery (1 to 250 kWh) and range (10 to 1,000 km) only for an electric car or a plug-in hybrid; `Create`, `Update`, `Restore`; `ToDetails()` returns the `VehicleDetails` record | new |
 
 The device database also holds a single `DeviceOwner` row (a SHA-256 hash of the signed-in Google account ID, 5.8).
 Device settings with no invariant (layer switches, alerts switch, welcome seen, permission snooze) stay in
@@ -740,7 +741,7 @@ risk parity for no modelling gain.
 
 | Type | Kind | Rule |
 | --- | --- | --- |
-| `CoverageAreaId`, `RefreshRunId`, `DatasetSnapshotId`, `UserAccountId`, `DeviceSessionId`, `ResidentCardId`, `SavedPlacesId`, `ParkingSessionId` | `StronglyTypedGuidId<T>` | Never `Guid.Empty`; one type per aggregate or entity; an EF value converter each on the server, mapped by hand to a row column on the phone (ADR-0026) |
+| `CoverageAreaId`, `RefreshRunId`, `DatasetSnapshotId`, `UserAccountId`, `DeviceSessionId`, `ResidentCardId`, `SavedPlacesId`, `ParkingSessionId`, `VehicleId` | `StronglyTypedGuidId<T>` | Never `Guid.Empty`; one type per aggregate or entity; an EF value converter each on the server, mapped by hand to a row column on the phone (ADR-0026) |
 | `AreaCode` | value object | Lower-case slug from the municipality IDs of the reference data, plus `region`; unique |
 | `SourceKind` | enumeration | Zones, Spaces, Mailles, AddressPoints, Rules, Works, CarParks, Chargers, CityDocuments |
 | `RefreshSchedule` | value object | Cron expression in Europe/Brussels, enabled flag |
@@ -752,8 +753,10 @@ risk parity for no modelling gain.
 | `SubjectHash` | value object | HMAC-SHA256 of issuer and Google `sub` with a server key, 64 hex characters |
 | `RefreshTokenHash` | value object | SHA-256 of the 256-bit random refresh token; the token itself is never stored |
 | `MunicipalityCode`, `SectorCode` | value objects | Known in the reference data |
-| `CardNumber`, `LicencePlate` | value objects | Trimmed; plate in capitals; persisted encrypted |
+| `CardNumber`, `LicencePlate` | value objects | Trimmed; plate in capitals; persisted encrypted; `LicencePlate` is shared by the card and the vehicle |
 | `PlaceKind` | enumeration | Home, Work, Favourite |
+| `FuelType`, `EuroNorm`, `ChargingConnector` | enumerations | Stored as their numbers, never renumbered (ADR-0031) |
+| `VehicleMakes` | curated list | Stable lower-case make codes with brand names, "Other" last; a code is never renamed or removed |
 
 Domain event payloads use primitives (Guid, string, int, UTC DateTime) and declare the Newtonsoft constructor that
 keeps `Id` and `OccurredOnUtc`. There are no integration events.
@@ -1107,20 +1110,23 @@ sequenceDiagram
   `LegacyDataMigration` (Capacitor to `Preferences`, ADR-0008) and before the sign-in screen.
 - **Schema versioning.** `schema_version` holds one row per applied step (version, applied at). The steps are numbered
   classes with explicit SQL in `ParkingTracker.Persistence.Device`, applied in order, each in one transaction with its
-  `schema_version` row; step 1 creates the tables below. A released step is never edited. A database newer than the
-  app stops the initializer with a failed `Result`. sqlite-net's `CreateTableAsync` is not used for the schema.
-- Tables: `resident_cards` (municipality, sector, period, mailles, lims and tolerances as JSON columns, card number
-  and plate as AES-GCM ciphertext), `saved_places` (kind, label, address text, coordinates as ciphertext),
+  `schema_version` row; step 1 creates the tables below and step 2 (`AddVehiclesStep`, ADR-0031) adds `vehicles`. A
+  released step is never edited. A database newer than the app stops the initializer with a failed `Result`.
+  sqlite-net's `CreateTableAsync` is not used for the schema.
+- Tables: `resident_cards` (municipality, sector, period, mailles, lims and tolerances as JSON columns, card number and
+  plate as AES-GCM ciphertext), `saved_places` (kind, label, address text, coordinates as ciphertext),
   `parking_sessions` (coordinates as ciphertext, parked at, headline, timer end and minutes, ended at), `device_owner`
-  (one row) and `schema_version`. There is no outbox table (3.1). The phone holds one card, one list of places and one
-  session, and the schema enforces it: a `slot` column that is always 1 and unique in `resident_cards` and
-  `parking_sessions`, a unique index on `position` and a partial unique index on `kind` for home and work in
-  `saved_places`. Every row carries the identifier of its aggregate (`saved_places` also the identifier of the list).
-- **Repositories.** One per aggregate (`ResidentCard`, `SavedPlaces`, `ParkingSession`): narrow ports in the phone's
-  Application project, implementations by hand in `ParkingTracker.Persistence.Device`. They map each aggregate to row
-  types that never leave the project and rehydrate through the aggregates' `Restore` factories (stored identifier, same
-  invariants, no domain events), so an invalid row gives a failed `Result`. Queries use sqlite-net's single-table LINQ
-  or hand-written SQL through `QueryAsync`.
+  (one row), `vehicles` (step 2: make code, model, model year, fuel and Euro standard as enum numbers, plugs as a JSON
+  array of numbers, battery kWh, range km, plate as ciphertext) and `schema_version`. There is no outbox table (3.1).
+  The phone holds one card, one list of places, one session and one vehicle profile, and the schema enforces it: a
+  `slot` column that is always 1 and unique in `resident_cards`, `parking_sessions` and `vehicles`, a unique index on
+  `position` and a partial unique index on `kind` for home and work in `saved_places`. Every row carries the identifier
+  of its aggregate (`saved_places` also the identifier of the list).
+- **Repositories.** One per aggregate (`ResidentCard`, `SavedPlaces`, `ParkingSession`, `Vehicle`): narrow ports in the
+  phone's Application project, implementations by hand in `ParkingTracker.Persistence.Device`. They map each aggregate
+  to row types that never leave the project and rehydrate through the aggregates' `Restore` factories (stored
+  identifier, same invariants, no domain events), so an invalid row gives a failed `Result`. Queries use sqlite-net's
+  single-table LINQ or hand-written SQL through `QueryAsync`.
 - **Unit of work.** Every operation that changes the database calls `IDeviceUnitOfWork.BeginAsync()` and gets its own
   `IDeviceChangeScope`. The repositories stage inserts, updates and deletes in the scope they are given;
   `IDeviceChangeScope.CommitAsync` applies them in one `RunInTransactionAsync` call (commit when the delegate returns,
@@ -1139,7 +1145,10 @@ sequenceDiagram
   (`DeviceDataErrors.KeyLost`: the storage holds no key, but the database holds encrypted rows) and **key missing or
   value rejected** (`DeviceDatabase.Key.Missing`, `DeviceDatabase.Cipher.Rejected`) mean these values can never be read
   (a restore on a new phone, a key that MAUI dropped, a changed or moved value). A field that cannot be decrypted
-  fails the read of the aggregate; it is never dropped silently.
+  fails the read of the aggregate; it is never dropped silently. `EncryptedDataProbe` decides "key lost" by counting
+  the rows that hold a ciphertext: a card with a number or plate, any saved place, any parking session and a vehicle
+  profile with a plate. It counts only the tables that exist, so a database not yet at the latest step still reports
+  the encrypted rows it has.
 - `SettingsToDatabaseMigration` runs once, after `LegacyDataMigration`: it reads `pt.card`, `pt.car` and `pt.timer`
   through the existing `SettingsJson` readers, creates `ResidentCard` and `ParkingSession` in one unit of work and
   writes the marker `pt.dbMigration`. It never overwrites a row, keeps the old keys in the release that migrates (a

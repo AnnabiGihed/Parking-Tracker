@@ -9,6 +9,7 @@ using ParkingTracker.Persistence.Device.Features.ResidentCards;
 using ParkingTracker.Persistence.Device.Features.SavedPlaces;
 using ParkingTracker.Persistence.Device.Features.Shared.Database;
 using ParkingTracker.Persistence.Device.Features.Shared.Encryption;
+using ParkingTracker.Persistence.Device.Features.Vehicles;
 using Pivot.Framework.Domain.Shared;
 using SQLite;
 
@@ -59,6 +60,7 @@ public sealed class DeviceTestDatabase : IAsyncDisposable
 		Cards = new ResidentCardRepository(Database, Cipher, ReferenceData, NullLogger<ResidentCardRepository>.Instance);
 		Places = new SavedPlacesRepository(Database, Cipher, NullLogger<SavedPlacesRepository>.Instance);
 		Sessions = new ParkingSessionRepository(Database, Cipher, NullLogger<ParkingSessionRepository>.Instance);
+		Vehicles = new VehicleRepository(Database, Cipher, NullLogger<VehicleRepository>.Instance);
 	}
 	#endregion
 
@@ -128,6 +130,11 @@ public sealed class DeviceTestDatabase : IAsyncDisposable
 	/// Gets the repository of the parking session.
 	/// </summary>
 	public ParkingSessionRepository Sessions { get; }
+
+	/// <summary>
+	/// Gets the repository of the vehicle profile.
+	/// </summary>
+	public VehicleRepository Vehicles { get; }
 	#endregion
 
 	#region Factory Methods
