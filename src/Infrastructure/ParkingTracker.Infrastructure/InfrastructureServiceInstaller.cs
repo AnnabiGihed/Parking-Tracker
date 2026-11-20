@@ -46,6 +46,9 @@ public sealed class InfrastructureServiceInstaller : BaseServiceInstaller, IServ
 		AddSourceClient<IMobilityLayersClient, MobilityLayersClient>(services);
 		AddSourceClient<ICityDocumentsClient, CityDocumentsClient>(services);
 
+		// One gate for every search: the usage policy of Nominatim is per application, not per client instance.
+		services.AddSingleton(_ => new AddressSearchGate(TimeProvider.System));
+
 		// Nominatim answers in the language of the request: French, as the first version of the app asked.
 		AddSourceClient<IAddressSearch, NominatimClient>(services, client => client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("fr"));
 	}

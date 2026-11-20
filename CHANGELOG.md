@@ -20,6 +20,7 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
 
 ### Changed
 
+- Searching an address shows all the matching places to choose from; one match still goes straight to the map.
 - The welcome screen is built with the Radzen component library, the first screen of the move to Radzen. Its texts
   and colours stay the same; buttons and text spacing may look slightly different.
 - The card form is built with Radzen components too: drop-downs for the municipality and sector, check-box lists for

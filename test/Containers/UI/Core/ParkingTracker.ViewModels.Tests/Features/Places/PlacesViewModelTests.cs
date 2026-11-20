@@ -49,7 +49,7 @@ public sealed class PlacesViewModelTests
 	/// <param name="displayName">The name the match carries.</param>
 	private static void AnswerMatch(UiFixture ui, string? displayName)
 	{
-		ui.Sender.Send(Arg.Any<SearchAddressQuery>(), Arg.Any<CancellationToken>()).Returns(Result.Success(new SearchAddressResponse(new AddressMatch(Centre, displayName))));
+		ui.Sender.Send(Arg.Any<SearchAddressQuery>(), Arg.Any<CancellationToken>()).Returns(Result.Success(new SearchAddressResponse([new AddressMatch(Centre, displayName), new AddressMatch(Centre, "Second")])));
 	}
 	#endregion
 
@@ -163,7 +163,7 @@ public sealed class PlacesViewModelTests
 		var (model, store) = Arrange(ui);
 		model.Open(PlaceKind.Home);
 		model.AddressText = "zzz";
-		ui.Sender.Send(Arg.Any<SearchAddressQuery>(), Arg.Any<CancellationToken>()).Returns(Result.Success(new SearchAddressResponse(null)));
+		ui.Sender.Send(Arg.Any<SearchAddressQuery>(), Arg.Any<CancellationToken>()).Returns(Result.Success(new SearchAddressResponse([])));
 		await model.SaveFromAddressAsync();
 		ui.Toast.Message.Should().Be("Address not found.");
 

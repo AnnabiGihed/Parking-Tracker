@@ -1,0 +1,20 @@
+@namespace ParkingTracker.Shared.Features.AddressSearch.Components
+<RadzenCard class="address-results-card">
+    <ul id="addressResults" class="address-results" aria-label="Matching addresses">
+        @foreach (var match in Matches)
+        {
+            <li>
+                <button type="button" class="address-result" @onclick="() => OnPickAsync(match)">
+                    <Icon Name="pin" />
+                    <span class="address-result-text">
+                        <strong class="address-result-label">@LabelOf(match)</strong>
+                        @if (!string.IsNullOrEmpty(match.Locality))
+                        {
+                            <span class="address-result-locality">@match.Locality</span>
+                        }
+                    </span>
+                </button>
+            </li>
+        }
+    </ul>
+</RadzenCard>

@@ -56,6 +56,12 @@ public sealed partial class Home : ComponentBase, IDisposable
 	/// </summary>
 	[Inject]
 	public LocationPermissionViewModel Permission { get; set; } = null!;
+
+	/// <summary>
+	/// Gets or sets the search bar, whose list of matches closes when the map is tapped.
+	/// </summary>
+	[Inject]
+	public SearchViewModel Search { get; set; } = null!;
 	#endregion
 
 	#region Fields
@@ -154,13 +160,14 @@ public sealed partial class Home : ComponentBase, IDisposable
 	}
 
 	/// <summary>
-	/// Handles a tap on the map: closes the layers popover and drops the pin.
+	/// Handles a tap on the map: closes the layers popover and the list of matches, and drops the pin.
 	/// </summary>
 	/// <param name="point">The place that was tapped.</param>
 	/// <returns>A task that completes when the spot was checked.</returns>
 	private Task OnMapClickAsync(GeoPoint point)
 	{
 		layersOpen = false;
+		Search.CloseList();
 		return Spot.HandleMapClickAsync(point);
 	}
 

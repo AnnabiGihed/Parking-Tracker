@@ -1,4 +1,5 @@
 using System.Globalization;
+using ParkingTracker.Application.Features.AddressSearch.Queries.SearchAddress;
 using ParkingTracker.Domain.Features.Shared.ValueObjects;
 
 namespace ParkingTracker.Infrastructure.Features.Shared.Http;
@@ -116,13 +117,15 @@ internal static class SourceRequests
 	}
 
 	/// <summary>
-	/// Builds the request for an address search limited to Belgium and the box of the Brussels-Capital Region, best match only.
+	/// Builds the request for an address search limited to Belgium and the box of the Brussels-Capital Region, with the details
+	/// of each address (road, house number, postcode, municipality) that the list of matches shows.
 	/// </summary>
 	/// <param name="text">What the user typed.</param>
+	/// <param name="limit">The most matches to return.</param>
 	/// <returns>Request address of the search.</returns>
-	internal static string AddressSearch(string text)
+	internal static string AddressSearch(string text, int limit = SearchAddressQuery.DefaultLimit)
 	{
-		return $"{NominatimSearch}?format=jsonv2&limit=1&countrycodes=be&viewbox=4.24,50.92,4.48,50.76&bounded=1&q={Uri.EscapeDataString(text)}";
+		return $"{NominatimSearch}?format=jsonv2&addressdetails=1&limit={limit.ToString(CultureInfo.InvariantCulture)}&countrycodes=be&viewbox=4.24,50.92,4.48,50.76&bounded=1&q={Uri.EscapeDataString(text)}";
 	}
 
 	/// <summary>

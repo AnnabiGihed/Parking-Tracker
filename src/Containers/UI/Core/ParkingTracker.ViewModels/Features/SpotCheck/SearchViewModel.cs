@@ -1,4 +1,5 @@
 using ParkingTracker.Application.Features.AddressSearch.Queries.SearchAddress;
+using ParkingTracker.Domain.Features.AddressSearch.ValueObjects;
 using ParkingTracker.ViewModels.Features.Shared;
 using Pivot.Framework.Application.Abstractions.Messaging;
 
@@ -7,8 +8,10 @@ namespace ParkingTracker.ViewModels.Features.SpotCheck;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : The search bar: sends the typed text to the Application and, when an address is found, shows it on the map with
-///              a pin and a spot check. "Not found" and a failed search are told to the user in the toast.
+/// Purpose     : The search bar: sends the typed text to the Application (only when it is submitted, as the usage policy of the
+///              search service forbids search-as-you-type). One match is shown on the map with a pin and a spot check; several open a
+///              list to choose from, which closes when a match is picked, when the text changes or when the map is tapped. "Not found"
+///              and a failed search are told to the user in the toast.
 /// </summary>
 public sealed class SearchViewModel : ViewModelBase
 {
@@ -27,6 +30,11 @@ public sealed class SearchViewModel : ViewModelBase
 	/// Shows the messages of the search.
 	/// </summary>
 	private readonly ToastViewModel toast;
+
+	/// <summary>
+	/// The text in the search box.
+	/// </summary>
+	private string text = string.Empty;
 	#endregion
 
 	#region Constructors
@@ -48,7 +56,34 @@ public sealed class SearchViewModel : ViewModelBase
 	/// <summary>
 	/// Gets or sets the text in the search box.
 	/// </summary>
-	public string Text { get; set; } = string.Empty;
+	public string Text
+	{
+		get
+		{
+			return text;
+		}
+
+		set
+		{
+			if (string.Equals(text, value, StringComparison.Ordinal))
+			{
+				return;
+			}
+
+			text = value;
+			CloseList();
+		}
+	}
+
+	/// <summary>
+	/// Gets the matches of the last search that the list offers; empty while the list is closed.
+	/// </summary>
+	public IReadOnlyList<AddressMatch> Matches { get; private set; } = [];
+
+	/// <summary>
+	/// Gets a value indicating whether the list of matches is open.
+	/// </summary>
+	public bool IsListOpen { get; private set; }
 	#endregion
 
 	#region Public Methods
@@ -59,26 +94,62 @@ public sealed class SearchViewModel : ViewModelBase
 	/// <returns>A task that completes when the result was shown or the user was told.</returns>
 	public async Task SubmitAsync(CancellationToken cancellationToken = default)
 	{
-		var text = Text.Trim();
-		if (text.Length == 0)
+		var typed = Text.Trim();
+		if (typed.Length == 0)
 		{
 			return;
 		}
 
-		var result = await sender.Send(new SearchAddressQuery(text), cancellationToken).ConfigureAwait(false);
+		CloseList();
+		var result = await sender.Send(new SearchAddressQuery(typed), cancellationToken).ConfigureAwait(false);
 		if (result.IsFailure)
 		{
 			toast.Show("Search failed — check your connection.");
 			return;
 		}
 
-		if (result.Value.Match is not { } match)
+		var matches = result.Value.Matches;
+		if (matches.Count == 0)
 		{
 			toast.Show("Address not found.");
 			return;
 		}
 
-		await spot.ShowSearchResultAsync(match.Point).ConfigureAwait(false);
+		if (matches.Count == 1)
+		{
+			await spot.ShowSearchResultAsync(matches[0].Point).ConfigureAwait(false);
+			return;
+		}
+
+		Matches = matches;
+		IsListOpen = true;
+		NotifyChanged();
+	}
+
+	/// <summary>
+	/// Handles the pick of a match in the list: closes the list and shows the match on the map.
+	/// </summary>
+	/// <param name="match">The match the user picked.</param>
+	/// <returns>A task that completes when the match was shown.</returns>
+	public Task PickAsync(AddressMatch match)
+	{
+		CloseList();
+		return spot.ShowSearchResultAsync(match.Point);
+	}
+
+	/// <summary>
+	/// Closes the list of matches, for example on the back button, a tap on the map or a change of the text.
+	/// </summary>
+	public void CloseList()
+	{
+		if (!IsListOpen)
+		{
+			return;
+		}
+
+		IsListOpen = false;
+		Matches = [];
+		NotifyChanged();
 	}
 	#endregion
 }
