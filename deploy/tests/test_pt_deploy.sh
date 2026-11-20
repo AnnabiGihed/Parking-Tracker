@@ -118,6 +118,8 @@ check "pt-backup removes the restore-test container after the function returned"
 # named by a function because a symbolic link needs rights that a developer PC may not give.
 provision_copy() {
 	local work=$1
+	# The second expression matches the literal text $EUID in provision.sh, so it must not expand.
+	# shellcheck disable=SC2016
 	sed -e "s|^readonly APP_DIR=.*|readonly APP_DIR=$work/app|" -e 's|\[\[ \$EUID -eq 0 \]\]|true|' "$SERVER_DIR/provision.sh" >"$work/provision.sh"
 }
 
