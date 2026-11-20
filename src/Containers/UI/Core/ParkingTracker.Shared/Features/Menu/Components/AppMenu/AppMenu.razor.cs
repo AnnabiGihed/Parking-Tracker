@@ -10,7 +10,7 @@ namespace ParkingTracker.Shared.Features.Menu.Components;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : The content of the side menu (ADR-0030): the app header and a Radzen panel menu with Home, Work and the parking card,
+/// Purpose     : The content of the side menu (ADR-0030): the app header and a Radzen panel menu with Home, Work, the favourite places and the parking card,
 ///              each with what is saved under it. A tap closes the menu and then opens the screen of the entry, so that a Radzen
 ///              dialog is never open over one of the app's own dialogs. While it is open, the back button of the phone closes it.
 /// </summary>
@@ -60,6 +60,12 @@ public sealed partial class AppMenu : ViewModelComponent<MenuViewModel>
 	private Task OnWorkAsync() => CloseThenAsync(() => OpenPlace(PlaceKind.Work));
 
 	/// <summary>
+	/// Handles a tap on the favourite places.
+	/// </summary>
+	/// <returns>A task that completes when the list opened.</returns>
+	private Task OnFavouritesAsync() => CloseThenAsync(OpenFavourites);
+
+	/// <summary>
 	/// Handles a tap on the parking card.
 	/// </summary>
 	/// <returns>A task that completes when the card dialog opened.</returns>
@@ -90,6 +96,16 @@ public sealed partial class AppMenu : ViewModelComponent<MenuViewModel>
 	{
 		DialogService.CloseSide();
 		return openScreen();
+	}
+
+	/// <summary>
+	/// Opens the list of favourite places.
+	/// </summary>
+	/// <returns>A task that is already complete, because the list opens at once.</returns>
+	private Task OpenFavourites()
+	{
+		ViewModel.OpenFavourites();
+		return Task.CompletedTask;
 	}
 
 	/// <summary>

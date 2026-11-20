@@ -3,6 +3,7 @@ using ParkingTracker.Application.Features.AddressSearch.Queries.SearchAddress;
 using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
 using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Domain.Features.AddressSearch.ValueObjects;
+using ParkingTracker.Domain.Features.SavedPlaces.Aggregates;
 using ParkingTracker.Domain.Features.SavedPlaces.Errors;
 using ParkingTracker.Domain.Features.SavedPlaces.ValueObjects;
 using ParkingTracker.Domain.Features.Shared.ValueObjects;
@@ -120,7 +121,7 @@ public sealed class PlacePickerViewModelTests
 	public async Task Start_PlaceSaved_ShouldShowItsPinInTheConfirmStep()
 	{
 		using var ui = new UiFixture();
-		var (picker, _, _) = await ArrangeAsync(ui, new PlaceShortcut(PlaceKind.Home, "Home", Centre, "Grand-Place 1"));
+		var (picker, _, _) = await ArrangeAsync(ui, new PlaceShortcut(SavedPlaceId.New(), PlaceKind.Home, "Home", Centre, "Grand-Place 1"));
 
 		picker.Start(PlaceKind.Home);
 
@@ -139,7 +140,7 @@ public sealed class PlacePickerViewModelTests
 	public async Task Start_PlaceSavedFromTheMap_ShouldNameItByItsOrigin()
 	{
 		using var ui = new UiFixture();
-		var (picker, _, _) = await ArrangeAsync(ui, new PlaceShortcut(PlaceKind.Work, "Work", Centre, string.Empty));
+		var (picker, _, _) = await ArrangeAsync(ui, new PlaceShortcut(SavedPlaceId.New(), PlaceKind.Work, "Work", Centre, string.Empty));
 
 		picker.Start(PlaceKind.Work);
 
@@ -478,12 +479,12 @@ public sealed class PlacePickerViewModelTests
 	{
 		using var ui = new UiFixture();
 		var (picker, places, store) = await ArrangeAsync(ui);
-		store.GetPlacesAsync(Arg.Any<CancellationToken>()).Returns([new PlaceShortcut(PlaceKind.Home, "Home", Centre, "Grand-Place 1, 1000 Brussels")]);
+		store.GetPlacesAsync(Arg.Any<CancellationToken>()).Returns([new PlaceShortcut(SavedPlaceId.New(), PlaceKind.Home, "Home", Centre, "Grand-Place 1, 1000 Brussels")]);
 		await SearchAsync(ui, picker, GrandPlace);
 
 		await picker.SaveAsync();
 
-		await store.Received(1).SavePlaceAsync(PlaceKind.Home, Centre, "Grand-Place 1, 1000 Brussels", Arg.Any<CancellationToken>());
+		await store.Received(1).SavePlaceAsync(PlaceKind.Home, Centre, "Grand-Place 1 · 1000 Brussels", Arg.Any<CancellationToken>());
 		places.Home.Should().NotBeNull();
 	}
 
@@ -578,7 +579,7 @@ public sealed class PlacePickerViewModelTests
 	public async Task Remove_PlaceSaved_ShouldClearItAndLeave()
 	{
 		using var ui = new UiFixture();
-		var (picker, places, store) = await ArrangeAsync(ui, new PlaceShortcut(PlaceKind.Work, "Work", Centre, "Rue Neuve 5"));
+		var (picker, places, store) = await ArrangeAsync(ui, new PlaceShortcut(SavedPlaceId.New(), PlaceKind.Work, "Work", Centre, "Rue Neuve 5"));
 		store.GetPlacesAsync(Arg.Any<CancellationToken>()).Returns([]);
 		picker.Start(PlaceKind.Work);
 
@@ -598,7 +599,7 @@ public sealed class PlacePickerViewModelTests
 	public async Task Remove_DatabaseRefused_ShouldTellTheUserAndStayOpen()
 	{
 		using var ui = new UiFixture();
-		var (picker, _, store) = await ArrangeAsync(ui, new PlaceShortcut(PlaceKind.Work, "Work", Centre, "Rue Neuve 5"));
+		var (picker, _, store) = await ArrangeAsync(ui, new PlaceShortcut(SavedPlaceId.New(), PlaceKind.Work, "Work", Centre, "Rue Neuve 5"));
 		store.ClearPlaceAsync(Arg.Any<PlaceKind>(), Arg.Any<CancellationToken>()).Returns<Task>(_ => throw new InvalidOperationException("refused"));
 		picker.Start(PlaceKind.Work);
 
@@ -606,6 +607,290 @@ public sealed class PlacePickerViewModelTests
 
 		ui.Toast.Message.Should().Be(PlacePickerViewModel.WriteFailedText);
 		picker.IsActive.Should().BeTrue();
+	}
+	#endregion
+
+	#region Favourite Tests
+	/// <summary>
+	/// A saved favourite.
+	/// </summary>
+	private static readonly PlaceShortcut SavedFavourite = new(SavedPlaceId.New(), PlaceKind.Favourite, "Bakery", Centre, "Rue Neuve 5");
+
+	/// <summary>
+	/// Starts the picker for a new favourite over a store whose writes succeed.
+	/// </summary>
+	/// <param name="ui">The fixture that holds the screen.</param>
+	/// <param name="saved">The places the store holds.</param>
+	/// <returns>The picker and the store.</returns>
+	private static async Task<(PlacePickerViewModel Picker, IPlacesStore Store)> ArrangeFavouriteAsync(UiFixture ui, params PlaceShortcut[] saved)
+	{
+		var (picker, _, store) = await ArrangeAsync(ui, saved).ConfigureAwait(false);
+		store.AddFavouriteAsync(Arg.Any<string>(), Arg.Any<GeoPoint>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Result.Success());
+		store.UpdateFavouriteAsync(Arg.Any<SavedPlaceId>(), Arg.Any<string>(), Arg.Any<GeoPoint>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Result.Success());
+		return (picker, store);
+	}
+
+	/// <summary>
+	/// Verifies that a new favourite starts empty, with a title, a required name and no Remove, even when another favourite is saved.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Start_Favourite_ShouldStartANewOneWithoutRemove()
+	{
+		using var ui = new UiFixture();
+		var (picker, _) = await ArrangeFavouriteAsync(ui, SavedFavourite);
+
+		picker.Start(PlaceKind.Favourite);
+
+		picker.State.Should().Be(PlacePickerState.Searching);
+		picker.IsFavourite.Should().BeTrue();
+		picker.Title.Should().Be("Add a favourite");
+		picker.HasSavedPlace.Should().BeFalse();
+		picker.FavouriteName.Should().BeEmpty();
+	}
+
+	/// <summary>
+	/// Verifies that a match offers its label as the name, and that Save needs a name.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Pick_Favourite_ShouldPrefillTheNameAndRequireOne()
+	{
+		using var ui = new UiFixture();
+		var (picker, store) = await ArrangeFavouriteAsync(ui);
+		AnswerMatches(ui, GrandPlace);
+		picker.Start(PlaceKind.Favourite);
+		picker.SearchText = "grand";
+
+		await picker.SearchAsync();
+
+		picker.FavouriteName.Should().Be("Grand-Place 1");
+		picker.CanSave.Should().BeTrue();
+		picker.FavouriteName = "   ";
+		picker.HasName.Should().BeFalse();
+		picker.CanSave.Should().BeFalse();
+		await picker.SaveAsync();
+		await store.DidNotReceiveWithAnyArgs().AddFavouriteAsync(default!, default, default);
+	}
+
+	/// <summary>
+	/// Verifies that a name the user typed is kept when the pin is moved or another match is chosen, and that a long label is cut to the limit.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Name_TypedByTheUser_ShouldBeKeptAndOfferedNamesCut()
+	{
+		using var ui = new UiFixture();
+		var (picker, _) = await ArrangeFavouriteAsync(ui);
+		picker.Start(PlaceKind.Favourite);
+		picker.Pick(new AddressMatch(Centre, "Long", new string('x', PlacePickerViewModel.MaxNameLength + 10), "1000"));
+		var offered = picker.FavouriteName;
+
+		picker.FavouriteName = "Bakery";
+		picker.Pick(RueNeuve);
+		picker.MoveCandidate(Elsewhere);
+
+		offered.Should().HaveLength(PlacePickerViewModel.MaxNameLength);
+		picker.FavouriteName.Should().Be("Bakery");
+	}
+
+	/// <summary>
+	/// Verifies that Save adds the favourite exactly once with the name, the confirmed point and the address, then closes and tells the user.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Save_NewFavourite_ShouldAddItOnce()
+	{
+		using var ui = new UiFixture();
+		var (picker, store) = await ArrangeFavouriteAsync(ui);
+		AnswerMatches(ui, GrandPlace);
+		picker.Start(PlaceKind.Favourite);
+		picker.SearchText = "grand";
+		await picker.SearchAsync();
+		picker.FavouriteName = "Bakery";
+		picker.MoveCandidate(Elsewhere);
+
+		await picker.SaveAsync();
+		await picker.SaveAsync();
+
+		await store.Received(1).AddFavouriteAsync("Bakery", Elsewhere, null, Arg.Any<CancellationToken>());
+		await store.DidNotReceiveWithAnyArgs().SavePlaceAsync(default, default, default);
+		picker.IsActive.Should().BeFalse();
+		ui.Toast.Message.Should().Be("Favourite saved.");
+	}
+
+	/// <summary>
+	/// Verifies that a refusal of the domain, such as the limit, is told and the picker stays open.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Save_FavouriteRefused_ShouldShowItsErrorAndStayOpen()
+	{
+		using var ui = new UiFixture();
+		var (picker, store) = await ArrangeFavouriteAsync(ui);
+		store.AddFavouriteAsync(Arg.Any<string>(), Arg.Any<GeoPoint>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Result.Failure(SavedPlacesErrors.TooManyFavourites));
+		picker.Start(PlaceKind.Favourite);
+		picker.Pick(GrandPlace);
+
+		await picker.SaveAsync();
+
+		ui.Toast.Message.Should().Be(SavedPlacesErrors.TooManyFavourites.Message);
+		picker.State.Should().Be(PlacePickerState.Confirming);
+	}
+
+	/// <summary>
+	/// Verifies that a favourite outside Brussels cannot be saved.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Save_FavouriteOutsideBrussels_ShouldNotBeAllowed()
+	{
+		using var ui = new UiFixture();
+		var (picker, store) = await ArrangeFavouriteAsync(ui);
+		picker.Start(PlaceKind.Favourite);
+		picker.FavouriteName = "Paris";
+		picker.MoveCandidate(Paris);
+
+		await picker.SaveAsync();
+
+		picker.CanSave.Should().BeFalse();
+		await store.DidNotReceiveWithAnyArgs().AddFavouriteAsync(default!, default, default);
+	}
+
+	/// <summary>
+	/// Verifies that editing opens the favourite with its pin and name, and that Save renames and moves it without adding another.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Edit_Favourite_ShouldShowItAndSaveRenameAndMove()
+	{
+		using var ui = new UiFixture();
+		var (picker, store) = await ArrangeFavouriteAsync(ui, SavedFavourite);
+
+		picker.Edit(SavedFavourite);
+
+		picker.State.Should().Be(PlacePickerState.Confirming);
+		picker.Candidate.Should().Be(Centre);
+		picker.FavouriteName.Should().Be("Bakery");
+		picker.Title.Should().Be("Edit favourite");
+		picker.HasSavedPlace.Should().BeTrue();
+		picker.FavouriteName = "Baker";
+		picker.MoveCandidate(Elsewhere);
+
+		await picker.SaveAsync();
+
+		await store.Received(1).UpdateFavouriteAsync(SavedFavourite.Id, "Baker", Elsewhere, null, Arg.Any<CancellationToken>());
+		await store.DidNotReceiveWithAnyArgs().AddFavouriteAsync(default!, default, default);
+		picker.IsActive.Should().BeFalse();
+	}
+
+	/// <summary>
+	/// Verifies that Remove deletes the favourite being edited, and that Cancel after editing writes nothing.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Remove_EditedFavourite_ShouldDeleteIt()
+	{
+		using var ui = new UiFixture();
+		var (picker, store) = await ArrangeFavouriteAsync(ui, SavedFavourite);
+		picker.Edit(SavedFavourite);
+		picker.Cancel();
+		await store.DidNotReceiveWithAnyArgs().UpdateFavouriteAsync(default!, default!, default, default);
+		picker.Edit(SavedFavourite);
+
+		await picker.RemoveAsync();
+
+		await store.Received(1).RemoveFavouriteAsync(SavedFavourite.Id, Arg.Any<CancellationToken>());
+		picker.IsActive.Should().BeFalse();
+		ui.Toast.Message.Should().Be("Favourite removed.");
+	}
+
+	/// <summary>
+	/// Verifies that Remove does nothing while a new favourite is being set, and that a refused delete is told.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Remove_NewFavouriteOrRefused_ShouldDoNothingOrTellTheUser()
+	{
+		using var ui = new UiFixture();
+		var (picker, store) = await ArrangeFavouriteAsync(ui, SavedFavourite);
+		picker.Start(PlaceKind.Favourite);
+
+		await picker.RemoveAsync();
+		await store.DidNotReceiveWithAnyArgs().RemoveFavouriteAsync(default!);
+		store.RemoveFavouriteAsync(Arg.Any<SavedPlaceId>(), Arg.Any<CancellationToken>()).Returns<Task>(_ => throw new InvalidOperationException("refused"));
+		picker.Edit(SavedFavourite);
+		await picker.RemoveAsync();
+
+		ui.Toast.Message.Should().Be(PlacePickerViewModel.WriteFailedText);
+		picker.IsActive.Should().BeTrue();
+	}
+
+	/// <summary>
+	/// Verifies that a missing favourite is rejected, and that leaving the picker forgets the name and the edited favourite.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Edit_NullOrAfterLeaving_ShouldBeRejectedOrForgotten()
+	{
+		using var ui = new UiFixture();
+		var (picker, _) = await ArrangeFavouriteAsync(ui, SavedFavourite);
+		var noFavourite = () => picker.Edit(null!); // null on purpose: proves the guard clause rejects it
+		picker.Edit(SavedFavourite);
+		picker.Cancel();
+
+		picker.Start(PlaceKind.Home);
+
+		noFavourite.Should().Throw<ArgumentNullException>();
+		picker.FavouriteName.Should().BeEmpty();
+		picker.IsFavourite.Should().BeFalse();
+		picker.HasSavedPlace.Should().BeFalse();
+	}
+	#endregion
+
+	#region Saved Address Tests
+	/// <summary>
+	/// Verifies that a confirmed match is saved with its short label and locality, a label alone when there is no locality, and the
+	/// display name when there is no label.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Save_Match_ShouldSaveLabelAndLocalityAndFallBackToTheDisplayName()
+	{
+		using var ui = new UiFixture();
+		var (picker, _, store) = await ArrangeAsync(ui);
+		var longMatch = new AddressMatch(Centre, "Gare, Rue de la Gare, Etterbeek, Bruxelles-Capitale, 1040, Belgique", "Rue de la Gare", "1040 Etterbeek");
+
+		picker.Start(PlaceKind.Work);
+		picker.Pick(longMatch);
+		await picker.SaveAsync();
+		picker.Start(PlaceKind.Work);
+		picker.Pick(longMatch with { Locality = null });
+		await picker.SaveAsync();
+		picker.Start(PlaceKind.Work);
+		picker.Pick(longMatch with { Label = null });
+		await picker.SaveAsync();
+
+		await store.Received(1).SavePlaceAsync(PlaceKind.Work, Centre, "Rue de la Gare · 1040 Etterbeek", Arg.Any<CancellationToken>());
+		await store.Received(1).SavePlaceAsync(PlaceKind.Work, Centre, "Rue de la Gare", Arg.Any<CancellationToken>());
+		await store.Received(1).SavePlaceAsync(PlaceKind.Work, Centre, longMatch.DisplayName, Arg.Any<CancellationToken>());
+	}
+
+	/// <summary>
+	/// Verifies that a favourite chosen from a match is saved with the short address too.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Save_FavouriteMatch_ShouldSaveTheShortAddress()
+	{
+		using var ui = new UiFixture();
+		var (picker, store) = await ArrangeFavouriteAsync(ui);
+		picker.Start(PlaceKind.Favourite);
+		picker.Pick(GrandPlace);
+
+		await picker.SaveAsync();
+
+		await store.Received(1).AddFavouriteAsync("Grand-Place 1", Centre, "Grand-Place 1 · 1000 Brussels", Arg.Any<CancellationToken>());
 	}
 	#endregion
 

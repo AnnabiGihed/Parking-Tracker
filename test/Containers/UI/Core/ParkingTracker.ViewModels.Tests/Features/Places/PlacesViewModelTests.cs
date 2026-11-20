@@ -1,6 +1,7 @@
 using NSubstitute;
 using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
 using ParkingTracker.Application.Features.Shared.Abstractions;
+using ParkingTracker.Domain.Features.SavedPlaces.Aggregates;
 using ParkingTracker.Domain.Features.SavedPlaces.ValueObjects;
 using ParkingTracker.Domain.Features.Shared.ValueObjects;
 using ParkingTracker.Domain.Features.SpotDecisions.ValueObjects;
@@ -48,7 +49,7 @@ public sealed class PlacesViewModelTests
 		using var ui = new UiFixture();
 		ui.AnswerChecks(SpotDecision.Create(Verdict.Pay, "x"));
 		var (model, store) = Arrange(ui);
-		store.GetPlacesAsync(Arg.Any<CancellationToken>()).Returns([new PlaceShortcut(PlaceKind.Home, "Home", Centre, "Grand-Place")]);
+		store.GetPlacesAsync(Arg.Any<CancellationToken>()).Returns([new PlaceShortcut(SavedPlaceId.New(), PlaceKind.Home, "Home", Centre, "Grand-Place")]);
 		await model.LoadAsync();
 		MapViewRequest? view = null;
 		ui.Spot.ViewRequested += (_, e) => view = e.Value;

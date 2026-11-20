@@ -9,8 +9,8 @@ namespace ParkingTracker.ViewModels.Features.Menu;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : The side menu: the text under Home, Work and the parking card, taken from the places and the card line the screen
-///              already holds, and what each entry opens (Home and Work start the map picker). The menu itself is closed by the
+/// Purpose     : The side menu: the text under Home, Work, the favourite places and the parking card, taken from the places and the card line the screen
+///              already holds, and what each entry opens (Home and Work start the map picker, favourite places open the list). The menu itself is closed by the
 ///              component before an entry opens its screen, so that two screens are never open at once.
 /// </summary>
 public sealed class MenuViewModel : ViewModelBase
@@ -25,6 +25,11 @@ public sealed class MenuViewModel : ViewModelBase
 	/// What a place shows when it was saved from a position on the map and has no address in words.
 	/// </summary>
 	public const string PositionText = "Saved from the map";
+
+	/// <summary>
+	/// What the favourite places entry shows while none is saved.
+	/// </summary>
+	public const string NoFavouritesText = "None yet";
 	#endregion
 
 	#region Fields
@@ -39,6 +44,11 @@ public sealed class MenuViewModel : ViewModelBase
 	private readonly PlacePickerViewModel picker;
 
 	/// <summary>
+	/// The list of favourite places that its entry opens.
+	/// </summary>
+	private readonly FavouritesViewModel favourites;
+
+	/// <summary>
 	/// The saved card and the dialog that edits it.
 	/// </summary>
 	private readonly CardViewModel card;
@@ -50,15 +60,18 @@ public sealed class MenuViewModel : ViewModelBase
 	/// </summary>
 	/// <param name="places">The saved places.</param>
 	/// <param name="picker">The map picker that sets Home and Work.</param>
+	/// <param name="favourites">The list of favourite places that its entry opens.</param>
 	/// <param name="card">The saved card and the dialog that edits it.</param>
 	/// <exception cref="ArgumentNullException">Thrown when an argument is <see langword="null"/>.</exception>
-	public MenuViewModel(PlacesViewModel places, PlacePickerViewModel picker, CardViewModel card)
+	public MenuViewModel(PlacesViewModel places, PlacePickerViewModel picker, FavouritesViewModel favourites, CardViewModel card)
 	{
 		ArgumentNullException.ThrowIfNull(places);
 		ArgumentNullException.ThrowIfNull(picker);
+		ArgumentNullException.ThrowIfNull(favourites);
 		ArgumentNullException.ThrowIfNull(card);
 		this.places = places;
 		this.picker = picker;
+		this.favourites = favourites;
 		this.card = card;
 
 		// Both are scoped like this view model and live as long as it does, so there is nothing to unsubscribe.
@@ -79,6 +92,11 @@ public sealed class MenuViewModel : ViewModelBase
 	public string WorkText => PlaceText(places.Work);
 
 	/// <summary>
+	/// Gets the text under the favourite places: how many are saved, or <see cref="NoFavouritesText"/>.
+	/// </summary>
+	public string FavouritesText => places.Favourites.Count == 0 ? NoFavouritesText : $"{places.Favourites.Count} saved";
+
+	/// <summary>
 	/// Gets the text under the parking card: the card summary line, or <see cref="NotSetText"/> when there is no card.
 	/// </summary>
 	public string CardText => card.Line.Dot == CardDot.None ? NotSetText : card.Line.Pill;
@@ -90,6 +108,11 @@ public sealed class MenuViewModel : ViewModelBase
 	/// </summary>
 	/// <param name="kind">Home or work.</param>
 	public void OpenPlace(PlaceKind kind) => picker.Start(kind);
+
+	/// <summary>
+	/// Opens the list of favourite places.
+	/// </summary>
+	public void OpenFavourites() => favourites.Open();
 
 	/// <summary>
 	/// Opens the card dialog.

@@ -14,6 +14,13 @@ namespace ParkingTracker.Domain.Features.SavedPlaces.Aggregates;
 /// </summary>
 public sealed class SavedPlace : Entity<SavedPlaceId>
 {
+	#region Constants
+	/// <summary>
+	/// The most characters a label may have when it is created or changed; a longer stored label is still restored as it is.
+	/// </summary>
+	public const int MaximumLabelLength = 40;
+	#endregion
+
 	#region Properties
 	/// <summary>
 	/// Gets the kind of place.
@@ -66,18 +73,38 @@ public sealed class SavedPlace : Entity<SavedPlaceId>
 	/// <returns>The place, or a failure when the label is blank or the point is outside the Brussels box.</returns>
 	internal static Result<SavedPlace> Create(PlaceKind kind, string? label, GeoPoint point, string? addressText)
 	{
+		return Create(SavedPlaceId.New(), kind, label, point, addressText);
+	}
+
+	/// <summary>
+	/// Creates a place with a given identifier after checking its label and point; used to change a place without changing who it is.
+	/// </summary>
+	/// <param name="id">The identifier the place keeps.</param>
+	/// <param name="kind">The kind of place.</param>
+	/// <param name="label">The label; surrounding white space is dropped, and at most <see cref="MaximumLabelLength"/> characters remain.</param>
+	/// <param name="point">Where the place is.</param>
+	/// <param name="addressText">The address in words; <see langword="null"/> means unknown.</param>
+	/// <returns>The place, or a failure when the label is blank or too long or the point is outside the Brussels box.</returns>
+	internal static Result<SavedPlace> Create(SavedPlaceId id, PlaceKind kind, string? label, GeoPoint point, string? addressText)
+	{
 		if (string.IsNullOrWhiteSpace(label))
 		{
 			return Result.Failure<SavedPlace>(SavedPlacesErrors.LabelRequired);
 		}
 
+		if (label.Trim().Length > MaximumLabelLength)
+		{
+			return Result.Failure<SavedPlace>(SavedPlacesErrors.LabelTooLong);
+		}
+
 		return IsInside(SavedPlaces.BrusselsBox, point)
-			? new SavedPlace(SavedPlaceId.New(), kind, label.Trim(), point, addressText?.Trim() ?? string.Empty)
+			? new SavedPlace(id, kind, label.Trim(), point, addressText?.Trim() ?? string.Empty)
 			: Result.Failure<SavedPlace>(SavedPlacesErrors.PointOutsideBrussels);
 	}
 
 	/// <summary>
-	/// Rebuilds a stored place with its stored identifier and the checks of <see cref="Create"/>; only <see cref="SavedPlaces"/> does so.
+	/// Rebuilds a stored place with its stored identifier and the checks of <c>Create</c>, except the label length: a label saved before the
+	/// limit existed still loads as it is. Only <see cref="SavedPlaces"/> does so.
 	/// </summary>
 	/// <param name="stored">The stored place.</param>
 	/// <returns>The place, or a failure when the kind is unknown, the label is blank or the point is outside the Brussels box.</returns>

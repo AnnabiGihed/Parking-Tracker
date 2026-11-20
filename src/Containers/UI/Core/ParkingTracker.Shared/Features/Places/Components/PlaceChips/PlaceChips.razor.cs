@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components;
-using ParkingTracker.Shared.Features.Shared.Components;
+using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
 using ParkingTracker.Domain.Features.SavedPlaces.ValueObjects;
+using ParkingTracker.Shared.Features.Shared.Components;
 using ParkingTracker.ViewModels.Features.Places;
 
 namespace ParkingTracker.Shared.Features.Places.Components;
@@ -8,8 +9,9 @@ namespace ParkingTracker.Shared.Features.Places.Components;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : The Home and Work chips under the search bar: a tap on a saved place shows it on the map, a tap on a place that is not
-///              set opens the map picker. A saved place is changed or removed from the side menu.
+/// Purpose     : The Home and Work chips under the search bar, followed by one chip for each favourite, which scroll sideways when they do
+///              not fit: a tap on a saved place shows it on the map, a tap on Home or Work that is not set opens the map picker. A
+///              saved place is changed or removed from the side menu.
 /// </summary>
 public sealed partial class PlaceChips : ViewModelComponent<PlacesViewModel>
 {
@@ -41,6 +43,13 @@ public sealed partial class PlaceChips : ViewModelComponent<PlacesViewModel>
 	/// </summary>
 	/// <returns>A task that completes when the place was shown.</returns>
 	private Task OnGoWorkAsync() => GoAsync(PlaceKind.Work);
+
+	/// <summary>
+	/// Handles a tap on the chip of a favourite.
+	/// </summary>
+	/// <param name="favourite">The favourite.</param>
+	/// <returns>A task that completes when the place was shown.</returns>
+	private Task OnGoFavouriteAsync(PlaceShortcut favourite) => ViewModel.ShowAsync(favourite);
 	#endregion
 
 	#region Private Helpers

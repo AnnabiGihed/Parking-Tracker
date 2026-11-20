@@ -3,6 +3,7 @@ using NSubstitute;
 using ParkingTracker.Application.Features.AddressSearch.Queries.SearchAddress;
 using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
 using ParkingTracker.Domain.Features.AddressSearch.ValueObjects;
+using ParkingTracker.Domain.Features.SavedPlaces.Aggregates;
 using ParkingTracker.Domain.Features.SavedPlaces.ValueObjects;
 using ParkingTracker.Domain.Features.Shared.ValueObjects;
 using ParkingTracker.Domain.Features.SpotDecisions.ValueObjects;
@@ -19,7 +20,7 @@ namespace ParkingTracker.Shared.Tests.Features.Places.Components;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : Component tests for the Home and Work chips, the picker header and the confirm bar: the chips render, a tap on a
+/// Purpose     : Component tests for the Home, Work and favourite chips, the picker header and the confirm bar: the chips render, a tap on a
 ///              place that is not set starts the picker, a saved place is shown on the map; the header shows the title, searches,
 ///              lists several matches and uses the position; the confirm bar shows the label and the hint, saves only on Save,
 ///              disables Save outside Brussels and removes a saved place; the back button closes the list first and then cancels.
@@ -30,7 +31,7 @@ public sealed class PlaceComponentsTests : UiTestContext
 	/// <summary>
 	/// A saved home.
 	/// </summary>
-	private static readonly PlaceShortcut SavedHome = new(PlaceKind.Home, "Home", Here, "Rue de la Loi 1");
+	private static readonly PlaceShortcut SavedHome = new(SavedPlaceId.New(), PlaceKind.Home, "Home", Here, "Rue de la Loi 1");
 
 	/// <summary>
 	/// A match with a label and a locality.
@@ -137,6 +138,29 @@ public sealed class PlaceComponentsTests : UiTestContext
 		chips.FindAll("#placeWorkEdit").Should().BeEmpty();
 		chips.FindAll(".place-edit").Should().BeEmpty();
 		chips.FindAll("button").Should().BeEmpty();
+	}
+	#endregion
+
+	#region Favourite Chip Tests
+	/// <summary>
+	/// Verifies that each favourite gets a chip after Home and Work, and that a tap shows the place on the map.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task PlaceChips_FavouritesSaved_ShouldShowThemAfterWorkAndShowThePlaceOnTap()
+	{
+		Places.GetPlacesAsync(Arg.Any<CancellationToken>()).Returns([SavedHome, new PlaceShortcut(SavedPlaceId.New(), PlaceKind.Favourite, "Bakery", Here, "Rue 1"), new PlaceShortcut(SavedPlaceId.New(), PlaceKind.Favourite, "Park", Here, string.Empty)]);
+		var chips = Render<PlaceChips>();
+		await chips.WaitForAssertionAsync(() => chips.FindAll(".place-favourite").Should().HaveCount(2));
+		AnswerChecks(SpotDecision.Create(Verdict.Pay, "x"));
+		MapViewRequest? view = null;
+		Resolve<SpotCheckViewModel>().ViewRequested += (_, e) => view = e.Value;
+
+		await chips.FindAll(".place-favourite")[0].ClickAsync();
+
+		chips.FindAll(".rz-chip").Select(chip => chip.TextContent.Trim()).Should().Equal("Home", "Set work", "Bakery", "Park");
+		view.Should().NotBeNull();
+		Resolve<PlacePickerViewModel>().IsActive.Should().BeFalse();
 	}
 	#endregion
 
@@ -290,6 +314,52 @@ public sealed class PlaceComponentsTests : UiTestContext
 
 		await Places.Received(1).SavePlaceAsync(PlaceKind.Home, Here, null, Arg.Any<CancellationToken>());
 		picker.IsActive.Should().BeFalse();
+	}
+
+	/// <summary>
+	/// Verifies that a favourite has a required name box limited to 40 characters, that Save adds it with the name, and that Home has no name box.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task ConfirmBar_Favourite_ShouldRequireANameAndSaveIt()
+	{
+		Places.AddFavouriteAsync(Arg.Any<string>(), Arg.Any<GeoPoint>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Result.Success());
+		var bar = Render<PlaceConfirmBar>();
+		var picker = Resolve<PlacePickerViewModel>();
+		await bar.InvokeAsync(() => picker.Start(PlaceKind.Home));
+		await bar.InvokeAsync(() => picker.MoveCandidate(Here));
+		bar.FindAll("#placeName").Should().BeEmpty();
+		await bar.InvokeAsync(() => picker.Cancel());
+		await bar.InvokeAsync(() => picker.Start(PlaceKind.Favourite));
+		await bar.InvokeAsync(() => picker.MoveCandidate(Here));
+
+		bar.Find("#placeName").GetAttribute("maxlength").Should().Be("40");
+		bar.Find("#placeNameError").TextContent.Should().Contain("name");
+		bar.Find("#placeSave").HasAttribute("disabled").Should().BeTrue();
+		await bar.Find("#placeName").InputAsync("Bakery");
+		bar.FindAll("#placeNameError").Should().BeEmpty();
+		bar.Find("#placeSave").HasAttribute("disabled").Should().BeFalse();
+		await bar.Find("#placeSave").ClickAsync();
+
+		await Places.Received(1).AddFavouriteAsync("Bakery", Here, null, Arg.Any<CancellationToken>());
+		picker.IsActive.Should().BeFalse();
+	}
+
+	/// <summary>
+	/// Verifies that an edited favourite shows its name and Remove, which removes it.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task ConfirmBar_EditedFavourite_ShouldShowItsNameAndRemoveIt()
+	{
+		var favourite = new PlaceShortcut(SavedPlaceId.New(), PlaceKind.Favourite, "Bakery", Here, "Rue 1");
+		var bar = Render<PlaceConfirmBar>();
+		await bar.InvokeAsync(() => Resolve<PlacePickerViewModel>().Edit(favourite));
+
+		bar.Find("#placeName").GetAttribute("value").Should().Be("Bakery");
+		await bar.Find("#placeRemove").ClickAsync();
+
+		await Places.Received(1).RemoveFavouriteAsync(favourite.Id, Arg.Any<CancellationToken>());
 	}
 
 	/// <summary>

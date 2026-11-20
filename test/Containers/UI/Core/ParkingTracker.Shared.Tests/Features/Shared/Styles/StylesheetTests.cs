@@ -108,6 +108,25 @@ public sealed partial class StylesheetTests : UiTestContext
 	}
 	#endregion
 
+	#region Sheet Tests
+	/// <summary>
+	/// Verifies that the Radzen dialogs of the bridge are styled as a bottom sheet, with the specificity needed to beat the small-screen
+	/// rule of Radzen: anchored to the bottom, rounded on top, limited in height with the content scrolling, and coloured by the
+	/// variables of the app, so that they follow the dark scheme.
+	/// </summary>
+	[Fact]
+	public void AppSheet_RadzenDialog_ShouldBeABottomSheet()
+	{
+		var css = ReadStylesheet("style.css");
+		var sheet = RuleOf(css, ".rz-dialog.app-sheet:not(.rz-dialog-confirm):not(.rz-dialog-alert)");
+		var content = RuleOf(css, ".app-sheet .rz-dialog-content");
+
+		sheet.Should().Contain("inset-block-start: auto !important").And.Contain("inset-block-end: 0 !important").And.Contain("transform: none !important").And.Contain("width: min(480px, 100%) !important").And.Contain("border-radius: 24px 24px 0 0").And.Contain("max-height: 85dvh")
+			.And.Contain("env(safe-area-inset-bottom)").And.Contain("background: var(--surface)");
+		content.Should().Contain("overflow-y: auto");
+	}
+	#endregion
+
 	#region Theme Tests
 	/// <summary>
 	/// Verifies that the fill of the Radzen "Light" buttons comes from a colour of the app, which changes with the dark scheme,

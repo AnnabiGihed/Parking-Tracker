@@ -3,19 +3,22 @@ using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
 using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Domain.Features.Cards.ValueObjects;
 using ParkingTracker.Domain.Features.Cars.ValueObjects;
+using ParkingTracker.Domain.Features.SavedPlaces.Aggregates;
 using ParkingTracker.Domain.Features.SavedPlaces.Errors;
 using ParkingTracker.Domain.Features.SavedPlaces.ValueObjects;
 using ParkingTracker.Domain.Features.Shared.ValueObjects;
 using ParkingTracker.Testing.Device;
 using ParkingTracker.ViewModels.Features.Shared.Settings;
 using ParkingTracker.ViewModels.Tests.Features.Shared.TestDoubles;
+using Pivot.Framework.Domain.Shared;
+using SavedPlacesList = ParkingTracker.Domain.Features.SavedPlaces.Aggregates.SavedPlaces;
 
 namespace ParkingTracker.ViewModels.Tests.Features.Shared.Settings;
 
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : Tests for <see cref="DevicePlacesStore"/> over a real SQLite file: Home and Work are saved, read back by a new store,
+/// Purpose     : Tests for <see cref="DevicePlacesStore"/> over a real SQLite file: Home, Work and favourites are saved, read back by a new store,
 ///              replaced and cleared one by one; a place outside Brussels is refused and nothing is written; saved places that cannot be
 ///              read throw on a read and are replaced by a save; a key that cannot be read now never lets a write replace them; and a
 ///              lost key is replaced by a new one on save.
@@ -61,8 +64,8 @@ public sealed class DevicePlacesStoreTests
 		var places = await NewStore(db).GetPlacesAsync();
 
 		places.Should().HaveCount(2);
-		places[0].Should().Be(new PlaceShortcut(PlaceKind.Home, "Home", GrandPlace, string.Empty));
-		places[1].Should().Be(new PlaceShortcut(PlaceKind.Work, "Work", Ixelles, "Rue Neuve 5"));
+		places[0].Should().BeEquivalentTo(new { Kind = PlaceKind.Home, Label = "Home", Point = GrandPlace, AddressText = string.Empty });
+		places[1].Should().BeEquivalentTo(new { Kind = PlaceKind.Work, Label = "Work", Point = Ixelles, AddressText = "Rue Neuve 5" });
 	}
 
 	/// <summary>
@@ -169,6 +172,153 @@ public sealed class DevicePlacesStoreTests
 		await store.ClearPlaceAsync(PlaceKind.Work);
 
 		(await store.GetPlacesAsync()).Should().ContainSingle();
+	}
+	#endregion
+
+	#region Favourite Tests
+	/// <summary>
+	/// Verifies that favourites are saved, read back after Home and Work in the order they were added, and carry their identifiers.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task AddFavourite_ShouldBeReadBackAfterHomeAndWork()
+	{
+		await using var db = await DeviceTestDatabase.CreateAsync();
+		var store = NewStore(db);
+		await store.AddFavouriteAsync("Bakery", GrandPlace, " Rue 1 ");
+		await store.SavePlaceAsync(PlaceKind.Work, Ixelles, null);
+		await store.AddFavouriteAsync("Park", Ixelles, null);
+		await store.SavePlaceAsync(PlaceKind.Home, GrandPlace, null);
+
+		var places = await NewStore(db).GetPlacesAsync();
+
+		places.Select(place => place.Label).Should().Equal("Home", "Work", "Bakery", "Park");
+		places[2].Kind.Should().Be(PlaceKind.Favourite);
+		places[2].AddressText.Should().Be("Rue 1");
+		places[2].Id.Should().NotBe(places[3].Id);
+	}
+
+	/// <summary>
+	/// Verifies that an update keeps the identifier and the position, and changes the name and the place.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task UpdateFavourite_ShouldKeepIdentifierAndPosition()
+	{
+		await using var db = await DeviceTestDatabase.CreateAsync();
+		var store = NewStore(db);
+		await store.AddFavouriteAsync("Bakery", GrandPlace, null);
+		await store.AddFavouriteAsync("Park", GrandPlace, null);
+		var first = (await store.GetPlacesAsync())[0];
+
+		var updated = await store.UpdateFavouriteAsync(first.Id, "Baker", Ixelles, "Rue 2");
+		var places = await store.GetPlacesAsync();
+
+		updated.IsSuccess.Should().BeTrue();
+		places.Select(place => place.Label).Should().Equal("Baker", "Park");
+		places[0].Id.Should().Be(first.Id);
+		places[0].Point.Should().Be(Ixelles);
+		places[0].AddressText.Should().Be("Rue 2");
+	}
+
+	/// <summary>
+	/// Verifies that an update of a favourite that is gone, or with a point outside Brussels, fails and writes nothing.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task UpdateFavourite_UnknownOrOutsideBrussels_ShouldReturnTheFailure()
+	{
+		await using var db = await DeviceTestDatabase.CreateAsync();
+		var store = NewStore(db);
+		await store.AddFavouriteAsync("Bakery", GrandPlace, null);
+		var first = (await store.GetPlacesAsync())[0];
+
+		var unknown = await store.UpdateFavouriteAsync(SavedPlaceId.New(), "X", Ixelles, null);
+		var outside = await store.UpdateFavouriteAsync(first.Id, "X", new GeoPoint(48.8566, 2.3522), null);
+
+		unknown.Error.Should().Be(SavedPlacesErrors.PlaceNotFound);
+		outside.Error.Should().Be(SavedPlacesErrors.PointOutsideBrussels);
+		(await store.GetPlacesAsync()).Single().Should().BeEquivalentTo(first);
+	}
+
+	/// <summary>
+	/// Verifies that removing a favourite keeps the others, that removing the last one empties the table, and that an unknown one changes nothing.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task RemoveFavourite_ShouldKeepTheOthersAndIgnoreAnUnknownOne()
+	{
+		await using var db = await DeviceTestDatabase.CreateAsync();
+		var store = NewStore(db);
+		await store.AddFavouriteAsync("Bakery", GrandPlace, null);
+		await store.AddFavouriteAsync("Park", Ixelles, null);
+		var all = await store.GetPlacesAsync();
+
+		await store.RemoveFavouriteAsync(SavedPlaceId.New());
+		await store.RemoveFavouriteAsync(all[0].Id);
+		var remaining = await store.GetPlacesAsync();
+		await store.RemoveFavouriteAsync(all[1].Id);
+
+		remaining.Should().ContainSingle().Which.Label.Should().Be("Park");
+		(await db.ScalarAsync<int>("SELECT COUNT(*) FROM saved_places")).Should().Be(0);
+	}
+
+	/// <summary>
+	/// Verifies that Home and Work cannot be removed as favourites.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task RemoveFavourite_HomeIdentifier_ShouldKeepHome()
+	{
+		await using var db = await DeviceTestDatabase.CreateAsync();
+		var store = NewStore(db);
+		await store.SavePlaceAsync(PlaceKind.Home, GrandPlace, null);
+		var home = (await store.GetPlacesAsync())[0];
+
+		await store.RemoveFavouriteAsync(home.Id);
+
+		(await store.GetPlacesAsync()).Should().ContainSingle();
+	}
+
+	/// <summary>
+	/// Verifies that the 21st favourite is refused and nothing is written for it.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task AddFavourite_TwentyOne_ShouldReturnTheFailureAndWriteNothing()
+	{
+		await using var db = await DeviceTestDatabase.CreateAsync();
+		var store = NewStore(db);
+		for (var index = 1; index <= SavedPlacesList.MaximumFavourites; index++)
+		{
+			(await store.AddFavouriteAsync("Place " + index, GrandPlace, null)).IsSuccess.Should().BeTrue();
+		}
+
+		var twentyFirst = await store.AddFavouriteAsync("One too many", GrandPlace, null);
+
+		twentyFirst.Error.Should().Be(SavedPlacesErrors.TooManyFavourites);
+		twentyFirst.ResultExceptionType.Should().Be(ResultExceptionType.Conflict);
+		(await db.ScalarAsync<int>("SELECT COUNT(*) FROM saved_places")).Should().Be(SavedPlacesList.MaximumFavourites);
+	}
+
+	/// <summary>
+	/// Verifies that a blank name, a too long name and a point outside Brussels are refused and nothing is written.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task AddFavourite_BlankTooLongOrOutsideBrussels_ShouldReturnTheFailure()
+	{
+		await using var db = await DeviceTestDatabase.CreateAsync();
+		var store = NewStore(db);
+
+		var blank = await store.AddFavouriteAsync(" ", GrandPlace, null);
+		var tooLong = await store.AddFavouriteAsync(new string('x', SavedPlace.MaximumLabelLength + 1), GrandPlace, null);
+		var outside = await store.AddFavouriteAsync("Paris", new GeoPoint(48.8566, 2.3522), null);
+
+		outside.Error.Should().Be(SavedPlacesErrors.PointOutsideBrussels);
+		blank.Error.Should().Be(SavedPlacesErrors.LabelRequired);
+		tooLong.Error.Should().Be(SavedPlacesErrors.LabelTooLong);
+		(await db.ScalarAsync<int>("SELECT COUNT(*) FROM saved_places")).Should().Be(0);
 	}
 	#endregion
 

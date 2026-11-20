@@ -16,6 +16,11 @@
                 <span class="app-menu-item"><Icon Name="work" /><span class="app-menu-text"><span class="app-menu-title">Work</span><span class="app-menu-sub">@ViewModel.WorkText</span></span></span>
             </Template>
         </RadzenPanelMenuItem>
+        <RadzenPanelMenuItem id="menuFavourites" Click="OnFavouritesAsync">
+            <Template>
+                <span class="app-menu-item"><Icon Name="star" /><span class="app-menu-text"><span class="app-menu-title">Favourite places</span><span class="app-menu-sub">@ViewModel.FavouritesText</span></span></span>
+            </Template>
+        </RadzenPanelMenuItem>
         <RadzenPanelMenuItem id="menuCard" Click="OnCardAsync">
             <Template>
                 <span class="app-menu-item"><Icon Name="card" /><span class="app-menu-text"><span class="app-menu-title">Parking card</span><span class="app-menu-sub">@ViewModel.CardText</span></span></span>

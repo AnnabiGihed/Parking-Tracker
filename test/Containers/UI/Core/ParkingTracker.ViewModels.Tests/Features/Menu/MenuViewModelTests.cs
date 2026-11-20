@@ -1,5 +1,6 @@
 using NSubstitute;
 using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
+using ParkingTracker.Domain.Features.SavedPlaces.Aggregates;
 using ParkingTracker.Domain.Features.SavedPlaces.ValueObjects;
 using ParkingTracker.Domain.Features.Shared.ValueObjects;
 using ParkingTracker.ViewModels.Features.Menu;
@@ -11,7 +12,7 @@ namespace ParkingTracker.ViewModels.Tests.Features.Menu;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : Unit tests for <see cref="MenuViewModel"/>: the text under Home, Work and the parking card, and the screens its entries open.
+/// Purpose     : Unit tests for <see cref="MenuViewModel"/>: the text under Home, Work, the favourite places and the parking card, and the screens its entries open.
 /// </summary>
 public sealed class MenuViewModelTests
 {
@@ -26,15 +27,16 @@ public sealed class MenuViewModelTests
 	/// </summary>
 	/// <param name="ui">The fixture that holds the card and the other view models.</param>
 	/// <param name="saved">The places the store holds.</param>
-	/// <returns>The menu, the places view model it reads and the picker it opens.</returns>
-	private static async Task<(MenuViewModel Menu, PlacesViewModel Places, PlacePickerViewModel Picker)> ArrangeAsync(UiFixture ui, params PlaceShortcut[] saved)
+	/// <returns>The menu, the places view model it reads, the picker and the list of favourites it opens.</returns>
+	private static async Task<(MenuViewModel Menu, PlacesViewModel Places, PlacePickerViewModel Picker, FavouritesViewModel Favourites)> ArrangeAsync(UiFixture ui, params PlaceShortcut[] saved)
 	{
 		var store = Substitute.For<IPlacesStore>();
 		store.GetPlacesAsync(Arg.Any<CancellationToken>()).Returns(saved);
 		var places = new PlacesViewModel(store, ui.Spot, ui.Toast);
 		await places.LoadAsync().ConfigureAwait(false);
 		var picker = new PlacePickerViewModel(store, ui.Sender, ui.Spot, places, ui.Toast);
-		return (new MenuViewModel(places, picker, ui.Card), places, picker);
+		var favourites = new FavouritesViewModel(places, picker);
+		return (new MenuViewModel(places, picker, favourites, ui.Card), places, picker, favourites);
 	}
 	#endregion
 
@@ -47,7 +49,7 @@ public sealed class MenuViewModelTests
 	public async Task Texts_NothingSaved_ShouldReadNotSet()
 	{
 		using var ui = new UiFixture();
-		var (menu, _, _) = await ArrangeAsync(ui);
+		var (menu, _, _, _) = await ArrangeAsync(ui);
 
 		menu.HomeText.Should().Be("Not set");
 		menu.WorkText.Should().Be("Not set");
@@ -63,7 +65,7 @@ public sealed class MenuViewModelTests
 	{
 		using var ui = new UiFixture();
 
-		var (menu, _, _) = await ArrangeAsync(ui, new PlaceShortcut(PlaceKind.Home, "Home", Centre, "Grand-Place 1"), new PlaceShortcut(PlaceKind.Work, "Work", Centre, string.Empty));
+		var (menu, _, _, _) = await ArrangeAsync(ui, new PlaceShortcut(SavedPlaceId.New(), PlaceKind.Home, "Home", Centre, "Grand-Place 1"), new PlaceShortcut(SavedPlaceId.New(), PlaceKind.Work, "Work", Centre, string.Empty));
 
 		menu.HomeText.Should().Be("Grand-Place 1");
 		menu.WorkText.Should().Be("Saved from the map");
@@ -77,7 +79,7 @@ public sealed class MenuViewModelTests
 	public async Task Changed_PlacesChange_ShouldBeRaised()
 	{
 		using var ui = new UiFixture();
-		var (menu, places, _) = await ArrangeAsync(ui);
+		var (menu, places, _, _) = await ArrangeAsync(ui);
 		var raised = 0;
 		menu.Changed += (_, _) => raised++;
 
@@ -96,7 +98,7 @@ public sealed class MenuViewModelTests
 	public async Task OpenPlace_Work_ShouldOpenTheMapPickerForWork()
 	{
 		using var ui = new UiFixture();
-		var (menu, _, picker) = await ArrangeAsync(ui);
+		var (menu, _, picker, _) = await ArrangeAsync(ui);
 
 		menu.OpenPlace(PlaceKind.Work);
 
@@ -112,11 +114,29 @@ public sealed class MenuViewModelTests
 	public async Task OpenCardAsync_ShouldOpenTheCardDialog()
 	{
 		using var ui = new UiFixture();
-		var (menu, _, _) = await ArrangeAsync(ui);
+		var (menu, _, _, _) = await ArrangeAsync(ui);
 
 		await menu.OpenCardAsync();
 
 		ui.Card.IsOpen.Should().BeTrue();
+	}
+
+	/// <summary>
+	/// Verifies that the favourite places entry shows how many are saved and opens the list.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Favourites_ShouldShowTheCountAndOpenTheList()
+	{
+		using var ui = new UiFixture();
+		var (empty, _, _, _) = await ArrangeAsync(ui);
+		var (menu, _, _, favourites) = await ArrangeAsync(ui, new PlaceShortcut(SavedPlaceId.New(), PlaceKind.Favourite, "Bakery", Centre, "Rue 1"), new PlaceShortcut(SavedPlaceId.New(), PlaceKind.Favourite, "Park", Centre, string.Empty));
+
+		menu.OpenFavourites();
+
+		empty.FavouritesText.Should().Be("None yet");
+		menu.FavouritesText.Should().Be("2 saved");
+		favourites.IsOpen.Should().BeTrue();
 	}
 	#endregion
 
@@ -129,14 +149,16 @@ public sealed class MenuViewModelTests
 	public async Task Constructor_NullArguments_ShouldThrowArgumentNullException()
 	{
 		using var ui = new UiFixture();
-		var (_, places, picker) = await ArrangeAsync(ui);
+		var (_, places, picker, favourites) = await ArrangeAsync(ui);
 
-		var noPlaces = () => new MenuViewModel(null!, picker, ui.Card); // null on purpose: proves the guard clause rejects it
-		var noPicker = () => new MenuViewModel(places, null!, ui.Card); // null on purpose: proves the guard clause rejects it
-		var noCard = () => new MenuViewModel(places, picker, null!); // null on purpose: proves the guard clause rejects it
+		var noPlaces = () => new MenuViewModel(null!, picker, favourites, ui.Card); // null on purpose: proves the guard clause rejects it
+		var noPicker = () => new MenuViewModel(places, null!, favourites, ui.Card); // null on purpose: proves the guard clause rejects it
+		var noFavourites = () => new MenuViewModel(places, picker, null!, ui.Card); // null on purpose: proves the guard clause rejects it
+		var noCard = () => new MenuViewModel(places, picker, favourites, null!); // null on purpose: proves the guard clause rejects it
 
 		noPlaces.Should().Throw<ArgumentNullException>();
 		noPicker.Should().Throw<ArgumentNullException>();
+		noFavourites.Should().Throw<ArgumentNullException>();
 		noCard.Should().Throw<ArgumentNullException>();
 	}
 	#endregion
