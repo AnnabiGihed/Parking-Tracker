@@ -1,10 +1,11 @@
-namespace ParkingTracker.Domain.Features.ResidentCards.ValueObjects;
+namespace ParkingTracker.Domain.Features.Shared.ValueObjects;
 
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : The number plate of the car on a residents' card, in capitals without spaces or dashes, as the card form of the
-///              first version wrote it. It is personal data, so the device database stores it encrypted.
+/// Purpose     : A number plate, in capitals without spaces or dashes, as the card form of the first version wrote it. The
+///              residents' card and the vehicle profile each hold their own. It is personal data, so the device database
+///              stores it encrypted.
 /// </summary>
 public sealed record LicencePlate
 {
@@ -28,7 +29,7 @@ public sealed record LicencePlate
 
 	#region Factory Methods
 	/// <summary>
-	/// Creates the plate of a card that may have none; the text is put in capitals and loses its white space and dashes.
+	/// Creates a plate that may be missing; the text is put in capitals and loses its white space and dashes.
 	/// </summary>
 	/// <param name="text">The plate as typed, or <see langword="null"/> when none was entered.</param>
 	/// <returns>The plate, or <see langword="null"/> when nothing is left after normalising.</returns>
