@@ -18,7 +18,8 @@ python .agent-kit/verify.py
 The token must be able to read packages, because the `Pivot.Framework.*` packages come from GitHub Packages. The
 Android app builds only in CI (it needs the `maui-android` workload); the solution on a PC holds everything else,
 with its unit tests. Documentation: [docs/architecture.md](docs/architecture.md) (design, build and CI),
-[docs/architecture-v2.md](docs/architecture-v2.md) (proposed back end, sign-in and admin app) and
+[docs/architecture-v2.md](docs/architecture-v2.md) (proposed back end, sign-in and admin app),
+[docs/reference/configuration.md](docs/reference/configuration.md) (the settings and secrets of the API) and
 [CONTRIBUTING.md](CONTRIBUTING.md) (rules for contributions).
 
 ## Features
@@ -144,8 +145,8 @@ and keeps it in the AppHost's user secrets, and the `migrate` resource applies t
 The API's reference page (Scalar, Development only) is the "API reference" link on the `api` resource. The tests that
 need PostgreSQL start their own container through Testcontainers, so `dotnet test` also needs Docker.
 
-The server side (provisioning, deployment, rollback, backups) is in the
-[back-end runbook](docs/operations/runbook.md).
+The server side (provisioning, deployment, rollback, backups, and the three secrets of the sign-in with the rotation of
+the token signing key) is in the [back-end runbook](docs/operations/runbook.md).
 
 ## Check the street data
 

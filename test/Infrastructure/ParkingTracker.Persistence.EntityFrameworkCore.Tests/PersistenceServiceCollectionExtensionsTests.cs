@@ -1,14 +1,15 @@
 using Microsoft.Extensions.DependencyInjection;
-using ParkingTracker.Application.Features.Accounts.Abstractions;
+using ParkingTracker.Backend.Application.Features.Accounts.Abstractions;
 using ParkingTracker.Persistence.EntityFrameworkCore.Features.Accounts;
 using ParkingTracker.Persistence.EntityFrameworkCore.Features.Shared.Database;
+using Pivot.Framework.Domain.Repositories;
 
 namespace ParkingTracker.Persistence.EntityFrameworkCore.Tests;
 
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : Tests for <see cref="PersistenceServiceCollectionExtensions"/>: the context and the account repository resolve from the container, and bad
+/// Purpose     : Tests for <see cref="PersistenceServiceCollectionExtensions"/>: the context, the account repository, the unit of work and the nonce store resolve from the container, and bad
 ///              arguments are rejected before anything is registered. Resolving the context does not open a connection.
 /// </summary>
 public sealed class PersistenceServiceCollectionExtensionsTests
@@ -30,6 +31,8 @@ public sealed class PersistenceServiceCollectionExtensionsTests
 
 		context.Should().NotBeNull();
 		scope.ServiceProvider.GetRequiredService<IUserAccountRepository>().Should().BeOfType<UserAccountRepository>();
+		scope.ServiceProvider.GetRequiredService<IUnitOfWork>().Should().BeOfType<ParkingDataUnitOfWork>();
+		scope.ServiceProvider.GetRequiredService<ISignInChallengeStore>().Should().BeOfType<SignInChallengeStore>();
 	}
 
 	/// <summary>

@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using ParkingTracker.Application.Features.Accounts.Abstractions;
+using ParkingTracker.Backend.Application.Features.Accounts.Abstractions;
 using ParkingTracker.Domain.Features.Accounts.Aggregates;
 using ParkingTracker.Domain.Features.Accounts.ValueObjects;
 using Pivot.Framework.Infrastructure.Persistence.EntityFrameworkCore.Repositories;

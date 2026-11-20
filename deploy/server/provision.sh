@@ -3,6 +3,7 @@
 # this folder, from a copy of deploy/ on the server:
 #
 #   sudo bash deploy/server/provision.sh --deploy-key parking-deploy.pub
+#   sudo bash deploy/server/provision.sh --rotate-signing-key
 #
 # It only adds; it never reinstalls, resets the firewall, changes sshd or touches another application:
 #   1. checks the server: Docker, Python 3, the shared `caddy` container, its Caddyfile and the `web` network;
@@ -10,11 +11,16 @@
 #      reports whether sshd's AllowUsers or AllowGroups admit it;
 #   3. installs pt-deploy, pt-deploy-root, pt-backup and pt_compose_check.py, and the single sudoers line;
 #   4. creates /opt/apps/parking-tracker and the secret files: database passwords generated here (they never leave
-#      the server), the proxy key (generated once, never rotated by a rerun) and the GHCR read token, typed at a prompt;
+#      the server), the proxy key, the token signing keys and the subject hash key (each generated once, never rotated by a
+#      rerun) and the GHCR read token, typed at a prompt;
 #   5. writes the Parking Tracker block into the shared Caddyfile between its marker lines, with the proxy key and the
 #      privacy notice (deploy/site/privacy-notice.html) in place of their placeholders (pt_caddy_block.py), validates
 #      and reloads Caddy, and restores the previous file when Caddy rejects it;
 #   6. installs and starts the nightly dump and monthly restore-test timers.
+# --rotate-signing-key does only one thing: the current token signing key becomes the previous one (still accepted, so
+# no one is signed out), a new current key is made, and the API container of the current release is recreated. The previous
+# key of before is dropped, so rotate again only after the access tokens of the last rotation have expired (15 minutes).
+# The subject hash key is never rotated: a new one would orphan every account and the erasure log.
 # Exit code 0 when everything is in place; 1 with a message otherwise. Safe to run again.
 set -euo pipefail
 
@@ -41,7 +47,7 @@ step() { printf '\n== %s\n' "$*"; }
 fail() { echo "provision: $*" >&2; exit 1; }
 
 usage() {
-	echo "usage: sudo bash provision.sh --deploy-key <public key file>" >&2
+	echo "usage: sudo bash provision.sh --deploy-key <public key file> | --rotate-signing-key" >&2
 	exit 1
 }
 
@@ -100,11 +106,87 @@ install_programs() {
 }
 
 write_secret() {
-	local path=$1 owner=$2 value=$3
+	local path=$1 owner=$2 value=$3 temp
 	umask 077
-	printf '%s' "$value" >"$path"
-	chown "$owner:$owner" "$path"
-	chmod 400 "$path"
+	# The new content is made complete beside the target, with its owner and mode 0400, and moved over it in one step, so a
+	# reader never meets a missing or half-written secret.
+	temp=$(mktemp "$path.XXXXXX") || fail "could not create a file beside $path"
+	if ! { printf '%s' "$value" >"$temp" && chown "$owner:$owner" "$temp" && chmod 400 "$temp" && mv -f -- "$temp" "$path"; }; then
+		rm -f -- "$temp"
+		fail "could not write $path"
+	fi
+}
+
+# Prints a new P-256 private key in PEM, the key type of the ES256 access tokens (ADR-0014).
+new_signing_key() {
+	openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256
+}
+
+# Creates a secret of the sign-in when its file is missing. A file that exists but is empty is never replaced: it means that
+# the secret was lost or damaged, and a new value would silently orphan the accounts or sign everyone out.
+# Usage: create_secret_once <path> <label> <generator command and arguments>
+create_secret_once() {
+	local path=$1 label=$2 value
+	shift 2
+	if [[ -e $path ]]; then
+		[[ -s $path ]] || fail "$path exists but is empty; restore $label from its copy (this script never replaces it)"
+		return 0
+	fi
+	value=$("$@") || fail "could not generate $label"
+	[[ -n $value ]] || fail "generating $label gave nothing"
+	write_secret "$path" "$DOTNET_APP_UID" "$value"
+	echo "Generated $label"
+}
+
+# The secrets of the sign-in, each created only when missing, so a rerun never invalidates a token or an account:
+# the current signing key, the previous one (an empty file until the first rotation) and the subject hash key.
+create_token_secrets() {
+	local app=$SECRETS_DIR/app
+	create_secret_once "$app/token_signing_key_current.pem" "the current token signing key" new_signing_key
+	if [[ ! -e $app/token_signing_key_previous.pem ]]; then
+		write_secret "$app/token_signing_key_previous.pem" "$DOTNET_APP_UID" ""
+		echo "Created the empty token_signing_key_previous.pem"
+	fi
+	create_secret_once "$app/subject_hash_key" "the subject hash key (never rotated; keep a copy in the password manager)" openssl rand -base64 32
+}
+
+# Prints the folder of the release the "current" link points at, or nothing before the first deployment.
+current_release_dir() {
+	local link=$APP_DIR/current
+	if [[ -L $link ]]; then
+		readlink -f "$link"
+	fi
+}
+
+# Recreates the API container of the current release, so that it reads the files that changed. The invocation is the one
+# of pt-deploy-root; before the first deployment there is nothing to recreate.
+recreate_api() {
+	local release_dir
+	release_dir=$(current_release_dir)
+	if [[ -z $release_dir ]]; then
+		echo "No release is deployed yet; the first deployment reads the new keys."
+		return 0
+	fi
+	docker compose -p parking-tracker --project-directory "$release_dir" -f "$release_dir/compose.yaml" \
+		--env-file "$release_dir/.env" up -d --force-recreate --no-deps api ||
+		fail "the API container could not be recreated; the keys are rotated, so deploy the current tag or restart the API"
+}
+
+# Makes the current signing key the previous one and creates a new current key, then recreates the API container so that
+# it reads them. The new key is generated before anything is replaced, so a failure leaves both files as they were.
+rotate_signing_key() {
+	step "Rotate the token signing key"
+	[[ $EUID -eq 0 ]] || fail "run with sudo"
+	local app=$SECRETS_DIR/app new_key old_key
+	[[ -s $app/token_signing_key_current.pem ]] || fail "there is no current signing key to rotate; run the full provisioning first"
+	new_key=$(new_signing_key) || fail "openssl could not make a key"
+	[[ -n $new_key ]] || fail "openssl made no key"
+	old_key=$(cat "$app/token_signing_key_current.pem") || fail "could not read the current key"
+	write_secret "$app/token_signing_key_previous.pem" "$DOTNET_APP_UID" "$old_key"
+	write_secret "$app/token_signing_key_current.pem" "$DOTNET_APP_UID" "$new_key"
+	echo "Rotated: the old current key is now the previous one, and a new current key is in place."
+	recreate_api
+	echo "The API reads the new keys; access tokens signed with the old key stay valid for 15 minutes."
 }
 
 create_folders_and_secrets() {
@@ -131,6 +213,7 @@ create_folders_and_secrets() {
 		write_secret "$SECRETS_DIR/app/proxy_key" "$DOTNET_APP_UID" "$(openssl rand -hex 32)"
 		echo "Generated proxy_key"
 	fi
+	create_token_secrets
 	if [[ ! -s $SECRETS_DIR/ghcr_token ]]; then
 		local token
 		read -r -s -p "GitHub token with read:packages only (input hidden): " token
@@ -201,13 +284,19 @@ install_timers() {
 }
 
 main() {
-	local key_file=""
+	local key_file="" rotate=false
 	while (($#)); do
 		case "$1" in
 			--deploy-key) key_file=${2:-}; shift 2 || usage ;;
+			--rotate-signing-key) rotate=true; shift ;;
 			*) usage ;;
 		esac
 	done
+	if [[ $rotate == true ]]; then
+		[[ -z $key_file ]] || usage
+		rotate_signing_key
+		return
+	fi
 	[[ -n $key_file ]] || usage
 	check_server
 	create_deploy_account "$key_file"

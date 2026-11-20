@@ -12,6 +12,10 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
 
 ### Added
 
+- The API's sign-in endpoints, not used by the app yet: `POST /api/v1/sessions/challenges` (a one-time nonce),
+  `POST /api/v1/sessions` (a Google ID token for an access token and a refresh token) and `GET /api/v1/me`. The server
+  keeps only keyed hashes of the Google subject and of the refresh token. The provisioning script creates three new
+  secrets and `--rotate-signing-key` rotates the signing key.
 - The privacy notice is published at <https://parking.pivotsoftwares.com/privacy>.
 - Home and Work shortcut chips under the search bar: tap one to see that place on the map and check it, or set it
   from an address or your position. The places stay on the phone, encrypted.

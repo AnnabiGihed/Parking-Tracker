@@ -16,14 +16,14 @@ RUN dotnet tool restore
 
 COPY src/Infrastructure/ParkingTracker.Persistence.EntityFrameworkCore/ParkingTracker.Persistence.EntityFrameworkCore.csproj src/Infrastructure/ParkingTracker.Persistence.EntityFrameworkCore/
 COPY src/Core/ParkingTracker.Domain/ParkingTracker.Domain.csproj src/Core/ParkingTracker.Domain/
-COPY src/Core/ParkingTracker.Application/ParkingTracker.Application.csproj src/Core/ParkingTracker.Application/
+COPY src/Core/ParkingTracker.Backend.Application/ParkingTracker.Backend.Application.csproj src/Core/ParkingTracker.Backend.Application/
 RUN --mount=type=secret,id=github_packages_user,env=GITHUB_PACKAGES_USER \
     --mount=type=secret,id=github_packages_token,env=GITHUB_PACKAGES_TOKEN \
     dotnet restore src/Infrastructure/ParkingTracker.Persistence.EntityFrameworkCore/ParkingTracker.Persistence.EntityFrameworkCore.csproj -r linux-x64
 
 COPY src/Infrastructure/ParkingTracker.Persistence.EntityFrameworkCore/ src/Infrastructure/ParkingTracker.Persistence.EntityFrameworkCore/
 COPY src/Core/ParkingTracker.Domain/ src/Core/ParkingTracker.Domain/
-COPY src/Core/ParkingTracker.Application/ src/Core/ParkingTracker.Application/
+COPY src/Core/ParkingTracker.Backend.Application/ src/Core/ParkingTracker.Backend.Application/
 # The bundle build creates the context once to read its model, so the design-time factory needs a connection string; this one is
 # a placeholder that is never connected to.
 RUN --mount=type=secret,id=github_packages_user,env=GITHUB_PACKAGES_USER \

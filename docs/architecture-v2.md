@@ -645,7 +645,7 @@ ParkingTracker.slnx                               everything that builds on a PC
 deploy/                                           S4   compose.yaml, Caddy block, role SQL, pt-deploy, provisioning
 src/
   Containers/
-    API/ParkingTracker.ApiService                 S4   ASP.NET Core, Pivot Containers.API, health, Dockerfile (token exchange S5)
+    API/ParkingTracker.ApiService                 S4   ASP.NET Core, Pivot Containers.API, health, Dockerfile, sign-in (S5)
     Jobs/ParkingTracker.RefreshJobs               new  Hangfire server, recurring jobs, outbox drain, Dockerfile
     Aspire/Defaults/ParkingTracker.ServiceDefaults  S4   OpenTelemetry, health checks, resilience (server hosts)
     Aspire/Hosting/ParkingTracker.AppHost         S4   local composition only, never deployed
@@ -658,8 +658,8 @@ src/
   Core/
     ParkingTracker.Domain                         shared: decision engine (unchanged) and the aggregates of both contexts
     ParkingTracker.Application                    phone use cases (existing) and the card, places, session commands
-    ParkingTracker.Backend.Application            new  refresh pipeline, data queries, sessions, admin commands
-    ParkingTracker.Contracts                      new  v1 transport records, no dependencies
+    ParkingTracker.Backend.Application            S5   sessions (S5), refresh pipeline, data queries, admin commands (later)
+    ParkingTracker.Contracts                      S5   v1 transport records, no dependencies
   Infrastructure/
     ParkingTracker.Infrastructure                 upstream clients and parsers (jobs and phone fallback),
                                                   the phone's API client, embedded reference data
@@ -1005,7 +1005,7 @@ Errors are ProblemDetails from `ApiController`. Data responses carry `ETag` (has
 
 | Method and route | Who | Answer |
 | --- | --- | --- |
-| `POST /sessions/challenges` | anonymous, rate-limited per IP | a one-time nonce, valid 5 minutes |
+| `POST /sessions/challenges` | anonymous, rate-limited per IP (one bucket of 10 per minute shared with `POST /sessions`) | a one-time nonce, valid 5 minutes |
 | `POST /sessions` | anonymous, rate-limited per IP | body: Google ID token; answer: access token, refresh token, expiry; `401` when the token is invalid |
 | `POST /sessions/refresh` | holder of a refresh token | rotated refresh token and new access token; `401` and family revoked on reuse |
 | `DELETE /sessions/current` | signed-in user | sign-out: revokes the session family (`204`) |
@@ -1426,7 +1426,13 @@ with the API's own tokens.
 Server hosts read non-secret defaults from `appsettings.json` and secrets from files mounted at `/run/secrets`
 (`AddKeyPerFile`): the database passwords per role, the token signing keys, the subject hash key, the proxy key
 (ADR-0029), the admin client secret and the allow-list. The token signing keys are two P-256 files, current and
-previous, with the key thumbprint as `kid`. The subject hash key is never rotated: a new key orphans every account and
+previous (`token_signing_key_current.pem` and `token_signing_key_previous.pem`, empty until the first rotation, mounted
+as `Tokens__SigningKeys__Current` and `Tokens__SigningKeys__Previous`), with the JWK thumbprint as `kid`;
+`provision.sh --rotate-signing-key` moves the current key to the previous one and makes a new current key. The subject
+hash key is the file `subject_hash_key` (`Accounts__SubjectHashKey`, base64 of 32 bytes). Outside Development the API
+refuses to start without the current key and the subject hash key, with a key that is not usable, or with Google
+settings (metadata address, issuers) that are not those of Google, so a test issuer cannot be switched on in a
+deployment. The subject hash key is never rotated: a new key orphans every account and
 the erasure log, so the owner keeps a copy in the password manager. The Google client IDs are configuration
 (`appsettings.Production.json`), not secrets. Development secrets are AppHost user secrets. The phone has the API
 base URL and the Web client ID per build configuration; nothing secret ships in the APK.

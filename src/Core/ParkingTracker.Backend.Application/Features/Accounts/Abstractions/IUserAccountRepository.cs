@@ -2,7 +2,7 @@ using ParkingTracker.Domain.Features.Accounts.Aggregates;
 using ParkingTracker.Domain.Features.Accounts.ValueObjects;
 using Pivot.Framework.Domain.Repositories;
 
-namespace ParkingTracker.Application.Features.Accounts.Abstractions;
+namespace ParkingTracker.Backend.Application.Features.Accounts.Abstractions;
 
 /// <summary>
 /// Author      : Gihed Annabi

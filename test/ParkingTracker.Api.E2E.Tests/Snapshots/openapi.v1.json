@@ -4,6 +4,387 @@
     "title": "Parking Tracker API",
     "version": "v1"
   },
-  "paths": { },
-  "components": { }
+  "paths": {
+    "/api/v1/me": {
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "summary": "Get the own account",
+        "description": "Returns the account of the access token: its identifier, the day it was created, the last day the user signed in or refreshed, and the number of devices signed in. Nothing in the answer identifies the person. Limited per account: 120 requests per minute with a burst of 30.",
+        "operationId": "getMe",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                "example": {
+                  "title": "Unauthorized",
+                  "status": 401
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                "example": {
+                  "title": "Too many requests",
+                  "status": 429
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sessions/challenges": {
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Create a sign-in challenge",
+        "description": "Issues a random single-use nonce, valid for 5 minutes. The app passes it to Google (Android Credential Manager) so that the ID token it gets back is bound to this challenge. Expired nonces are purged on every call. Limited to 10 session requests per minute per client address.",
+        "operationId": "createSignInChallenge",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignInChallengeResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                "example": {
+                  "title": "Too many requests",
+                  "status": 429
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sessions": {
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Sign in with a Google ID token",
+        "description": "Validates the Google ID token (signature, issuer, audience, expiry), consumes the single-use nonce it carries, finds or creates the account of the Google subject and starts a device session. Returns the API access token (ES256 JWT, 15 minutes) and a single-use refresh token. Every refusal is the same 401 answer without a cause; the cause is only logged. A consumed nonce stays consumed even when the answer is a refusal. Limited to 10 session requests per minute per client address.",
+        "operationId": "createSession",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSessionRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSessionRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                },
+                "example": {
+                  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+                  "title": "One or more validation errors occurred.",
+                  "status": 400,
+                  "errors": {
+                    "IdToken": [
+                      "The IdToken field is required."
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                "example": {
+                  "type": "Session.SignIn.Failed",
+                  "title": "Unauthorized",
+                  "status": 401,
+                  "detail": "The sign-in could not be completed."
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Content Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                "example": {
+                  "title": "Request body too large",
+                  "status": 413
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                "example": {
+                  "title": "Too many requests",
+                  "status": 429
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CreateSessionRequest": {
+        "required": [
+          "idToken"
+        ],
+        "type": "object",
+        "properties": {
+          "idToken": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "example": {
+          "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6Ij....<Google ID token>"
+        }
+      },
+      "MeResponse": {
+        "required": [
+          "accountId",
+          "activeSessionCount",
+          "createdOn",
+          "lastSeenOn"
+        ],
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdOn": {
+            "type": "string",
+            "format": "date"
+          },
+          "lastSeenOn": {
+            "type": "string",
+            "format": "date"
+          },
+          "activeSessionCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false,
+        "example": {
+          "accountId": "3f2c1e5a-7a52-4b8e-9d0e-0a5b1f6d9c11",
+          "createdOn": "2026-11-20",
+          "lastSeenOn": "2026-11-20",
+          "activeSessionCount": 1
+        }
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
+          },
+          "instance": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": {},
+        "example": {
+          "type": "Error.Code",
+          "title": "Short title of the problem",
+          "status": 400,
+          "detail": "What went wrong, without private data."
+        }
+      },
+      "SessionResponse": {
+        "required": [
+          "accessToken",
+          "accessTokenExpiresAt",
+          "refreshToken"
+        ],
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "accessTokenExpiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "refreshToken": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "example": {
+          "accessToken": "eyJhbGciOiJFUzI1NiIsImtpZCI6Ij....<API access token>",
+          "accessTokenExpiresAt": "2026-11-20T10:15:00+00:00",
+          "refreshToken": "mB3xT9vQ1zKd7sWc5nYhLr2PuJe8GfAo4iXqVtZ0kNE"
+        }
+      },
+      "SignInChallengeResponse": {
+        "required": [
+          "expiresAt",
+          "nonce"
+        ],
+        "type": "object",
+        "properties": {
+          "nonce": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "example": {
+          "nonce": "q7Zx0mR2oVwq3k8c4yT1bN5hJd9sLpEa6uFgXzCvWiM",
+          "expiresAt": "2026-11-20T10:05:00+00:00"
+        }
+      },
+      "ValidationProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
+          },
+          "instance": {
+            "type": "string",
+            "nullable": true
+          },
+          "errors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "additionalProperties": {}
+      }
+    },
+    "securitySchemes": {
+      "Bearer": {
+        "type": "http",
+        "description": "The access token of POST /api/v1/sessions (ES256, 15 minutes).",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Account"
+    },
+    {
+      "name": "Sessions"
+    }
+  ]
 }

@@ -80,6 +80,18 @@ reads it as `ReverseProxy__Key`. The API trusts `X-Forwarded-For`, `-Proto` and 
 the key (ADR-0029), and in Production it refuses to start without it. Check that the shared Caddy sets no
 `trusted_proxies`.
 
+The script also creates the three secrets of the sign-in, each once (a rerun keeps it; a file that exists but is empty
+stops the script, because a new value would orphan the accounts or sign everyone out; restore it from its copy), owner uid 1654, mode 0400, and
+the API reads them as the settings named in brackets: `secrets/app/token_signing_key_current.pem` (a P-256 private key,
+`Tokens__SigningKeys__Current`), `secrets/app/token_signing_key_previous.pem` (empty until the first rotation,
+`Tokens__SigningKeys__Previous`) and `secrets/app/subject_hash_key` (32 random bytes in base64,
+`Accounts__SubjectHashKey`). In Production the API refuses to start without the current key and the subject hash key
+(ADR-0014). **Copy `subject_hash_key` to the password manager now:** the account identity is the keyed hash of the
+Google subject, so a lost or changed key orphans every account and the erasure log. The pull request that adds these
+secrets needs `provision.sh` from its branch run on the server before it is merged, or the deployment that follows
+fails at start. The Google Web client identifiers are configuration, not secrets: `appsettings.Production.json` holds
+the development client; add the production client there when it exists.
+
 The apex, `https://parking.pivotsoftwares.com`, serves the privacy notice: `/privacy` answers with the page,
 `/` redirects to it and any other path answers 404. The page is `deploy/site/privacy-notice.html`; the script copies it
 into the Caddy block (braces escaped; a page with the heredoc marker or a backslash is refused) and fails when the file
@@ -202,6 +214,17 @@ refresh. A container that reaches its limit is restarted by Docker; raising a li
 - **Proxy key:** delete `secrets/app/proxy_key`, run `provision.sh` again (it creates a new key and reloads Caddy with
   it), then redeploy the current tag right after, so that the API reads the new key. Until that deployment finishes
   the API holds the old key, forwarded client addresses are ignored and callers share one rate-limit bucket.
+- **Token signing key:** run `sudo bash deploy/server/provision.sh --rotate-signing-key`. It rotates the files and
+  recreates the API container of the current release (`docker compose ... up -d --force-recreate --no-deps api`, the
+  invocation of `pt-deploy-root`), so the API reads the new keys at once; before the first deployment there is nothing to
+  recreate. If the recreate fails the script says so after the rotation: deploy the current tag or restart the API. The
+  old current key becomes the previous one and is still accepted,
+  so nobody is signed out; new tokens carry the new key id. The key before the previous one is dropped, so wait 15
+  minutes (the life of an access token) before rotating again. A refresh token does not depend on the key. If the
+  current key leaks, rotate twice, 15 minutes apart, to retire it.
+- **Subject hash key:** never. A new key gives every user a new account hash, orphans the accounts and the erasure log
+  and makes an erased user appear new. Restore the file from the password manager if it is lost; without a copy the
+  accounts of the old key cannot be matched again.
 - **Image read token:** replace `secrets/ghcr_token` (root, 0400); the next deployment uses it.
 - **Deploy key:** create a new pair, run `provision.sh --deploy-key` with the new public key, and replace
   `DEPLOY_SSH_KEY` in the `production` environment.

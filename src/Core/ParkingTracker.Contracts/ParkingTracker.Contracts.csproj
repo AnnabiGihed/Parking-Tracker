@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The v1 transport records of the API, shared with the phone later; no dependencies, so the phone carries nothing of the server. -->
+
+</Project>

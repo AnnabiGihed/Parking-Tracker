@@ -2,6 +2,8 @@
   <Folder Name="/src/Core/">
     <Project Path="src/Core/ParkingTracker.Domain/ParkingTracker.Domain.csproj" />
     <Project Path="src/Core/ParkingTracker.Application/ParkingTracker.Application.csproj" />
+    <Project Path="src/Core/ParkingTracker.Backend.Application/ParkingTracker.Backend.Application.csproj" />
+    <Project Path="src/Core/ParkingTracker.Contracts/ParkingTracker.Contracts.csproj" />
   </Folder>
   <Folder Name="/src/Containers/UI/Core/">
     <Project Path="src/Containers/UI/Core/ParkingTracker.ViewModels/ParkingTracker.ViewModels.csproj" />
@@ -24,6 +26,7 @@
   <Folder Name="/test/Core/">
     <Project Path="test/Core/ParkingTracker.Domain.Tests/ParkingTracker.Domain.Tests.csproj" />
     <Project Path="test/Core/ParkingTracker.Application.Tests/ParkingTracker.Application.Tests.csproj" />
+    <Project Path="test/Core/ParkingTracker.Backend.Application.Tests/ParkingTracker.Backend.Application.Tests.csproj" />
   </Folder>
   <Folder Name="/test/Containers/UI/Core/">
     <Project Path="test/Containers/UI/Core/ParkingTracker.ViewModels.Tests/ParkingTracker.ViewModels.Tests.csproj" />
