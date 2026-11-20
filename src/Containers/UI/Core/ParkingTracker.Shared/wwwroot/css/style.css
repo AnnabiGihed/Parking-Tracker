@@ -229,16 +229,7 @@ button, input, select { font: inherit; color: inherit; }
 .btn-sm { padding: 7px 12px; font-size: 13.5px; border-radius: 10px; }
 .paylinks { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
 
-/* dialogs: a backdrop with a sheet, instead of the native <dialog> element, so that Blazor controls when it is open.
-   The layer stays under 2000, where Radzen.Blazor.js puts the popups it moves to <body> (date picker calendar, drop-down
-   list): above it, the calendar of the card dialog opened behind the dialog and no date could be picked. */
-.dialog-backdrop { position: fixed; inset: 0; z-index: 1500; background: rgba(8, 12, 22, .5); display: flex; justify-content: center; align-items: flex-end; }
-@media (min-width: 720px) { .dialog-backdrop { align-items: center; } }
-.sheet-dialog { background: var(--surface); color: var(--fg); width: min(480px, 100vw); max-width: 100vw;
-  max-height: 92vh; overflow-y: auto; margin: 0; border-radius: 24px 24px 0 0; box-shadow: var(--shadow); }
-@media (min-width: 720px) { .sheet-dialog { border-radius: 24px; } }
-.sheet-dialog form, .dialog-form, .welcome { padding: 18px 18px 22px; padding-bottom: max(22px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 12px; }
-/* Radzen dialogs opened by the DialogBridge look like the sheets above: anchored to the bottom, rounded on top, scrolling inside.
+/* Every dialog of the app is a Radzen dialog opened by the DialogBridge and looks like a bottom sheet: anchored to the bottom, rounded on top, scrolling inside.
    Radzen.Blazor.js sets left, transform and width inline, and below 768px default-base.css makes a dialog full height with
    "inset-block-start: 0 !important; width: 100% !important; border-radius: 0" on .rz-dialog:not(.rz-dialog-confirm):not(.rz-dialog-alert),
    so this selector repeats those :not() parts to win on specificity; it applies to this class only. */
@@ -249,8 +240,6 @@ button, input, select { font: inherit; color: inherit; }
   border-radius: 24px 24px 0 0; box-shadow: var(--shadow); padding-bottom: env(safe-area-inset-bottom); overflow: hidden; }
 .app-sheet .rz-dialog-titlebar { flex: none; background: var(--surface); color: var(--fg); }
 .app-sheet .rz-dialog-content { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; background: var(--surface); color: var(--fg); padding-bottom: max(16px, env(safe-area-inset-bottom)); }
-.dialog-head { display: flex; justify-content: space-between; align-items: center; }
-.dialog-head h2 { margin: 0; font-size: 20px; }
 /* Input look (fill, border, radius, height, padding, colours) comes from the --rz-input-* variables in radzen-theme.css, so that the
    text box, drop-down, numeric box and date picker of every form render alike; no rule here styles their inputs. */
 .field { display: flex; flex-direction: column; gap: 5px; }

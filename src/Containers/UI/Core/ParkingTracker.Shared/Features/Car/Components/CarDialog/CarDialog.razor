@@ -1,11 +1,8 @@
 @namespace ParkingTracker.Shared.Features.Car.Components
 @inherits ViewModelComponent<CarViewModel>
-<DialogShell IsOpen="ViewModel.IsOpen" Label="My car" OnBack="OnClose">
-    <RadzenStack Gap="0.75rem" class="dialog-form" id="carForm">
-        <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween" AlignItems="AlignItems.Center" class="dialog-head">
-            <RadzenText TextStyle="TextStyle.H5" TagName="TagName.H2">My car</RadzenText>
-            <RadzenButton ButtonStyle="ButtonStyle.Base" Variant="Variant.Text" class="icon-btn" aria-label="Close" Click="OnClose"><Icon Name="close" /></RadzenButton>
-        </RadzenStack>
+@using ParkingTracker.Shared.Features.Shared.Dialogs
+<DialogBridge ViewModel="ViewModel" Title="My car">
+    <RadzenStack Gap="0.75rem" id="carForm">
         <RadzenText id="carInfo" TextStyle="TextStyle.Body2" TagName="TagName.Div" class="muted">
             @ViewModel.Info
             @if (!string.IsNullOrEmpty(ViewModel.AppSaid))
@@ -55,4 +52,4 @@
             <RadzenText TextStyle="TextStyle.Body2" TagName="TagName.P" class="muted small">Reminder 10 minutes before the end, and at the end.</RadzenText>
         </div>
     </RadzenStack>
-</DialogShell>
+</DialogBridge>

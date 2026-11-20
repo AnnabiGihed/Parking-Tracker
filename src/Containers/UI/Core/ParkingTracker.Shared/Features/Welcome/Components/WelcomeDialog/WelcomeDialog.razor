@@ -1,6 +1,7 @@
 @namespace ParkingTracker.Shared.Features.Welcome.Components
 @inherits ViewModelComponent<WelcomeViewModel>
-<DialogShell IsOpen="ViewModel.IsOpen" Label="Welcome">
+@using ParkingTracker.Shared.Features.Shared.Dialogs
+<DialogBridge ViewModel="ViewModel" Title="Welcome" Dismissible="false">
     <RadzenStack class="welcome" id="welcomeDialog" Gap="0.75rem">
         <div class="welcome-logo"><Icon Name="parking" /></div>
         <RadzenText TextStyle="TextStyle.H4" TagName="TagName.H1" class="welcome-title">Park free with your residents' card</RadzenText>
@@ -43,4 +44,4 @@
         <RadzenButton id="welcomeStart" ButtonStyle="ButtonStyle.Primary" class="welcome-button" Click="OnAddCardAsync" Text="Add my parking card" />
         <RadzenText TextStyle="TextStyle.Body2" TagName="TagName.P" class="muted small">Uses official live data from parking.brussels, Brussels Mobility and the City of Brussels. Your card stays on this phone.</RadzenText>
     </RadzenStack>
-</DialogShell>
+</DialogBridge>

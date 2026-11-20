@@ -66,21 +66,7 @@ public sealed class SharedComponentsTests : UiTestContext
 	}
 	#endregion
 
-	#region Dialog Shell Tests
-	/// <summary>
-	/// Verifies that the shell draws its content only while open.
-	/// </summary>
-	[Fact]
-	public void DialogShell_OpenAndClosed_ShouldDrawContentOnlyWhenOpen()
-	{
-		var closed = Render<DialogShell>(parameters => parameters.Add(shell => shell.IsOpen, false).AddChildContent("<p>inside</p>"));
-		var open = Render<DialogShell>(parameters => parameters.Add(shell => shell.IsOpen, true).Add(shell => shell.Label, "Test").AddChildContent("<p>inside</p>"));
-
-		closed.FindAll("p").Should().BeEmpty();
-		open.Find(".sheet-dialog p").TextContent.Should().Be("inside");
-		open.Find("[role=dialog]").GetAttribute("aria-label").Should().Be("Test");
-	}
-
+	#region Layout Tests
 	/// <summary>
 	/// Verifies that the layout draws the page and the toast.
 	/// </summary>

@@ -10,7 +10,8 @@ namespace ParkingTracker.Shared.Features.Shared.Dialogs;
 /// Purpose     : Lets a view model drive a Radzen dialog without referencing Radzen (ADR-0020, ADR-0030): it opens the dialog, styled as a bottom sheet, through
 ///              <see cref="DialogService"/> when the view model says it is open and closes it when it says it is not, and when the
 ///              user closes the dialog (the close button, the mask, the escape key) it calls the view model's <c>Close</c>. While the
-///              dialog is open the back button of the phone closes it. It draws nothing itself; its content is shown in the dialog.
+///              dialog is open the back button of the phone closes it. A dialog the user must not dismiss (the welcome screen) is
+///              opened with <see cref="Dismissible"/> set to <see langword="false"/>. It draws nothing itself; its content is shown in the dialog.
 /// </summary>
 public sealed class DialogBridge : ComponentBase, IDisposable
 {
@@ -49,6 +50,13 @@ public sealed class DialogBridge : ComponentBase, IDisposable
 	public string Width { get; set; } = "100%";
 
 	/// <summary>
+	/// Gets or sets a value indicating whether the user can dismiss the dialog; when it is <see langword="false"/> the dialog has no
+	/// title bar and no close button, the mask, the escape key and the back button leave it open, and only the view model closes it. It is read when the dialog opens; changing it while the dialog is open has no effect.
+	/// </summary>
+	[Parameter]
+	public bool Dismissible { get; set; } = true;
+
+	/// <summary>
 	/// Gets or sets the content of the dialog.
 	/// </summary>
 	[Parameter]
@@ -81,6 +89,17 @@ public sealed class DialogBridge : ComponentBase, IDisposable
 		ViewModel.Changed += OnViewModelChanged;
 		DialogService.OnClose += OnDialogClosed;
 		Synchronise();
+	}
+
+	/// <inheritdoc />
+	protected override void OnParametersSet()
+	{
+		// The content is drawn by the dialog, not by this component, so a component that handled an event and rendered this bridge
+		// again with a new content must also have the open dialog draw it again.
+		if (shown)
+		{
+			DialogService.Refresh();
+		}
 	}
 	#endregion
 
@@ -133,10 +152,22 @@ public sealed class DialogBridge : ComponentBase, IDisposable
 	private void Show()
 	{
 		shown = true;
-		backRegistration = BackNavigation.Register(ViewModel.Close);
+		if (Dismissible)
+		{
+			backRegistration = BackNavigation.Register(ViewModel.Close);
+		}
 
 		// The task ends when the dialog closes, which this bridge learns from OnClose, so it is not awaited.
-		_ = DialogService.OpenAsync(Title, _ => ChildContent ?? (_ => { }), new DialogOptions { Width = Width, CssClass = SheetClass });
+		_ = DialogService.OpenAsync(Title, _ => ChildContent ?? (_ => { }), new DialogOptions
+		{
+			Width = Width,
+			CssClass = SheetClass,
+			AriaLabel = Title,
+			ShowTitle = Dismissible,
+			ShowClose = Dismissible,
+			CloseDialogOnOverlayClick = Dismissible,
+			CloseDialogOnEsc = Dismissible,
+		});
 	}
 
 	/// <summary>

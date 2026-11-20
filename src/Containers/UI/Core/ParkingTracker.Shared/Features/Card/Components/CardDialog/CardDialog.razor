@@ -1,13 +1,10 @@
 @namespace ParkingTracker.Shared.Features.Card.Components
 @inherits ViewModelComponent<CardViewModel>
 @using ParkingTracker.Domain.Features.Sectors.ValueObjects
-<DialogShell IsOpen="ViewModel.IsOpen" Label="My parking card" OnBack="OnClose">
+@using ParkingTracker.Shared.Features.Shared.Dialogs
+<DialogBridge ViewModel="ViewModel" Title="My parking card">
     <RadzenTemplateForm TItem="CardViewModel" Data="ViewModel" Submit="OnSaveAsync" id="cardForm">
         <RadzenStack Gap="0.75rem">
-            <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween" AlignItems="AlignItems.Center" class="dialog-head">
-                <RadzenText TextStyle="TextStyle.H5" TagName="TagName.H2">My parking card</RadzenText>
-                <RadzenButton ButtonStyle="ButtonStyle.Base" Variant="Variant.Text" class="icon-btn" aria-label="Close" Click="OnClose"><Icon Name="close" /></RadzenButton>
-            </RadzenStack>
             <RadzenButton id="scanBtn" ButtonStyle="ButtonStyle.Primary" Variant="Variant.Outlined" class="scan" Disabled="ViewModel.IsScanning" Click="OnScanAsync">
                 <Icon Name="camera" />
                 <span><b>Scan my card</b><small>Take a photo, we fill in the fields</small></span>
@@ -124,4 +121,4 @@
             <RadzenButton ButtonType="ButtonType.Submit" ButtonStyle="ButtonStyle.Primary" Text="Save card" class="btn-block" Style="width:100%" />
         </RadzenStack>
     </RadzenTemplateForm>
-</DialogShell>
+</DialogBridge>

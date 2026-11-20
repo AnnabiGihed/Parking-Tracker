@@ -23,6 +23,11 @@ public sealed partial class StylesheetTests : UiTestContext
 	/// The z-index Radzen.Blazor.js gives a popup it moves to the end of the page (date picker calendar, drop-down list).
 	/// </summary>
 	private const int RadzenPopupLayer = 2000;
+
+	/// <summary>
+	/// The z-index of the Radzen mask, above the search bar and the layers popover.
+	/// </summary>
+	private const int RadzenMaskLayer = 1500;
 	#endregion
 
 	#region Static Instances
@@ -65,6 +70,13 @@ public sealed partial class StylesheetTests : UiTestContext
 	}
 
 	/// <summary>
+	/// Matches the z-index the theme gives the Radzen dialog.
+	/// </summary>
+	/// <returns>The expression, with the value in the group <c>value</c>.</returns>
+	[GeneratedRegex(@"--rz-dialog-zindex:\s*(?<value>\d+)", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+	private static partial Regex DialogLayerDeclaration();
+
+	/// <summary>
 	/// Matches the z-index declaration of a rule.
 	/// </summary>
 	/// <returns>The expression, with the value in the group <c>value</c>.</returns>
@@ -74,25 +86,25 @@ public sealed partial class StylesheetTests : UiTestContext
 
 	#region Layer Tests
 	/// <summary>
-	/// Verifies that the date pickers of the card dialog sit in the dialog backdrop and that the backdrop stays under the layer of
+	/// Verifies that the date pickers of the card dialog sit in the Radzen dialog and that the dialog stays under the layer of
 	/// the Radzen popups, so that the calendar opens in front of the dialog and a date can be picked.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
-	public async Task DialogBackdrop_CardDialogOpen_ShouldStayUnderTheRadzenPopupLayer()
+	public async Task DialogLayer_CardDialogOpen_ShouldStayUnderTheRadzenPopupLayer()
 	{
-		var cut = Render<CardDialog>();
+		var cut = RenderInDialogHost<CardDialog>();
 		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
-		cut.FindAll(".dialog-backdrop .rz-datepicker").Should().HaveCount(2);
+		await cut.WaitForAssertionAsync(() => cut.FindAll(".rz-dialog .rz-datepicker").Should().HaveCount(2));
 
-		var rule = RuleOf(ReadStylesheet("style.css"), ".dialog-backdrop");
+		var theme = RuleOf(ReadStylesheet("radzen-theme.css"), ":root");
 
-		var zIndex = int.Parse(ZIndexDeclaration().Match(rule).Groups["value"].Value, CultureInfo.InvariantCulture);
+		var zIndex = int.Parse(DialogLayerDeclaration().Match(theme).Groups["value"].Value, CultureInfo.InvariantCulture);
 		zIndex.Should().BeLessThan(RadzenPopupLayer);
 	}
 
 	/// <summary>
-	/// Verifies the order of the layers (ADR-0030): the Radzen mask and dialog sit above the search bar and the dialogs of the app, the
+	/// Verifies the order of the layers (ADR-0030): the Radzen mask and dialog sit above the search bar, the
 	/// toast sits above the Radzen popups, and the map stays at the bottom.
 	/// </summary>
 	[Fact]
@@ -104,7 +116,7 @@ public sealed partial class StylesheetTests : UiTestContext
 		theme.Should().MatchRegex(@"--rz-dialog-mask-zindex:\s*1500;").And.MatchRegex(@"--rz-dialog-zindex:\s*1501;");
 		LayerOf(css, ".toast").Should().Be(2100).And.BeGreaterThan(RadzenPopupLayer);
 		LayerOf(css, "#map").Should().Be(0);
-		LayerOf(css, ".top").Should().BeLessThan(LayerOf(css, ".dialog-backdrop"));
+		LayerOf(css, ".top").Should().BeLessThan(RadzenMaskLayer);
 	}
 	#endregion
 

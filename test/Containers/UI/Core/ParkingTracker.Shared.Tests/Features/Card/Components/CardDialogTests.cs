@@ -10,6 +10,7 @@ using ParkingTracker.Domain.Features.Zones.ValueObjects;
 using ParkingTracker.Shared.Features.Card.Components;
 using ParkingTracker.Shared.Tests.Features.Shared.TestDoubles;
 using ParkingTracker.ViewModels.Features.Card;
+using ParkingTracker.ViewModels.Features.Shared;
 using Pivot.Framework.Domain.Shared;
 
 namespace ParkingTracker.Shared.Tests.Features.Card.Components;
@@ -29,7 +30,7 @@ public sealed class CardDialogTests : UiTestContext
 	[Fact]
 	public void Render_Closed_ShouldDrawNothing()
 	{
-		var cut = Render<CardDialog>();
+		var cut = RenderInDialogHost<CardDialog>();
 
 		cut.FindAll("#cardForm").Should().BeEmpty();
 	}
@@ -41,7 +42,7 @@ public sealed class CardDialogTests : UiTestContext
 	[Fact]
 	public async Task Submit_TypedCard_ShouldSaveThroughTheSettingsStore()
 	{
-		var cut = Render<CardDialog>();
+		var cut = RenderInDialogHost<CardDialog>();
 		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
 
 		await PickDatesAsync(cut, new DateOnly(2026, 1, 1), new DateOnly(2027, 1, 1));
@@ -66,7 +67,7 @@ public sealed class CardDialogTests : UiTestContext
 	[Fact]
 	public async Task PlateInput_TypedLowerCase_ShouldBeUpperCased()
 	{
-		var cut = Render<CardDialog>();
+		var cut = RenderInDialogHost<CardDialog>();
 		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
 
 		await cut.Find("#cardPlate").InputAsync("1abc234");
@@ -82,7 +83,7 @@ public sealed class CardDialogTests : UiTestContext
 	[Fact]
 	public async Task Submit_NoDates_ShouldStayOpenWithTheReason()
 	{
-		var cut = Render<CardDialog>();
+		var cut = RenderInDialogHost<CardDialog>();
 		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
 
 		await cut.Find("#cardForm").SubmitAsync();
@@ -100,7 +101,7 @@ public sealed class CardDialogTests : UiTestContext
 	{
 		Sender.Send(Arg.Any<GetMaillesQuery>(), Arg.Any<CancellationToken>())
 			.Returns(Result.Success(new GetMaillesResponse([new MailleOption("IXLR_1", "Ixelles 1"), new MailleOption("IXLR_2", "Ixelles 2")], [new MailleOption("LIM_X", "Border")])));
-		var cut = Render<CardDialog>();
+		var cut = RenderInDialogHost<CardDialog>();
 		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
 
 		var municipalities = cut.FindComponent<RadzenDropDown<string>>();
@@ -124,7 +125,7 @@ public sealed class CardDialogTests : UiTestContext
 	[Fact]
 	public async Task Render_Open_ShouldShowTheScanButton()
 	{
-		var cut = Render<CardDialog>();
+		var cut = RenderInDialogHost<CardDialog>();
 		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
 
 		cut.Find("#scanBtn").TextContent.Should().Contain("Scan my card");
@@ -141,7 +142,7 @@ public sealed class CardDialogTests : UiTestContext
 	{
 		Sender.Send(Arg.Any<ReadCardQuery>(), Arg.Any<CancellationToken>())
 			.Returns(Result.Success(new ParsedCard("B012-345-678", "1ABC234", null, null, null, null, [])));
-		var cut = Render<CardDialog>();
+		var cut = RenderInDialogHost<CardDialog>();
 		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
 
 		await cut.Find("#scanBtn").ClickAsync();
@@ -160,7 +161,7 @@ public sealed class CardDialogTests : UiTestContext
 	[Fact]
 	public async Task Render_Open_ShouldUseRadzenComponentsAndShowTheSectorFields()
 	{
-		var cut = Render<CardDialog>();
+		var cut = RenderInDialogHost<CardDialog>();
 		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
 
 		cut.FindComponents<RadzenDropDown<string>>().Should().HaveCount(2);
@@ -180,7 +181,7 @@ public sealed class CardDialogTests : UiTestContext
 	[Fact]
 	public async Task Change_DateCleared_ShouldEmptyTheDateOfTheViewModel()
 	{
-		var cut = Render<CardDialog>();
+		var cut = RenderInDialogHost<CardDialog>();
 		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
 		await PickDatesAsync(cut, new DateOnly(2026, 1, 1), new DateOnly(2027, 1, 1));
 		var pickers = cut.FindComponents<RadzenDatePicker<DateTime?>>();
@@ -199,7 +200,7 @@ public sealed class CardDialogTests : UiTestContext
 	[Fact]
 	public async Task Change_ToleranceUnticked_ShouldRemoveTheCodeFromTheSelection()
 	{
-		var cut = Render<CardDialog>();
+		var cut = RenderInDialogHost<CardDialog>();
 		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
 		await TickAsync(cut, "#tolBox", 0);
 		Resolve<CardViewModel>().SelectedTolerances.Should().HaveCount(1);
@@ -216,7 +217,7 @@ public sealed class CardDialogTests : UiTestContext
 	[Fact]
 	public async Task Render_DateNotADate_ShouldShowAnEmptyPicker()
 	{
-		var cut = Render<CardDialog>();
+		var cut = RenderInDialogHost<CardDialog>();
 		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
 
 		await cut.InvokeAsync(() => Resolve<CardViewModel>().ValidFrom = "not a date");
@@ -235,7 +236,7 @@ public sealed class CardDialogTests : UiTestContext
 	[Fact]
 	public async Task Submit_DateCleared_ShouldShowTheFormError()
 	{
-		var cut = Render<CardDialog>();
+		var cut = RenderInDialogHost<CardDialog>();
 		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
 		await PickDatesAsync(cut, new DateOnly(2026, 1, 1), new DateOnly(2027, 1, 1));
 		var pickers = cut.FindComponents<RadzenDatePicker<DateTime?>>();
@@ -256,7 +257,7 @@ public sealed class CardDialogTests : UiTestContext
 	{
 		Sender.Send(Arg.Any<GetMaillesQuery>(), Arg.Any<CancellationToken>())
 			.Returns(Result.Success(new GetMaillesResponse([new MailleOption("IXLR_1", "Ixelles 1")], [])));
-		var cut = Render<CardDialog>();
+		var cut = RenderInDialogHost<CardDialog>();
 		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
 
 		var municipalities = cut.FindComponent<RadzenDropDown<string>>();
@@ -275,7 +276,7 @@ public sealed class CardDialogTests : UiTestContext
 	[Fact]
 	public async Task Submit_ReversedDates_ShouldStayOpenWithTheReason()
 	{
-		var cut = Render<CardDialog>();
+		var cut = RenderInDialogHost<CardDialog>();
 		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
 
 		await PickDatesAsync(cut, new DateOnly(2027, 1, 1), new DateOnly(2026, 1, 1));
@@ -295,7 +296,7 @@ public sealed class CardDialogTests : UiTestContext
 	{
 		var release = new TaskCompletionSource<Result<ParsedCard>>();
 		Sender.Send(Arg.Any<ReadCardQuery>(), Arg.Any<CancellationToken>()).Returns(_ => release.Task);
-		var cut = Render<CardDialog>();
+		var cut = RenderInDialogHost<CardDialog>();
 		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
 
 		var click = cut.Find("#scanBtn").ClickAsync();
@@ -315,7 +316,7 @@ public sealed class CardDialogTests : UiTestContext
 	[Fact]
 	public async Task Render_DatesPicked_ShouldShowTheShortDateInFieldsWithoutTyping()
 	{
-		var cut = Render<CardDialog>();
+		var cut = RenderInDialogHost<CardDialog>();
 		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
 
 		await PickDatesAsync(cut, new DateOnly(2026, 11, 1), new DateOnly(2027, 10, 31));
@@ -387,7 +388,7 @@ public sealed class CardDialogTests : UiTestContext
 	/// <param name="from">The date the card is valid from.</param>
 	/// <param name="to">The date the card is valid until.</param>
 	/// <returns>A task that completes when both dates were set.</returns>
-	private static async Task PickDatesAsync(IRenderedComponent<CardDialog> cut, DateOnly from, DateOnly to)
+	private static async Task PickDatesAsync(IRenderedComponent<RadzenDialog> cut, DateOnly from, DateOnly to)
 	{
 		var pickers = cut.FindComponents<RadzenDatePicker<DateTime?>>();
 		await cut.InvokeAsync(() => pickers[0].Instance.ValueChanged.InvokeAsync(from.ToDateTime(TimeOnly.MinValue))).ConfigureAwait(true);
@@ -401,7 +402,62 @@ public sealed class CardDialogTests : UiTestContext
 	/// <param name="listSelector">The selector of the element that holds the list.</param>
 	/// <param name="index">The position of the box in the list.</param>
 	/// <returns>A task that completes when the box was clicked.</returns>
-	private static Task TickAsync(IRenderedComponent<CardDialog> cut, string listSelector, int index) =>
+	private static Task TickAsync(IRenderedComponent<RadzenDialog> cut, string listSelector, int index) =>
 		cut.FindAll(listSelector + " .rz-chkbox-box")[index].ClickAsync();
+	#endregion
+
+	#region Bridge Tests
+	/// <summary>
+	/// Verifies that the dialog opens as a Radzen bottom sheet with its title and closes when the view model closes.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Bridge_OpenAndClose_ShouldShowAndRemoveTheSheet()
+	{
+		var host = RenderInDialogHost<CardDialog>();
+		host.FindAll("#cardForm").Should().BeEmpty();
+
+		await host.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
+
+		await host.WaitForAssertionAsync(() => host.Find(".rz-dialog-title").TextContent.Should().Be("My parking card"));
+		host.FindAll(".rz-dialog.app-sheet #cardForm").Should().HaveCount(1);
+		await host.InvokeAsync(Resolve<CardViewModel>().Close);
+		await host.WaitForAssertionAsync(() => host.FindAll("#cardForm").Should().BeEmpty());
+	}
+
+	/// <summary>
+	/// Verifies that the back button of the phone closes the dialog through the bridge.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Bridge_BackButton_ShouldCloseTheDialog()
+	{
+		var host = RenderInDialogHost<CardDialog>();
+		await host.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
+		await host.WaitForAssertionAsync(() => host.FindAll("#cardForm").Should().HaveCount(1));
+
+		var closed = await host.InvokeAsync(Resolve<IBackNavigation>().TryGoBack);
+
+		closed.Should().BeTrue();
+		await host.WaitForAssertionAsync(() => host.FindAll("#cardForm").Should().BeEmpty());
+		Resolve<CardViewModel>().IsOpen.Should().BeFalse();
+	}
+
+	/// <summary>
+	/// Verifies that a close by the user (the close button of the sheet) reaches the view model.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Bridge_CloseButton_ShouldCloseTheViewModel()
+	{
+		var host = RenderInDialogHost<CardDialog>();
+		await host.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
+		await host.WaitForAssertionAsync(() => host.FindAll("#cardForm").Should().HaveCount(1));
+
+		await host.Find(".rz-dialog-titlebar-close").ClickAsync();
+
+		await host.WaitForAssertionAsync(() => host.FindAll("#cardForm").Should().BeEmpty());
+		Resolve<CardViewModel>().IsOpen.Should().BeFalse();
+	}
 	#endregion
 }

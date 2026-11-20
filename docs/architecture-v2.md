@@ -389,11 +389,13 @@ singleton that a second route would destroy. The menu button `#menuBtn` in the s
 parking card; `MenuViewModel` supplies the secondary texts ("Not set" or the saved address, vehicle or card line). A tap
 closes the menu and then opens the existing dialog, so a Radzen dialog is never open over one of the app's own; Home and
 Work start the map picker instead (below). `DialogBridge` joins an `IDialogViewModel` to `DialogService`
-(`OpenAsync`/`Close`, and `OnClose` back to the view model's `Close`), so view models stay free of Radzen; the four
-existing dialogs (`DialogShell`) move to it later. Layers: the search bar is 1000, the layers popover 1100, the app's
-dialog backdrop 1500, the Radzen mask 1500 and dialog 1501 (`radzen-theme.css`), Radzen's popups 2000, the toast 2100,
+(`OpenAsync`/`Close`, and `OnClose` back to the view model's `Close`), so view models stay free of Radzen; every dialog
+of the app (welcome, card, car, favourite places, My vehicle) now goes through `DialogService` as a bottom sheet, and
+`DialogShell` is gone. The welcome dialog is opened with `Dismissible="false"`: no title bar, close button, mask click,
+escape key or back button, so only "Add my parking card" closes it. Layers: the search bar is 1000, the layers popover 1100,
+the Radzen mask 1500 and dialog 1501 (`radzen-theme.css`), Radzen's popups 2000, the toast 2100,
 the map 0. The back button closes the newest open screen: `IBackNavigation` is a singleton stack that the menu, the
-bridge and each `DialogShell` with `OnBack` register in; `MainPage.OnBackButtonPressed` dispatches `TryGoBack` into
+bridge register in; `MainPage.OnBackButtonPressed` dispatches `TryGoBack` into
 Blazor through `BlazorWebView.TryDispatchAsync` and leaves the app only when nothing is open.
 
 **Map picker for Home and Work.** Setting a place is a map mode, not a dialog (`PlacePickerViewModel`: Idle, Searching,
