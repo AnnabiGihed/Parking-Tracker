@@ -20,6 +20,8 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
 
 ### Changed
 
+- Setting Home or Work shows the place on the map with a pin you can drag, and saves only when you confirm. The
+  Home and Work chips and the side menu open this map view; a saved place can be moved or removed there.
 - Searching an address shows all the matching places to choose from; one match still goes straight to the map.
 - The welcome screen is built with the Radzen component library, the first screen of the move to Radzen. Its texts
   and colours stay the same; buttons and text spacing may look slightly different.

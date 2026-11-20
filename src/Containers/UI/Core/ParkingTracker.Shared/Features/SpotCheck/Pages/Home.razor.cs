@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Components;
+using Microsoft.JSInterop;
 using ParkingTracker.Domain.Features.Shared.ValueObjects;
 using ParkingTracker.Shared.Features.MapLayers.Components;
 using ParkingTracker.ViewModels.Features.Car;
 using ParkingTracker.ViewModels.Features.Card;
 using ParkingTracker.ViewModels.Features.MapLayers;
+using ParkingTracker.ViewModels.Features.Places;
 using ParkingTracker.ViewModels.Features.Shared;
 using ParkingTracker.ViewModels.Features.SpotCheck;
 using ParkingTracker.ViewModels.Features.Welcome;
@@ -62,6 +64,12 @@ public sealed partial class Home : ComponentBase, IDisposable
 	/// </summary>
 	[Inject]
 	public SearchViewModel Search { get; set; } = null!;
+
+	/// <summary>
+	/// Gets or sets the map picker that sets Home and Work; while it is open, the map shows its pin and a tap moves it.
+	/// </summary>
+	[Inject]
+	public PlacePickerViewModel Picker { get; set; } = null!;
 	#endregion
 
 	#region Fields
@@ -101,6 +109,16 @@ public sealed partial class Home : ComponentBase, IDisposable
 	private GeoPoint? drawnPin;
 
 	/// <summary>
+	/// The marker of the place being chosen in the picker, as last drawn on the map.
+	/// </summary>
+	private GeoPoint? drawnCandidate;
+
+	/// <summary>
+	/// Whether the layout was last drawn for the picker, so that the map is told when it changes.
+	/// </summary>
+	private bool layoutPicking;
+
+	/// <summary>
 	/// The nearest free spot as last drawn on the map.
 	/// </summary>
 	private GeoPoint? drawnTarget;
@@ -132,6 +150,7 @@ public sealed partial class Home : ComponentBase, IDisposable
 		Spot.Nearest.Changed += OnStateChanged;
 		Car.Changed += OnStateChanged;
 		Layers.Changed += OnStateChanged;
+		Picker.Changed += OnPickerChanged;
 		Spot.ViewRequested += OnViewRequested;
 		Spot.FitRequested += OnFitRequested;
 		Spot.LocationFailed += OnLocationFailed;
@@ -140,6 +159,29 @@ public sealed partial class Home : ComponentBase, IDisposable
 		Card.CardSaved += OnCardSaved;
 		Welcome.AddCardRequested += OnAddCardRequested;
 		Permission.ForegroundGranted += OnForegroundGranted;
+	}
+
+	/// <inheritdoc />
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		// Switching to the picker hides the sheet and the controls, so Leaflet is told that its surroundings changed.
+		await base.OnAfterRenderAsync(firstRender);
+		if (mapReady && layoutPicking != Picker.IsActive)
+		{
+			layoutPicking = Picker.IsActive;
+			try
+			{
+				await map!.Script.InvalidateSizeAsync();
+			}
+			catch (JSException)
+			{
+				// The map only redraws its tiles late; the page must not fail because the script refused the call.
+			}
+			catch (JSDisconnectedException)
+			{
+				// The page is gone (the app was closed or restarted), so there is no map left to resize.
+			}
+		}
 	}
 	#endregion
 
@@ -160,12 +202,19 @@ public sealed partial class Home : ComponentBase, IDisposable
 	}
 
 	/// <summary>
-	/// Handles a tap on the map: closes the layers popover and the list of matches, and drops the pin.
+	/// Handles a tap on the map: while the picker is open it moves the pin of the picker; otherwise it closes the layers popover and
+	/// the list of matches, and drops the pin.
 	/// </summary>
 	/// <param name="point">The place that was tapped.</param>
 	/// <returns>A task that completes when the spot was checked.</returns>
 	private Task OnMapClickAsync(GeoPoint point)
 	{
+		if (Picker.IsActive)
+		{
+			Picker.MoveCandidate(point);
+			return Task.CompletedTask;
+		}
+
 		layersOpen = false;
 		Search.CloseList();
 		return Spot.HandleMapClickAsync(point);
@@ -177,6 +226,18 @@ public sealed partial class Home : ComponentBase, IDisposable
 	/// <param name="point">The place the pin was dropped on.</param>
 	/// <returns>A task that completes when the spot was checked.</returns>
 	private Task OnPinMovedAsync(GeoPoint point) => Spot.HandlePinMovedAsync(point);
+
+	/// <summary>
+	/// Handles the end of a drag of the picker's pin. The marker is already where it was dropped, so it is not drawn again.
+	/// </summary>
+	/// <param name="point">The place the pin was dropped on.</param>
+	/// <returns>A task that completes when the picker took the place.</returns>
+	private Task OnCandidateMovedAsync(GeoPoint point)
+	{
+		drawnCandidate = point;
+		Picker.MoveCandidate(point);
+		return Task.CompletedTask;
+	}
 
 	/// <summary>
 	/// Passes a move of the map to the layers.
@@ -245,6 +306,21 @@ public sealed partial class Home : ComponentBase, IDisposable
 			await SyncMapAsync();
 			StateHasChanged();
 		});
+	}
+
+	/// <summary>
+	/// Closes the list of matches of the search bar when the picker opens, which replaces the search bar, and draws what changed.
+	/// </summary>
+	/// <param name="sender">The picker.</param>
+	/// <param name="e">Not used.</param>
+	private void OnPickerChanged(object? sender, EventArgs e)
+	{
+		if (Picker.IsActive)
+		{
+			Search.CloseList();
+		}
+
+		OnStateChanged(sender, e);
 	}
 
 	/// <summary>
@@ -399,6 +475,12 @@ public sealed partial class Home : ComponentBase, IDisposable
 			await script.SetPinAsync(drawnPin);
 		}
 
+		if (drawnCandidate != Picker.Candidate)
+		{
+			drawnCandidate = Picker.Candidate;
+			await script.SetCandidateAsync(drawnCandidate);
+		}
+
 		var target = Spot.Nearest.State == NearestSpotState.Found ? Spot.Nearest.Best?.Point : null;
 		if (drawnTarget != target)
 		{
@@ -429,6 +511,7 @@ public sealed partial class Home : ComponentBase, IDisposable
 		Spot.Nearest.Changed -= OnStateChanged;
 		Car.Changed -= OnStateChanged;
 		Layers.Changed -= OnStateChanged;
+		Picker.Changed -= OnPickerChanged;
 		Spot.ViewRequested -= OnViewRequested;
 		Spot.FitRequested -= OnFitRequested;
 		Spot.LocationFailed -= OnLocationFailed;

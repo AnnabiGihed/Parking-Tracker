@@ -77,6 +77,35 @@ public sealed class SpotCheckViewModelTests
 	}
 
 	/// <summary>
+	/// Verifies that while following is suspended a fix updates the position but does not move the map, that following stays on,
+	/// and that after it is resumed the next fix moves the map again.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task FixReceived_FollowingSuspended_ShouldKeepThePositionButNotMoveTheMap()
+	{
+		using var ui = new UiFixture();
+		ui.AnswerChecks(SpotDecision.Create(Verdict.Pay, "x"));
+		await ui.Spot.StartTrackingAsync();
+		var requests = 0;
+		ui.Spot.ViewRequested += (_, _) => requests++;
+		ui.Spot.SuspendFollowing();
+
+		ui.RaiseFix(ui.FixNow());
+
+		requests.Should().Be(0);
+		ui.Spot.Me.Should().NotBeNull();
+		ui.Spot.IsTracking.Should().BeTrue();
+		ui.Spot.IsFollowSuspended.Should().BeTrue();
+
+		ui.Spot.ResumeFollowing();
+		ui.RaiseFix(ui.FixNow());
+
+		requests.Should().Be(1);
+		ui.Spot.IsFollowSuspended.Should().BeFalse();
+	}
+
+	/// <summary>
 	/// Verifies that a small move shortly after a check does not start another one, and a move of more than 8 metres does.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>

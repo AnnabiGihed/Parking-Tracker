@@ -16,10 +16,5 @@ public sealed record SearchAddressQuery(string Text, int Limit = SearchAddressQu
 	/// The number of matches asked for when the caller gives none.
 	/// </summary>
 	public const int DefaultLimit = 8;
-
-	/// <summary>
-	/// The limit of a caller that uses only the first match.
-	/// </summary>
-	public const int BestMatchOnly = 1;
 	#endregion
 }

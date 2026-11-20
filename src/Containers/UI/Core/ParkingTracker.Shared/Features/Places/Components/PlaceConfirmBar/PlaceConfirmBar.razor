@@ -1,0 +1,26 @@
+@namespace ParkingTracker.Shared.Features.Places.Components
+@inherits ViewModelComponent<PlacePickerViewModel>
+@if (ViewModel.IsConfirmShown)
+{
+    <section id="placeConfirm" class="place-confirm" aria-live="polite">
+        <div class="place-confirm-place">
+            <Icon Name="pin" />
+            <div class="place-confirm-text">
+                <strong id="placeConfirmLabel" class="place-confirm-label">@ViewModel.CandidateLabel</strong>
+                <span class="place-confirm-hint">@PlacePickerViewModel.DragHint</span>
+                @if (ViewModel.IsOutsideBrussels)
+                {
+                    <span id="placeConfirmError" class="place-confirm-error" role="alert">@OutsideText</span>
+                }
+            </div>
+        </div>
+        <div class="place-confirm-actions">
+            @if (ViewModel.HasSavedPlace)
+            {
+                <RadzenButton id="placeRemove" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Text" Text="Remove" Click="OnRemoveAsync" />
+            }
+            <RadzenButton id="placeCancel" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Base" Variant="Variant.Outlined" class="place-cancel" Text="Cancel" Click="OnCancel" />
+            <RadzenButton id="placeSave" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Primary" Text="Save" Disabled="!ViewModel.CanSave" Click="OnSaveAsync" />
+        </div>
+    </section>
+}

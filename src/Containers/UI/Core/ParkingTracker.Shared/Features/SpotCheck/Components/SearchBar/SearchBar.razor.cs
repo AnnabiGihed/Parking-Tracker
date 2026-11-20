@@ -26,12 +26,6 @@ public sealed partial class SearchBar : ViewModelComponent<SearchViewModel>
 	/// The width of the side menu: wide enough for an address, narrow enough to leave the map visible behind the mask.
 	/// </summary>
 	private const string MenuWidth = "300px";
-
-	/// <summary>
-	/// The browser function that takes the focus off the focused element, which closes the keyboard of the phone. Blazor cannot do
-	/// it by itself.
-	/// </summary>
-	private const string BlurFunction = "document.activeElement.blur";
 	#endregion
 
 	#region Injected Services
@@ -48,29 +42,6 @@ public sealed partial class SearchBar : ViewModelComponent<SearchViewModel>
 	public IJSRuntime JS { get; set; } = null!;
 	#endregion
 
-	#region Private Helpers
-	/// <summary>
-	/// Takes the focus off the text box. A failure is ignored: the keyboard staying open is cosmetic, and the search must still run
-	/// when the browser function is missing or the connection to the page was lost.
-	/// </summary>
-	/// <returns>A task that completes when the call ended.</returns>
-	private async Task CloseKeyboardAsync()
-	{
-		try
-		{
-			await JS.InvokeVoidAsync(BlurFunction);
-		}
-		catch (JSException)
-		{
-			// Nothing to do: see the summary.
-		}
-		catch (JSDisconnectedException)
-		{
-			// Nothing to do: see the summary.
-		}
-	}
-	#endregion
-
 	#region Event Handlers
 	/// <summary>
 	/// Handles the submit of the search form: closes the keyboard, so that it does not cover the map and the list of matches, and
@@ -79,7 +50,7 @@ public sealed partial class SearchBar : ViewModelComponent<SearchViewModel>
 	/// <returns>A task that completes when the result was shown.</returns>
 	private async Task OnSubmitAsync()
 	{
-		await CloseKeyboardAsync();
+		await JS.CloseKeyboardAsync();
 		await ViewModel.SubmitAsync();
 	}
 

@@ -58,7 +58,7 @@ public sealed class MapScript : IAsyncDisposable, IDisposable
 	/// <param name="element">The element that holds the map.</param>
 	/// <param name="center">The place the map starts at.</param>
 	/// <param name="zoom">The zoom level the map starts at.</param>
-	/// <param name="target">The object that receives <c>OnMapClick</c>, <c>OnPinMoved</c>, <c>OnViewChanged</c> and <c>OnPopupAction</c>.</param>
+	/// <param name="target">The object that receives <c>OnMapClick</c>, <c>OnPinMoved</c>, <c>OnCandidateMoved</c>, <c>OnViewChanged</c> and <c>OnPopupAction</c>.</param>
 	/// <returns>A task that completes when the map exists.</returns>
 	public async Task InitAsync<TCallbacks>(ElementReference element, GeoPoint center, int zoom, TCallbacks target)
 		where TCallbacks : class
@@ -107,6 +107,19 @@ public sealed class MapScript : IAsyncDisposable, IDisposable
 	/// <param name="position">The place of the pin, or <see langword="null"/> to remove it.</param>
 	/// <returns>A task that completes when the call was made.</returns>
 	public ValueTask SetPinAsync(GeoPoint? position) => Call("setPin", position?.Latitude, position?.Longitude);
+
+	/// <summary>
+	/// Shows or removes the draggable marker of the place being chosen for Home or Work, and pans the map to it.
+	/// </summary>
+	/// <param name="position">The place of the marker, or <see langword="null"/> to remove it.</param>
+	/// <returns>A task that completes when the call was made.</returns>
+	public ValueTask SetCandidateAsync(GeoPoint? position) => Call("setCandidate", position?.Latitude, position?.Longitude);
+
+	/// <summary>
+	/// Tells the map that its element changed size, so that it redraws its tiles.
+	/// </summary>
+	/// <returns>A task that completes when the call was made.</returns>
+	public ValueTask InvalidateSizeAsync() => Call("invalidateSize");
 
 	/// <summary>
 	/// Shows or removes the parked car.
