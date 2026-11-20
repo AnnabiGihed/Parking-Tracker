@@ -192,8 +192,46 @@ docker exec -i parking-tracker-postgres-1 pg_restore -U postgres -d parkingdata 
 docker compose -p parking-tracker start api
 ```
 
+Erasures made after the dump must not come back, so the restore keeps the erasure log (architecture 6.1). On the
+server as root, `pt-erasure-reapply` does it in three steps around the restore above:
+
+```bash
+# 1. Before the restore: export the erasure log of the live database (CSV, mode 600).
+pt-erasure-reapply export /root/erasure-log-$(date -u +%Y%m%d).csv
+
+# 2. Restore as above, with the API stopped.
+
+# 3. Before the API starts: a dry run prints what would change and changes nothing, then the real run.
+pt-erasure-reapply apply /root/erasure-log-<date>.csv
+pt-erasure-reapply apply /root/erasure-log-<date>.csv --commit
+docker compose -p parking-tracker start api
+```
+
+The dry run and the real run are the same transaction; the first ends with `ROLLBACK`, the second with `COMMIT`.
+It prints `accounts_deleted` (the accounts of the list that the restored database still has, their sessions go with
+them), `log_rows_merged` and `log_rows_purged` (rows older than 6 months; the cleanup job of S6 purges the live log in
+the same way). The tool refuses a file with any line that is not `<64 hex characters>,<yyyy-mm-dd>` before it touches
+the database. Only accounts created on or before the day of the erasure are deleted, so a person who signed up again
+after erasing keeps the new account; an erasure and a new sign-up on the same day cannot be told apart, and the re-apply
+would remove that new account (the person signs in again). Keep the exported file until the restore is checked,
+then delete it: it holds keyed hashes of the subjects, not the subjects. After a total loss nothing newer exists to
+re-apply.
+
 A total loss of the server and of OVH's backup means: provision a server again with this runbook, deploy, and the
 drivers sign in again; the owner re-enters the admin allow-list, and the run history starts again (ADR-0028).
+
+## Sign-out and account deletion
+
+- `DELETE /api/v1/sessions/current` revokes the refresh tokens of one device at once. An access token already issued
+  keeps working until it expires (15 minutes at most); there is no list of revoked access tokens. To cut an account off
+  immediately, delete it.
+- `DELETE /api/v1/me` deletes the account and its sessions and records the keyed hash of the subject in `erasure_log`
+  in one transaction. The old access token then gets `401` from `GET /api/v1/me`. The same Google account can sign in
+  again and gets a new account; the log only serves to apply the erasure after a restore.
+- A refresh refused because its token was used before revokes the whole device family, and the log carries
+  `Refresh refused: refresh.reused`; other reasons are `refresh.unknown`, `refresh.revoked`, `refresh.expired`,
+  `refresh.malformed` and `save.failed` (a second request won the race for the same token). The answer is always the
+  same `401`.
 
 ## Memory
 

@@ -36,7 +36,7 @@ public sealed class PostgisServer : IAsyncLifetime
 	/// <summary>
 	/// The container of the server.
 	/// </summary>
-	private readonly PostgreSqlContainer container = new PostgreSqlBuilder(Image).Build();
+	private readonly PostgreSqlContainer container = new PostgreSqlBuilder(Image).WithCommand("-c", "max_connections=500").Build();
 
 	/// <summary>
 	/// The generated password of the owner role.

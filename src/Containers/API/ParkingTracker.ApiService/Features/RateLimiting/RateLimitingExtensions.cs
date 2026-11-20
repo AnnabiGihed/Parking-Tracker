@@ -9,7 +9,7 @@ namespace ParkingTracker.ApiService.Features.RateLimiting;
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
 /// Purpose     : Registers the rate limits of the API: a global concurrency limit, the per-address policy of the health endpoints, the per-address
-///              sliding window of the session endpoints and the per-account token bucket of the authenticated endpoints.
+///              sliding windows of the session endpoints and of the refresh endpoint, and the per-account token bucket of the authenticated endpoints.
 ///              A refusal answers 429 with a Retry-After header in seconds and a problem document.
 /// </summary>
 public static class RateLimitingExtensions
@@ -46,6 +46,15 @@ public static class RateLimitingExtensions
 					PermitLimit = RateLimitSettings.SessionPermitsPerWindow,
 					Window = RateLimitSettings.SessionWindow,
 					SegmentsPerWindow = RateLimitSettings.SessionSegmentsPerWindow,
+					QueueLimit = 0,
+				}));
+			_ = options.AddPolicy(RateLimitSettings.RefreshPolicyName, context => RateLimitPartition.GetSlidingWindowLimiter(
+				ClientAddressKey.From(context.Connection.RemoteIpAddress),
+				_ => new SlidingWindowRateLimiterOptions
+				{
+					PermitLimit = RateLimitSettings.RefreshPermitsPerWindow,
+					Window = RateLimitSettings.RefreshWindow,
+					SegmentsPerWindow = RateLimitSettings.RefreshSegmentsPerWindow,
 					QueueLimit = 0,
 				}));
 			_ = options.AddPolicy(RateLimitSettings.AccountPolicyName, context => RateLimitPartition.GetTokenBucketLimiter(

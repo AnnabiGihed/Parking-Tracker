@@ -190,6 +190,16 @@ public sealed class UserAccount : LightweightAggregateRoot<UserAccountId>
 	}
 
 	/// <summary>
+	/// Signs out a device by its family: revokes every session of the family, the one an access token names in its session claim.
+	/// </summary>
+	/// <param name="familyId">The family of the device.</param>
+	/// <returns>Success, or a not-found failure when the account has no session of the family.</returns>
+	public Result EndFamily(Guid familyId)
+	{
+		return EndFamilyOf(sessions.Find(session => session.FamilyId == familyId));
+	}
+
+	/// <summary>
 	/// Counts the signed-in devices: the families that still hold a token that is unused, not revoked and not expired.
 	/// </summary>
 	/// <param name="now">The current moment.</param>

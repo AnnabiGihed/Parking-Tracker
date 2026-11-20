@@ -156,13 +156,13 @@ public sealed partial class ExchangeGoogleIdTokenCommandHandler : ICommandHandle
 			return Refuse(SignInFailureReason.HashInvalid);
 		}
 
-		var account = await StartSessionAsync(subjectHash.Value, tokenHash.Value, now, cancellationToken).ConfigureAwait(false);
-		if (account is null)
+		var started = await StartSessionAsync(subjectHash.Value, tokenHash.Value, now, cancellationToken).ConfigureAwait(false);
+		if (started is null)
 		{
 			return Refuse(SignInFailureReason.SaveFailed);
 		}
 
-		var accessToken = tokenIssuer.Issue(account.Id, now);
+		var accessToken = tokenIssuer.Issue(started.Value.Account.Id, started.Value.Session.FamilyId, now);
 		return new ExchangeGoogleIdTokenResponse(accessToken.Token, accessToken.ExpiresAt, refreshToken);
 	}
 
@@ -175,8 +175,8 @@ public sealed partial class ExchangeGoogleIdTokenCommandHandler : ICommandHandle
 	/// <param name="tokenHash">The hash of the new refresh token.</param>
 	/// <param name="now">The current moment.</param>
 	/// <param name="cancellationToken">Cancels the work.</param>
-	/// <returns>The account that holds the new session, or <see langword="null"/> when it could not be saved.</returns>
-	private async Task<UserAccount?> StartSessionAsync(SubjectHash subjectHash, RefreshTokenHash tokenHash, DateTimeOffset now, CancellationToken cancellationToken)
+	/// <returns>The account that holds the new session and the session, or <see langword="null"/> when it could not be saved.</returns>
+	private async Task<(UserAccount Account, DeviceSession Session)?> StartSessionAsync(SubjectHash subjectHash, RefreshTokenHash tokenHash, DateTimeOffset now, CancellationToken cancellationToken)
 	{
 		var existing = await accounts.FindBySubjectHashAsync(subjectHash, cancellationToken).ConfigureAwait(false);
 		if (existing is not null)
@@ -204,12 +204,12 @@ public sealed partial class ExchangeGoogleIdTokenCommandHandler : ICommandHandle
 	/// <param name="tokenHash">The hash of the new refresh token.</param>
 	/// <param name="now">The current moment.</param>
 	/// <param name="cancellationToken">Cancels the save.</param>
-	/// <returns>The account, or <see langword="null"/> when the save failed.</returns>
-	private async Task<UserAccount?> SaveSessionAsync(UserAccount account, RefreshTokenHash tokenHash, DateTimeOffset now, CancellationToken cancellationToken)
+	/// <returns>The account and the new session, or <see langword="null"/> when the save failed.</returns>
+	private async Task<(UserAccount Account, DeviceSession Session)?> SaveSessionAsync(UserAccount account, RefreshTokenHash tokenHash, DateTimeOffset now, CancellationToken cancellationToken)
 	{
-		_ = account.StartSession(tokenHash, now);
+		var session = account.StartSession(tokenHash, now);
 		var save = await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-		return save.IsSuccess ? account : null;
+		return save.IsSuccess ? (account, session) : null;
 	}
 
 	/// <summary>

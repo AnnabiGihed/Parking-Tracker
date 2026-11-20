@@ -58,6 +58,132 @@
             "Bearer": []
           }
         ]
+      },
+      "delete": {
+        "tags": [
+          "Account"
+        ],
+        "summary": "Delete the own account",
+        "description": "Deletes the account and every device session in one transaction and records the hash of the Google subject in the erasure log, which only serves to apply the erasure again after a backup restore. It is no ban: the same Google account can sign in again and gets a new account. Idempotent: a repeated call with an access token that has not expired answers 204 as well. Access tokens already issued stay valid until they expire, but they name an account that no longer exists, so GET /me then answers 401. Limited per account: 120 requests per minute with a burst of 30.",
+        "operationId": "deleteMe",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                "example": {
+                  "title": "Unauthorized",
+                  "status": 401
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                "example": {
+                  "type": "Persistence.Concurrency",
+                  "title": "Conflict",
+                  "status": 409,
+                  "detail": "The data changed while it was being saved."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                "example": {
+                  "title": "Too many requests",
+                  "status": 429
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sessions/current": {
+      "delete": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Sign out this device",
+        "description": "Revokes the device session named in the access token (its sid claim): every refresh token of the device stops working, other devices are not affected. Idempotent: a session that is gone or already revoked answers 204 as well. Access tokens already issued stay valid until they expire (15 minutes); only the refresh is cut at once. Limited per account: 120 requests per minute with a burst of 30.",
+        "operationId": "deleteCurrentSession",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                "example": {
+                  "title": "Unauthorized",
+                  "status": 401
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                "example": {
+                  "type": "Persistence.Concurrency",
+                  "title": "Conflict",
+                  "status": 409,
+                  "detail": "The data changed while it was being saved."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                "example": {
+                  "title": "Too many requests",
+                  "status": 429
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
       }
     },
     "/api/v1/sessions/challenges": {
@@ -200,6 +326,111 @@
           }
         }
       }
+    },
+    "/api/v1/sessions/refresh": {
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Refresh a session",
+        "description": "Exchanges the single-use refresh token for a new access token (15 minutes) and the next refresh token; the presented token is spent. Presenting a token that was already exchanged revokes the whole family of the device, and the device must sign in again. An unknown, revoked or expired token (30 days unused, 90 days in all) is refused. Every refusal is the same 401 answer without a cause; the cause is only logged. Limited to 30 refresh requests per minute per client address, apart from the sign-in limit.",
+        "operationId": "refreshSession",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshSessionRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshSessionRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                },
+                "example": {
+                  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+                  "title": "One or more validation errors occurred.",
+                  "status": 400,
+                  "errors": {
+                    "IdToken": [
+                      "The IdToken field is required."
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                "example": {
+                  "type": "Session.Refresh.Failed",
+                  "title": "Unauthorized",
+                  "status": 401,
+                  "detail": "The session could not be refreshed."
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Content Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                "example": {
+                  "title": "Request body too large",
+                  "status": 413
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                "example": {
+                  "title": "Too many requests",
+                  "status": 429
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -284,6 +515,21 @@
           "title": "Short title of the problem",
           "status": 400,
           "detail": "What went wrong, without private data."
+        }
+      },
+      "RefreshSessionRequest": {
+        "required": [
+          "refreshToken"
+        ],
+        "type": "object",
+        "properties": {
+          "refreshToken": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "example": {
+          "refreshToken": "mB3xT9vQ1zKd7sWc5nYhLr2PuJe8GfAo4iXqVtZ0kNE"
         }
       },
       "SessionResponse": {

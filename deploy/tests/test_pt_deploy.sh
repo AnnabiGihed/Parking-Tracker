@@ -246,5 +246,123 @@ check "provision.sh refuses to rotate when there is no current signing key" refu
 
 check "provision.sh refuses --rotate-signing-key with --deploy-key" refuse bash "$SERVER_DIR/provision.sh" --rotate-signing-key --deploy-key x
 
+# pt-erasure-reapply: the file it applies is checked line by line before the database is touched.
+erasure_check() {
+	bash -c 'source "$1/pt-erasure-reapply"; shift; "$@"' _ "$SERVER_DIR" "$@"
+}
+erasure_file() {
+	local file
+	file=$(mktemp)
+	printf '%b' "$1" >"$file"
+	echo "$file"
+}
+erasure_file_check() {
+	local content=$1 expected=$2 file
+	file=$(erasure_file "$content")
+	check "pt-erasure-reapply $expected the file $(printf '%q' "$content")" "$expected" erasure_check valid_log_file "$file"
+	rm -f "$file"
+}
+hash64=$(printf 'a%.0s' {1..64})
+erasure_file_check "" accept
+erasure_file_check "$hash64,2026-11-20
+" accept
+erasure_file_check "$hash64,2026-11-20
+$hash64,2026-11-21" accept
+erasure_file_check "${hash64:1},2026-11-20
+" refuse
+erasure_file_check "${hash64}0,2026-11-20
+" refuse
+erasure_file_check "${hash64^^},2026-11-20
+" refuse
+erasure_file_check "$hash64,2026-11-2
+" refuse
+erasure_file_check "$hash64,2026-11-20,extra
+" refuse
+erasure_file_check "$hash64
+" refuse
+erasure_file_check "$hash64,2026-11-20
+
+" refuse
+erasure_file_check "$hash64,2026-11-20
+\.
+DROP TABLE user_accounts;
+" refuse
+erasure_file_check "$hash64,2026-11-20'); DROP TABLE user_accounts; --
+" refuse
+check "pt-erasure-reapply refuses a missing file" refuse erasure_check valid_log_file /nonexistent/erasure.csv
+check "pt-erasure-reapply needs a command" refuse bash "$SERVER_DIR/pt-erasure-reapply"
+check "pt-erasure-reapply refuses an unknown command" refuse bash "$SERVER_DIR/pt-erasure-reapply" drop
+check "pt-erasure-reapply export needs a file" refuse bash "$SERVER_DIR/pt-erasure-reapply" export
+check "pt-erasure-reapply apply needs a file" refuse bash "$SERVER_DIR/pt-erasure-reapply" apply
+check "pt-erasure-reapply refuses an unknown option" refuse bash "$SERVER_DIR/pt-erasure-reapply" apply /tmp/x --force
+
+# The transaction it sends: the rows of the file between COPY and the end marker, the SQL file, then ROLLBACK for the dry run.
+erasure_script_is_wrapped() {
+	local file sql script status=0
+	file=$(erasure_file "$hash64,2026-11-20
+")
+	sql=$(mktemp)
+	echo "SELECT 1;" >"$sql"
+	script=$(erasure_check build_script "$file" ROLLBACK "$sql")
+	[[ $script == *"BEGIN;"*"COPY erasure_import FROM STDIN WITH (FORMAT csv);"*"$hash64,2026-11-20"*'\.'*"SELECT 1;"*"ROLLBACK;" ]] || status=1
+	rm -f "$file" "$sql"
+	return "$status"
+}
+check "pt-erasure-reapply wraps the file and the SQL in one transaction that ends as asked" accept erasure_script_is_wrapped
+
+# Real dates only: a month 13 or a 30th of February would reach the database as an error in the middle of the transaction.
+erasure_file_check "$hash64,2026-13-01\n" refuse
+erasure_file_check "$hash64,2026-02-30\n" refuse
+erasure_file_check "$hash64,2026-00-10\n" refuse
+
+# apply with a stub docker on the PATH that records what psql would read: the dry run must end with ROLLBACK, --commit with
+# COMMIT, a failing psql must fail the tool.
+erasure_apply_with_stub_docker() {
+	local ending=$1 option=$2 psql_status=${3:-0} work file status=0 script
+	work=$(mktemp -d)
+	printf '#!/usr/bin/env bash
+case $1 in ps) echo stubcontainer ;; exec) cat >"$CAPTURE"; exit "${STUB_PSQL_STATUS:-0}" ;; esac
+' >"$work/docker"
+	chmod +x "$work/docker"
+	echo "SELECT 1;" >"$work/erasure-reapply.sql"
+	file=$(erasure_file "$hash64,2026-11-20\n")
+	CAPTURE="$work/captured" STUB_PSQL_STATUS=$psql_status PATH="$work:$PATH" bash -c '
+		source "$1/pt-erasure-reapply"
+		SQL_FILE=$2
+		apply_log "$3" "$4"
+	' _ "$SERVER_DIR" "$work/erasure-reapply.sql" "$file" "$option" || status=$?
+	if ((psql_status == 0)); then
+		script=$(cat "$work/captured")
+		[[ ${script##*$'
+'} == "$ending;" && $script == *"$hash64,2026-11-20"* && $script == *"SELECT 1;"* ]] || status=1
+	fi
+	rm -rf "$work" "$file"
+	return "$status"
+}
+check "pt-erasure-reapply dry run ends the transaction with ROLLBACK" accept erasure_apply_with_stub_docker ROLLBACK ""
+check "pt-erasure-reapply --commit ends the transaction with COMMIT" accept erasure_apply_with_stub_docker COMMIT --commit
+check "pt-erasure-reapply fails when psql fails" refuse erasure_apply_with_stub_docker ROLLBACK --commit 3
+
+# An invalid file is refused before the database is reached: docker is never called.
+erasure_invalid_file_never_reaches_docker() {
+	local work file status=0
+	work=$(mktemp -d)
+	printf '#!/usr/bin/env bash
+touch "$CAPTURE"
+' >"$work/docker"
+	chmod +x "$work/docker"
+	echo "SELECT 1;" >"$work/erasure-reapply.sql"
+	file=$(erasure_file "$hash64,2026-13-01\n")
+	CAPTURE="$work/docker-called" PATH="$work:$PATH" bash -c '
+		source "$1/pt-erasure-reapply"
+		SQL_FILE=$2
+		apply_log "$3" --commit
+	' _ "$SERVER_DIR" "$work/erasure-reapply.sql" "$file" && status=1
+	[[ ! -e $work/docker-called ]] || status=1
+	rm -rf "$work" "$file"
+	return "$status"
+}
+check "pt-erasure-reapply refuses an impossible date before any docker call" accept erasure_invalid_file_never_reaches_docker
+
 echo "pt-deploy tests: $passes passed, $failures failed"
 ((failures == 0))

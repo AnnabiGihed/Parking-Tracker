@@ -3,8 +3,8 @@ namespace ParkingTracker.ApiService.Features.RateLimiting;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : The names and limits of the rate limits, in one place: the health policy, the per-address policy of the session endpoints
-///              and the per-account policy of the authenticated endpoints.
+/// Purpose     : The names and limits of the rate limits, in one place: the health policy, the per-address policy of the session endpoints,
+///              the per-address policy of the refresh endpoint and the per-account policy of the authenticated endpoints.
 /// </summary>
 public static class RateLimitSettings
 {
@@ -18,6 +18,12 @@ public static class RateLimitSettings
 	/// The name of the policy of the session endpoints (challenge and sign-in), per client address.
 	/// </summary>
 	public const string SessionPolicyName = "session-ip";
+
+	/// <summary>
+	/// The name of the policy of the refresh endpoint, per client address; separate from <see cref="SessionPolicyName"/> so that a
+	/// device that refreshes often cannot starve the sign-ins.
+	/// </summary>
+	public const string RefreshPolicyName = "refresh-ip";
 
 	/// <summary>
 	/// The name of the policy of the authenticated endpoints, per account.
@@ -43,6 +49,16 @@ public static class RateLimitSettings
 	/// The number of segments the window of the session policy slides in.
 	/// </summary>
 	public const int SessionSegmentsPerWindow = 6;
+
+	/// <summary>
+	/// The number of refresh requests one client address may make per window.
+	/// </summary>
+	public const int RefreshPermitsPerWindow = 30;
+
+	/// <summary>
+	/// The number of segments the window of the refresh policy slides in.
+	/// </summary>
+	public const int RefreshSegmentsPerWindow = 6;
 
 	/// <summary>
 	/// The most requests one account may make at once: the capacity of its token bucket.
@@ -75,6 +91,11 @@ public static class RateLimitSettings
 	/// The window of the session policy.
 	/// </summary>
 	public static readonly TimeSpan SessionWindow = TimeSpan.FromMinutes(1);
+
+	/// <summary>
+	/// The window of the refresh policy.
+	/// </summary>
+	public static readonly TimeSpan RefreshWindow = TimeSpan.FromMinutes(1);
 
 	/// <summary>
 	/// The interval at which the bucket of an account is refilled, with the permits of that interval.

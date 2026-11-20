@@ -28,5 +28,14 @@ public interface IUserAccountRepository : IAsyncCommandRepository<UserAccount, U
 	/// <param name="cancellationToken">Cancels the read.</param>
 	/// <returns>A task with the account and its sessions, or <see langword="null"/> when no session has the token.</returns>
 	Task<UserAccount?> FindByRefreshTokenHashAsync(RefreshTokenHash tokenHash, CancellationToken cancellationToken = default);
+
+	/// <summary>
+	/// Discards the changes that are staged but not saved, for example after a save that failed, and reads the account that holds a
+	/// refresh token again from the database, so the caller works on what is stored and not on what it staged.
+	/// </summary>
+	/// <param name="tokenHash">The hash of the refresh token.</param>
+	/// <param name="cancellationToken">Cancels the read.</param>
+	/// <returns>A task with the account and its sessions, or <see langword="null"/> when no session has the token (any more).</returns>
+	Task<UserAccount?> ReloadByRefreshTokenHashAsync(RefreshTokenHash tokenHash, CancellationToken cancellationToken = default);
 	#endregion
 }

@@ -32,6 +32,16 @@ public sealed class SignInHarness : IAsyncDisposable
 	/// The route of the own-account endpoint.
 	/// </summary>
 	public const string MeRoute = "/api/v1/me";
+
+	/// <summary>
+	/// The route of the refresh endpoint.
+	/// </summary>
+	public const string RefreshRoute = "/api/v1/sessions/refresh";
+
+	/// <summary>
+	/// The route of the sign-out endpoint.
+	/// </summary>
+	public const string CurrentSessionRoute = "/api/v1/sessions/current";
 	#endregion
 
 	#region Constructors
@@ -148,19 +158,55 @@ public sealed class SignInHarness : IAsyncDisposable
 	}
 
 	/// <summary>
+	/// Sends a refresh token to the refresh endpoint.
+	/// </summary>
+	/// <param name="refreshToken">The refresh token.</param>
+	/// <returns>The answer.</returns>
+	public Task<HttpResponseMessage> RefreshAsync(string refreshToken)
+	{
+		return Client.PostAsJsonAsync(new Uri(RefreshRoute, UriKind.Relative), new RefreshSessionRequest(refreshToken));
+	}
+
+	/// <summary>
+	/// Refreshes a session and expects success.
+	/// </summary>
+	/// <param name="refreshToken">The refresh token.</param>
+	/// <returns>The new tokens.</returns>
+	public async Task<SessionResponse> RefreshSucceedingAsync(string refreshToken)
+	{
+		var response = await RefreshAsync(refreshToken).ConfigureAwait(false);
+		response.EnsureSuccessStatusCode();
+		return (await response.Content.ReadFromJsonAsync<SessionResponse>().ConfigureAwait(false))!;
+	}
+
+	/// <summary>
+	/// Signs out the device of an access token.
+	/// </summary>
+	/// <param name="accessToken">The access token; <see langword="null"/> for none.</param>
+	/// <returns>The answer.</returns>
+	public Task<HttpResponseMessage> SignOutAsync(string? accessToken)
+	{
+		return SendAuthenticatedAsync(HttpMethod.Delete, CurrentSessionRoute, accessToken);
+	}
+
+	/// <summary>
+	/// Erases the account of an access token.
+	/// </summary>
+	/// <param name="accessToken">The access token; <see langword="null"/> for none.</param>
+	/// <returns>The answer.</returns>
+	public Task<HttpResponseMessage> DeleteAccountAsync(string? accessToken)
+	{
+		return SendAuthenticatedAsync(HttpMethod.Delete, MeRoute, accessToken);
+	}
+
+	/// <summary>
 	/// Calls the own-account endpoint, with a bearer token when one is given.
 	/// </summary>
 	/// <param name="accessToken">The access token; <see langword="null"/> for none.</param>
 	/// <returns>The answer.</returns>
-	public async Task<HttpResponseMessage> GetMeAsync(string? accessToken)
+	public Task<HttpResponseMessage> GetMeAsync(string? accessToken)
 	{
-		using var request = new HttpRequestMessage(HttpMethod.Get, MeRoute);
-		if (accessToken is not null)
-		{
-			request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-		}
-
-		return await Client.SendAsync(request).ConfigureAwait(false);
+		return SendAuthenticatedAsync(HttpMethod.Get, MeRoute, accessToken);
 	}
 	#endregion
 
@@ -175,6 +221,24 @@ public sealed class SignInHarness : IAsyncDisposable
 	#endregion
 
 	#region Private Helpers
+	/// <summary>
+	/// Sends a request with a bearer token when one is given.
+	/// </summary>
+	/// <param name="method">The HTTP method.</param>
+	/// <param name="route">The route.</param>
+	/// <param name="accessToken">The access token; <see langword="null"/> for none.</param>
+	/// <returns>The answer.</returns>
+	private async Task<HttpResponseMessage> SendAuthenticatedAsync(HttpMethod method, string route, string? accessToken)
+	{
+		using var request = new HttpRequestMessage(method, route);
+		if (accessToken is not null)
+		{
+			request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+		}
+
+		return await Client.SendAsync(request).ConfigureAwait(false);
+	}
+
 	/// <summary>
 	/// Creates a context on a connection string.
 	/// </summary>
