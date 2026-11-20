@@ -7,8 +7,8 @@ namespace ParkingTracker.Application.Features.AddressSearch.Queries.SearchAddres
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : Handles <see cref="SearchAddressQuery"/>: asks the search port for the typed text, trimmed, and keeps the best
-///              match. Nothing found is a successful answer without a match; an unreachable service is a failure.
+/// Purpose     : Handles <see cref="SearchAddressQuery"/>: asks the search port for the typed text, trimmed, and returns every
+///              match, best first. Nothing found is a successful answer without a match; an unreachable service is a failure.
 /// </summary>
 public sealed class SearchAddressQueryHandler : IQueryHandler<SearchAddressQuery, SearchAddressResponse>
 {
@@ -34,13 +34,13 @@ public sealed class SearchAddressQueryHandler : IQueryHandler<SearchAddressQuery
 	/// <inheritdoc />
 	public async Task<Result<SearchAddressResponse>> Handle(SearchAddressQuery request, CancellationToken cancellationToken)
 	{
-		var matches = await search.SearchAsync(request.Text.Trim(), cancellationToken).ConfigureAwait(false);
+		var matches = await search.SearchAsync(request.Text.Trim(), request.Limit, cancellationToken).ConfigureAwait(false);
 		if (matches.IsFailure)
 		{
 			return Result.Failure<SearchAddressResponse>(matches.Error);
 		}
 
-		return Result.Success(new SearchAddressResponse(matches.Value.Count > 0 ? matches.Value[0] : null));
+		return Result.Success(new SearchAddressResponse(matches.Value));
 	}
 	#endregion
 }

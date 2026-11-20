@@ -5,7 +5,7 @@ namespace ParkingTracker.Application.Features.AddressSearch.Queries.SearchAddres
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : The best match of an address search.
+/// Purpose     : The matches of an address search.
 /// </summary>
-/// <param name="Match">The best match, or <see langword="null"/> when the address was not found.</param>
-public sealed record SearchAddressResponse(AddressMatch? Match);
+/// <param name="Matches">The matches, best first; empty when the address was not found.</param>
+public sealed record SearchAddressResponse(IReadOnlyList<AddressMatch> Matches);

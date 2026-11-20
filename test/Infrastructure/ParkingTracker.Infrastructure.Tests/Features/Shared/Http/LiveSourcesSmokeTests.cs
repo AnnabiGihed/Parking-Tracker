@@ -185,7 +185,7 @@ public sealed class LiveSourcesSmokeTests
 	{
 		using var provider = Provider();
 
-		var result = await provider.GetRequiredService<IAddressSearch>().SearchAsync("Avenue Louise 216", Token());
+		var result = await provider.GetRequiredService<IAddressSearch>().SearchAsync("Avenue Louise 216", 8, Token());
 
 		result.IsSuccess.Should().BeTrue(result.IsFailure ? result.Error.Message : null);
 		var match = result.Value.Should().NotBeEmpty().And.Subject.First();

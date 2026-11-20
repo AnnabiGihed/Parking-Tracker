@@ -187,17 +187,18 @@ public sealed class PlacesViewModel : ViewModelBase
 		SetBusy(true);
 		try
 		{
-			var result = await sender.Send(new SearchAddressQuery(text), cancellationToken).ConfigureAwait(false);
+			var result = await sender.Send(new SearchAddressQuery(text, SearchAddressQuery.BestMatchOnly), cancellationToken).ConfigureAwait(false);
 			if (result.IsFailure)
 			{
 				toast.Show("Search failed — check your connection.");
 			}
-			else if (result.Value.Match is not { } match)
+			else if (result.Value.Matches.Count == 0)
 			{
 				toast.Show("Address not found.");
 			}
 			else
 			{
+				var match = result.Value.Matches[0];
 				await SaveAsync(match.Point, string.IsNullOrWhiteSpace(match.DisplayName) ? text : match.DisplayName, cancellationToken).ConfigureAwait(false);
 			}
 		}

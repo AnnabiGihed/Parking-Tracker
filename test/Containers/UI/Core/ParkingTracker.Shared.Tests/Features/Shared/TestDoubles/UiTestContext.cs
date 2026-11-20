@@ -95,6 +95,11 @@ public abstract class UiTestContext : BunitContext
 	protected FakeTimeProvider Clock { get; } = new(Start);
 
 	/// <summary>
+	/// Gets the setup of the call that takes the focus off the text box; a test can make it fail with <c>SetException</c>.
+	/// </summary>
+	protected JSRuntimeInvocationHandler Blur { get; private set; } = null!;
+
+	/// <summary>
 	/// Gets the mediator substitute.
 	/// </summary>
 	protected ISender Sender { get; } = Substitute.For<ISender>();
@@ -234,6 +239,10 @@ public abstract class UiTestContext : BunitContext
 		JSInterop.Setup<string>("Radzen.closeDialog", _ => true).SetResult(string.Empty);
 		JSInterop.Setup<string>("Radzen.openDialog", _ => true).SetResult(string.Empty);
 		JSInterop.Setup<string>("Radzen.openSideDialog", _ => true).SetResult(string.Empty);
+
+		// The search bar takes the focus off the text box after a submit, to close the keyboard.
+		Blur = JSInterop.SetupVoid("document.activeElement.blur");
+		Blur.SetVoidResult();
 	}
 
 	/// <summary>

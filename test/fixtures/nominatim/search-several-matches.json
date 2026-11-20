@@ -1,0 +1,59 @@
+[
+  {
+    "place_id": 101,
+    "lat": "50.8467",
+    "lon": "4.3525",
+    "category": "highway",
+    "type": "residential",
+    "name": "Rue de la Loi",
+    "display_name": "Rue de la Loi, Quartier Léopold, Bruxelles, Ville de Bruxelles, Région de Bruxelles-Capitale, 1000, Belgique",
+    "address": {
+      "road": "Rue de la Loi",
+      "suburb": "Quartier Léopold",
+      "city": "Bruxelles",
+      "postcode": "1000",
+      "country": "Belgique"
+    }
+  },
+  {
+    "place_id": 102,
+    "lat": "50.8441",
+    "lon": "4.3809",
+    "category": "building",
+    "type": "yes",
+    "name": "",
+    "display_name": "16, Rue de la Loi, Etterbeek, Bruxelles-Capitale, 1040, Belgique",
+    "address": {
+      "house_number": "16",
+      "road": "Rue de la Loi",
+      "town": "Etterbeek",
+      "postcode": "1040",
+      "country": "Belgique"
+    }
+  },
+  {
+    "place_id": 103,
+    "lat": "50.8503",
+    "lon": "4.3517",
+    "category": "tourism",
+    "type": "attraction",
+    "name": "Grand-Place",
+    "display_name": "Grand-Place, Quartier de l'Îlot Sacré, Bruxelles, 1000, Belgique",
+    "address": {
+      "tourism": "Grand-Place",
+      "municipality": "Bruxelles",
+      "postcode": "1000",
+      "country": "Belgique"
+    }
+  },
+  {
+    "place_id": 104,
+    "lat": "50.8333",
+    "lon": "4.3333",
+    "display_name": "Parc de Forest, Forest, Belgique"
+  },
+  {
+    "place_id": 105,
+    "display_name": "No position, Belgique"
+  }
+]

@@ -1,6 +1,9 @@
 using Bunit;
+using Microsoft.JSInterop;
 using NSubstitute;
 using ParkingTracker.Application.Features.AddressSearch.Queries.SearchAddress;
+using ParkingTracker.Domain.Features.AddressSearch.ValueObjects;
+using ParkingTracker.Domain.Features.Shared.ValueObjects;
 using ParkingTracker.Shared.Features.SpotCheck.Components;
 using ParkingTracker.Shared.Tests.Features.Shared.TestDoubles;
 using ParkingTracker.ViewModels.Features.Shared;
@@ -13,7 +16,7 @@ namespace ParkingTracker.Shared.Tests.Features.SpotCheck.Components;
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
 /// Purpose     : Component tests for <see cref="SearchBar"/>, built on a Radzen text box: typing fills the view model, a submit
-///              looks the text up, an empty text sends nothing, and a failed or empty search tells the user.
+///              looks the text up, an empty text sends nothing, and a failed or empty search tells the user. Several matches open a list that typing closes.
 /// </summary>
 public sealed class SearchBarTests : UiTestContext
 {
@@ -40,7 +43,7 @@ public sealed class SearchBarTests : UiTestContext
 	[Fact]
 	public async Task Submit_TypedText_ShouldSearchIt()
 	{
-		Sender.Send(Arg.Any<SearchAddressQuery>(), Arg.Any<CancellationToken>()).Returns(Result.Success(new SearchAddressResponse(null)));
+		Sender.Send(Arg.Any<SearchAddressQuery>(), Arg.Any<CancellationToken>()).Returns(Result.Success(new SearchAddressResponse([])));
 		var cut = Render<SearchBar>();
 		await cut.Find("#searchInput").InputAsync("Avenue Louise");
 
@@ -48,6 +51,39 @@ public sealed class SearchBarTests : UiTestContext
 
 		await Sender.Received(1).Send(Arg.Is<SearchAddressQuery>(query => query.Text == "Avenue Louise"), Arg.Any<CancellationToken>());
 		Resolve<ToastViewModel>().Message.Should().Be("Address not found.");
+	}
+
+	/// <summary>
+	/// Verifies that a submit takes the focus off the text box, which closes the keyboard of the phone.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Submit_TypedText_ShouldCloseTheKeyboard()
+	{
+		Sender.Send(Arg.Any<SearchAddressQuery>(), Arg.Any<CancellationToken>()).Returns(Result.Success(new SearchAddressResponse([])));
+		var cut = Render<SearchBar>();
+		await cut.Find("#searchInput").InputAsync("Avenue Louise");
+
+		await cut.Find("#searchForm").SubmitAsync();
+
+		JSInterop.VerifyInvoke("document.activeElement.blur");
+	}
+
+	/// <summary>
+	/// Verifies that the search still runs when taking the focus off the text box fails.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Submit_BlurFails_ShouldStillSearch()
+	{
+		Blur.SetException(new JSException("no such function"));
+		Sender.Send(Arg.Any<SearchAddressQuery>(), Arg.Any<CancellationToken>()).Returns(Result.Success(new SearchAddressResponse([])));
+		var cut = Render<SearchBar>();
+		await cut.Find("#searchInput").InputAsync("Avenue Louise");
+
+		await cut.Find("#searchForm").SubmitAsync();
+
+		await Sender.Received(1).Send(Arg.Is<SearchAddressQuery>(query => query.Text == "Avenue Louise"), Arg.Any<CancellationToken>());
 	}
 
 	/// <summary>
@@ -78,6 +114,27 @@ public sealed class SearchBarTests : UiTestContext
 		await cut.Find("#searchForm").SubmitAsync();
 
 		Resolve<ToastViewModel>().Message.Should().Be("Search failed — check your connection.");
+	}
+
+	/// <summary>
+	/// Verifies that several matches open the list under the bar, that typing closes it, and that it opens again on the next submit.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Submit_SeveralMatches_ShouldOpenTheListAndTypingShouldCloseIt()
+	{
+		var matches = new[] { new AddressMatch(new GeoPoint(50.85, 4.35), "A", "A road", "1000 Bruxelles"), new AddressMatch(new GeoPoint(50.84, 4.38), "B", "B road", "1040 Etterbeek") };
+		Sender.Send(Arg.Any<SearchAddressQuery>(), Arg.Any<CancellationToken>()).Returns(Result.Success(new SearchAddressResponse(matches)));
+		var cut = Render<SearchBar>();
+		await cut.Find("#searchInput").InputAsync("road");
+
+		await cut.Find("#searchForm").SubmitAsync();
+
+		cut.FindAll("#addressResults .address-result").Should().HaveCount(2);
+
+		await cut.Find("#searchInput").InputAsync("road 2");
+
+		cut.FindAll("#addressResults").Should().BeEmpty();
 	}
 	#endregion
 }

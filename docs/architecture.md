@@ -457,7 +457,7 @@ error: ..."), which is saved and notified like any other answer.
 | `ParkingDetector` | class | Fed `GpsFix` values and asked `GetParkedFix(now)` and told `AcknowledgeParked()`; no clock inside. Parked after driving above 20 km/h when the phone stays within 15 m of where it stopped for 2 minutes, or stood still for 20 seconds and then stayed at walking pace (≤ 9 km/h) for 3 minutes (the user walked away; the car's stop is reported) |
 | `SpotDecision`, `Verdict`, `SpotStatus` | record, enums | Verdict (headline and colour), plain-text detail, notes, tariff, the zone reading (surface, rule, why the rule is missing) and the reserved space; `CantVerify` carries why in its detail |
 | `ParkedCar`, `ParkingTimer`, `LayerSettings` | records | Same JSON as `pt.car`, `pt.timer` and `pt.layers`; `ParkingTimer` plans the two reminders |
-| `CarPark`, `ChargingPoint`, `MailleOption`, `AddressMatch` | records | Map layer markers, the sector list of the card form and the address search answer; values are kept as the services wrote them because the map only prints them |
+| `CarPark`, `ChargingPoint`, `MailleOption`, `AddressMatch` | records | Map layer markers, the sector list of the card form and the address search answer (point, full name, short label and locality); values are kept as the services wrote them because the map only prints them |
 | `OfficialListStatus` | record | `Ok`, `Changed`, `Unverified`, checked time; re-check every 6 h, after 1 min when not ok. Kept in memory by `IOfficialListChecker` (singleton), not persisted; the comparison rules (headers, content hash, PDF signature) are in the record |
 
 Expected failures use Pivot `Result`/`Error` with dotted codes (`ParkingBrussels.Unavailable`, `Urbis.BadResponse`,
@@ -473,7 +473,7 @@ of range, caught by `ValidationPipelineBehavior`).
 | `IAddressPointsClient` | `data.mobility.brussels` `bm_urbis:urbadm_adpt` | 12 s |
 | `IParkingRulesClient` | `api.mobility.brussels` `regulations_rules`, per zone code or all, at a moment | 12 s |
 | `IMobilityLayersClient` | `data.mobility.brussels` roadworks and events (`GetWorksAsync`), car parks (`bm_parking:parkingpublic`, `GetCarParksAsync`) and EV charging (`bm_equipment:evse`, `GetChargersAsync`) | 12 s |
-| `IAddressSearch` | `nominatim.openstreetmap.org` search, `countrycodes=be`, bounded to the Brussels box, `Accept-Language: fr`, best match only; only the typed text is sent | 12 s |
+| `IAddressSearch` | `nominatim.openstreetmap.org` search, `countrycodes=be`, bounded to the Brussels box, `Accept-Language: fr`, up to 8 matches with `addressdetails=1` (label and locality), at most one request per second and repeated questions answered from memory; only the typed text is sent | 12 s |
 | `ICityDocumentsClient` | `www.bruxelles.be` PDFs: `GetHeadersAsync` (HEAD), then `DownloadAsync`, which returns whether the content is a PDF and its SHA-256, not the bytes, when headers differ | 12 s / 30 s |
 
 Two small ports complete the decision: `INetworkStatus` (online or not) and `ISettingsStore` (section 4.2). Request addresses, response

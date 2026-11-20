@@ -13,11 +13,12 @@ public interface IAddressSearch
 {
 	#region Methods
 	/// <summary>
-	/// Searches the best match for a text inside Brussels.
+	/// Searches the matches for a text inside Brussels.
 	/// </summary>
 	/// <param name="text">What the user typed.</param>
+	/// <param name="limit">The most matches to return.</param>
 	/// <param name="cancellationToken">Cancels the request.</param>
 	/// <returns>The matches, best first, empty when nothing was found; or a failure with a <c>Nominatim.*</c> code.</returns>
-	Task<Result<IReadOnlyList<AddressMatch>>> SearchAsync(string text, CancellationToken cancellationToken);
+	Task<Result<IReadOnlyList<AddressMatch>>> SearchAsync(string text, int limit, CancellationToken cancellationToken);
 	#endregion
 }

@@ -10,8 +10,8 @@ namespace ParkingTracker.Infrastructure.Features.AddressSearch;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : Turns the Nominatim search answer (a JSON array whose positions are written as text) into address matches. An
-///              entry without a readable position is left out.
+/// Purpose     : Turns the Nominatim search answer (a JSON array whose positions are written as text) into address matches, each
+///              with a short label and a locality built from its address details. An entry without a readable position is left out.
 /// </summary>
 internal static class AddressMatchParser
 {
@@ -20,6 +20,13 @@ internal static class AddressMatchParser
 	/// The name of this data in failure messages.
 	/// </summary>
 	internal const string What = "address search";
+	#endregion
+
+	#region Static Instances
+	/// <summary>
+	/// The address details that name the municipality, from the most to the least specific; Nominatim picks one by the size of the place.
+	/// </summary>
+	private static readonly string[] LocalityNames = ["city", "town", "village", "municipality"];
 	#endregion
 
 	#region Internal Methods
@@ -57,7 +64,57 @@ internal static class AddressMatchParser
 	{
 		var latitude = JsonValues.Number(entry, "lat");
 		var longitude = JsonValues.Number(entry, "lon");
-		return latitude is null || longitude is null ? null : new AddressMatch(new GeoPoint(latitude.Value, longitude.Value), JsonValues.Text(entry, "display_name"));
+		if (latitude is null || longitude is null)
+		{
+			return null;
+		}
+
+		var displayName = JsonValues.Text(entry, "display_name");
+		var address = JsonValues.Property(entry, "address");
+		return new AddressMatch(new GeoPoint(latitude.Value, longitude.Value), displayName, LabelOf(entry, address, displayName), LocalityOf(address));
+	}
+
+	/// <summary>
+	/// Builds the first line of a match: road and house number, else the name of the place, else the first part of the full name.
+	/// </summary>
+	/// <param name="entry">The JSON object of one result.</param>
+	/// <param name="address">The address details of the result.</param>
+	/// <param name="displayName">The full name of the result.</param>
+	/// <returns>The label, or <see langword="null"/> when the service gave no name at all.</returns>
+	private static string? LabelOf(JsonElement entry, JsonElement address, string? displayName)
+	{
+		var road = JsonValues.Present(address, "road") ?? JsonValues.Present(address, "pedestrian");
+		if (road is not null)
+		{
+			var houseNumber = JsonValues.Present(address, "house_number");
+			return houseNumber is null ? road : $"{road} {houseNumber}";
+		}
+
+		return JsonValues.Present(entry, "name") ?? FirstPart(displayName);
+	}
+
+	/// <summary>
+	/// Builds the second line of a match: the postcode and the municipality.
+	/// </summary>
+	/// <param name="address">The address details of the result.</param>
+	/// <returns>The locality, or <see langword="null"/> when the details hold neither.</returns>
+	private static string? LocalityOf(JsonElement address)
+	{
+		var postcode = JsonValues.Present(address, "postcode");
+		var city = LocalityNames.Select(name => JsonValues.Present(address, name)).FirstOrDefault(value => value is not null);
+		var locality = string.Join(' ', new[] { postcode, city }.Where(part => part is not null));
+		return locality.Length == 0 ? null : locality;
+	}
+
+	/// <summary>
+	/// Takes the part of a full name before its first comma.
+	/// </summary>
+	/// <param name="displayName">The full name, or <see langword="null"/>.</param>
+	/// <returns>The first part, or <see langword="null"/> when there is no name.</returns>
+	private static string? FirstPart(string? displayName)
+	{
+		var first = displayName?.Split(',')[0].Trim();
+		return string.IsNullOrEmpty(first) ? null : first;
 	}
 	#endregion
 }
