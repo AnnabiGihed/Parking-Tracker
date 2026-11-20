@@ -7,9 +7,11 @@ namespace ParkingTracker.ViewModels.Features.Welcome;
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
 /// Purpose     : The welcome dialog shown on the first launch, when there is no card yet: it explains the app and the location
-///              permission and leads to the card form. Once the user went on, it is not shown again.
+///              permission and leads to the card form. Once the user went on, it is not shown again. The user cannot dismiss it: only
+///              "Add my parking card" closes it. The dialog is drawn by a <c>DialogBridge</c> through <see cref="IDialogViewModel"/>,
+///              so this class never references Radzen.
 /// </summary>
-public sealed class WelcomeViewModel : ViewModelBase
+public sealed class WelcomeViewModel : ViewModelBase, IDialogViewModel
 {
 	#region Fields
 	/// <summary>
@@ -28,6 +30,9 @@ public sealed class WelcomeViewModel : ViewModelBase
 	{
 		this.settings = settings;
 		Permission = permission;
+
+		// No unsubscription: the permission view model lives as long as this one (same scoped lifetime).
+		permission.Changed += OnPermissionChanged;
 	}
 	#endregion
 
@@ -89,6 +94,12 @@ public sealed class WelcomeViewModel : ViewModelBase
 	}
 
 	/// <summary>
+	/// Closes the dialog and remembers that it was seen. The bridge opens this dialog as one the user cannot dismiss, so it
+	/// calls this only when the dialog was closed from elsewhere, to keep the state in line.
+	/// </summary>
+	void IDialogViewModel.Close() => _ = CloseAsync();
+
+	/// <summary>
 	/// Closes the dialog and remembers that it was seen.
 	/// </summary>
 	/// <returns>A task that completes when it was remembered.</returns>
@@ -98,5 +109,14 @@ public sealed class WelcomeViewModel : ViewModelBase
 		IsOpen = false;
 		NotifyChanged();
 	}
+	#endregion
+
+	#region Private Helpers
+	/// <summary>
+	/// Passes a change of the permission state on, so that the dialog is drawn again.
+	/// </summary>
+	/// <param name="sender">The permission view model.</param>
+	/// <param name="e">Not used.</param>
+	private void OnPermissionChanged(object? sender, EventArgs e) => NotifyChanged();
 	#endregion
 }

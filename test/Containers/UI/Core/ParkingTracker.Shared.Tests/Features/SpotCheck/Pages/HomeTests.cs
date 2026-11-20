@@ -1,5 +1,6 @@
 using Bunit;
 using NSubstitute;
+using Radzen.Blazor;
 using ParkingTracker.Domain.Features.Shared.ValueObjects;
 using ParkingTracker.Domain.Features.SpotDecisions.ValueObjects;
 using ParkingTracker.Shared.Features.MapLayers.Components;
@@ -71,11 +72,30 @@ public sealed class HomeTests : UiTestContext
 	{
 		SetUpMap();
 
+		var host = Render<RadzenDialog>();
 		var cut = Render<Home>();
 
 		await cut.WaitForAssertionAsync(() => cut.Find("#trackBtn").ClassList.Should().Contain("active"));
 		await Tracker.Received(1).StartAsync(Arg.Any<CancellationToken>());
-		await cut.WaitForAssertionAsync(() => cut.Find("#welcomeStart").Should().NotBeNull());
+		await host.WaitForAssertionAsync(() => host.Find("#welcomeStart").Should().NotBeNull());
+	}
+
+	/// <summary>
+	/// Verifies that "Add my parking card" in the welcome dialog replaces it with the card dialog, in this order, through the one dialog service.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Welcome_AddMyParkingCard_ShouldReplaceTheWelcomeWithTheCardDialog()
+	{
+		SetUpMap();
+		var host = Render<RadzenDialog>();
+		Render<Home>();
+		await host.WaitForAssertionAsync(() => host.Find("#welcomeStart").Should().NotBeNull());
+
+		await host.Find("#welcomeStart").ClickAsync();
+
+		await host.WaitForAssertionAsync(() => host.FindAll("#cardForm").Should().HaveCount(1));
+		host.FindAll("#welcomeDialog").Should().BeEmpty();
 	}
 
 	/// <summary>

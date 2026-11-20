@@ -23,9 +23,10 @@ namespace ParkingTracker.ViewModels.Features.Card;
 ///              dialog adapts to the municipality (a City sector with tolerance codes, or the areas printed on the card), loads
 ///              the list of areas through the Application and saves the card through the settings store. "Scan my card" reads a photo
 ///              through the Application and fills only the fields it found, then asks the user to check them; nothing is saved
-///              until "Save card".
+///              until "Save card". The dialog is drawn by a <c>DialogBridge</c> through <see cref="IDialogViewModel"/>, so this class
+///              never references Radzen.
 /// </summary>
-public sealed class CardViewModel : ViewModelBase
+public sealed class CardViewModel : ViewModelBase, IDialogViewModel
 {
 	#region Constants
 	/// <summary>

@@ -7,16 +7,12 @@ namespace ParkingTracker.Shared.Features.Car.Components;
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
 /// Purpose     : The "My car" dialog: saves where the user parked, shows it on the map, opens walking directions in Google Maps and
-///              forgets the spot. It also has the parking alerts switch and the parking timer (presets, minutes, start and stop).
+///              forgets the spot. It also has the parking alerts switch and the parking timer (presets, minutes, start and stop). It is
+///              shown as a bottom sheet through the <c>DialogBridge</c>, which also closes it with the back button of the phone.
 /// </summary>
 public sealed partial class CarDialog : ViewModelComponent<CarViewModel>
 {
 	#region Event Handlers
-	/// <summary>
-	/// Handles the close button.
-	/// </summary>
-	private void OnClose() => ViewModel.Close();
-
 	/// <summary>
 	/// Handles "My car is parked here" and "Car is here now".
 	/// </summary>

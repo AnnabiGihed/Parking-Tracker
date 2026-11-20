@@ -1,4 +1,5 @@
 using Bunit;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,6 +27,7 @@ using ParkingTracker.ViewModels.Features.Shared.Settings.Database;
 using ParkingTracker.ViewModels.Features.Shared.Settings.Legacy;
 using Pivot.Framework.Application.Abstractions.Messaging;
 using Pivot.Framework.Domain.Shared;
+using Radzen.Blazor;
 
 namespace ParkingTracker.Shared.Tests.Features.Shared.TestDoubles;
 
@@ -185,6 +187,20 @@ public abstract class UiTestContext : BunitContext
 		where T : notnull
 	{
 		return Services.GetRequiredService<T>();
+	}
+
+	/// <summary>
+	/// Renders the Radzen dialog host and a dialog component that the <c>DialogBridge</c> opens in it, so the content of the dialog
+	/// is found in the returned host while the view model is open.
+	/// </summary>
+	/// <typeparam name="TDialog">The dialog component.</typeparam>
+	/// <returns>The Radzen dialog host, which holds the dialog while it is open.</returns>
+	protected IRenderedComponent<RadzenDialog> RenderInDialogHost<TDialog>()
+		where TDialog : IComponent
+	{
+		var host = Render<RadzenDialog>();
+		Render<TDialog>();
+		return host;
 	}
 
 	/// <summary>

@@ -27,7 +27,7 @@ public sealed class CarDialogTests : UiTestContext
 	[Fact]
 	public async Task Render_NoCar_ShouldOfferOnlyToSaveTheSpot()
 	{
-		var cut = Render<CarDialog>();
+		var cut = RenderInDialogHost<CarDialog>();
 		await cut.InvokeAsync(() => Resolve<CarViewModel>().Open());
 
 		cut.Find("#carHere").TextContent.Should().Contain("My car is parked here");
@@ -44,7 +44,7 @@ public sealed class CarDialogTests : UiTestContext
 	[Fact]
 	public async Task SaveHere_NoPosition_ShouldSaySoAndSaveNothing()
 	{
-		var cut = Render<CarDialog>();
+		var cut = RenderInDialogHost<CarDialog>();
 		await cut.InvokeAsync(() => Resolve<CarViewModel>().Open());
 
 		await cut.Find("#carHere").ClickAsync();
@@ -61,7 +61,7 @@ public sealed class CarDialogTests : UiTestContext
 	public async Task Render_SavedCar_ShouldShowItsStateAndButtons()
 	{
 		Settings.GetCarAsync().Returns(new ParkedCar(Here, Start, "Free here", string.Empty));
-		var cut = Render<CarDialog>();
+		var cut = RenderInDialogHost<CarDialog>();
 		await cut.InvokeAsync(LoadAndOpenAsync);
 
 		cut.Find("#carInfo").TextContent.Should().Contain("Parked").And.Contain("The app said: Free here");
@@ -79,7 +79,7 @@ public sealed class CarDialogTests : UiTestContext
 	public async Task Walk_SavedCar_ShouldOpenTheWalkingLink()
 	{
 		Settings.GetCarAsync().Returns(new ParkedCar(Here, Start, string.Empty, string.Empty));
-		var cut = Render<CarDialog>();
+		var cut = RenderInDialogHost<CarDialog>();
 		await cut.InvokeAsync(LoadAndOpenAsync);
 
 		await cut.FindComponents<RadzenButton>().First(button => button.Markup.Contains("Walk to my car", StringComparison.Ordinal)).Find("button").ClickAsync();
@@ -95,7 +95,7 @@ public sealed class CarDialogTests : UiTestContext
 	public async Task Forget_SavedCar_ShouldClearTheCarAndClose()
 	{
 		Settings.GetCarAsync().Returns(new ParkedCar(Here, Start, string.Empty, string.Empty));
-		var cut = Render<CarDialog>();
+		var cut = RenderInDialogHost<CarDialog>();
 		await cut.InvokeAsync(LoadAndOpenAsync);
 
 		await cut.Find("#carClear").ClickAsync();
@@ -116,7 +116,7 @@ public sealed class CarDialogTests : UiTestContext
 	[Fact]
 	public async Task Render_Open_ShouldShowAlertsOnAndSaveAChange()
 	{
-		var cut = Render<CarDialog>();
+		var cut = RenderInDialogHost<CarDialog>();
 		await cut.InvokeAsync(() => Resolve<CarViewModel>().Open());
 
 		cut.FindComponent<RadzenSwitch>().Instance.Value.Should().BeTrue();
@@ -136,7 +136,7 @@ public sealed class CarDialogTests : UiTestContext
 	[Fact]
 	public async Task Start_PresetOneHour_ShouldScheduleAndOfferStop()
 	{
-		var cut = Render<CarDialog>();
+		var cut = RenderInDialogHost<CarDialog>();
 		await cut.InvokeAsync(() => Resolve<CarViewModel>().Open());
 		cut.FindAll("#timerStop").Should().BeEmpty();
 
@@ -157,7 +157,7 @@ public sealed class CarDialogTests : UiTestContext
 	[Fact]
 	public async Task Start_TypedMinutes_ShouldUseThem()
 	{
-		var cut = Render<CarDialog>();
+		var cut = RenderInDialogHost<CarDialog>();
 		await cut.InvokeAsync(() => Resolve<CarViewModel>().Open());
 
 		await cut.InvokeAsync(() => cut.FindComponent<RadzenNumeric<int?>>().Instance.ValueChanged.InvokeAsync(45));
@@ -173,7 +173,7 @@ public sealed class CarDialogTests : UiTestContext
 	[Fact]
 	public async Task Start_EmptyMinutes_ShouldUseTheMinimum()
 	{
-		var cut = Render<CarDialog>();
+		var cut = RenderInDialogHost<CarDialog>();
 		await cut.InvokeAsync(() => Resolve<CarViewModel>().Open());
 
 		await cut.InvokeAsync(() => cut.FindComponent<RadzenNumeric<int?>>().Instance.ValueChanged.InvokeAsync(null));
@@ -189,7 +189,7 @@ public sealed class CarDialogTests : UiTestContext
 	[Fact]
 	public async Task Stop_RunningTimer_ShouldCancelAndHide()
 	{
-		var cut = Render<CarDialog>();
+		var cut = RenderInDialogHost<CarDialog>();
 		await cut.InvokeAsync(() => Resolve<CarViewModel>().Open());
 		await cut.Find("#timerStart").ClickAsync();
 
@@ -209,6 +209,61 @@ public sealed class CarDialogTests : UiTestContext
 	{
 		await Resolve<CarViewModel>().LoadAsync().ConfigureAwait(false);
 		Resolve<CarViewModel>().Open();
+	}
+	#endregion
+
+	#region Bridge Tests
+	/// <summary>
+	/// Verifies that the dialog opens as a Radzen bottom sheet with its title and closes when the view model closes.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Bridge_OpenAndClose_ShouldShowAndRemoveTheSheet()
+	{
+		var host = RenderInDialogHost<CarDialog>();
+		host.FindAll("#carForm").Should().BeEmpty();
+
+		await host.InvokeAsync(() => Resolve<CarViewModel>().Open());
+
+		await host.WaitForAssertionAsync(() => host.Find(".rz-dialog-title").TextContent.Should().Be("My car"));
+		host.FindAll(".rz-dialog.app-sheet #carForm").Should().HaveCount(1);
+		await host.InvokeAsync(Resolve<CarViewModel>().Close);
+		await host.WaitForAssertionAsync(() => host.FindAll("#carForm").Should().BeEmpty());
+	}
+
+	/// <summary>
+	/// Verifies that the back button of the phone closes the dialog through the bridge.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Bridge_BackButton_ShouldCloseTheDialog()
+	{
+		var host = RenderInDialogHost<CarDialog>();
+		await host.InvokeAsync(() => Resolve<CarViewModel>().Open());
+		await host.WaitForAssertionAsync(() => host.FindAll("#carForm").Should().HaveCount(1));
+
+		var closed = await host.InvokeAsync(Resolve<IBackNavigation>().TryGoBack);
+
+		closed.Should().BeTrue();
+		await host.WaitForAssertionAsync(() => host.FindAll("#carForm").Should().BeEmpty());
+		Resolve<CarViewModel>().IsOpen.Should().BeFalse();
+	}
+
+	/// <summary>
+	/// Verifies that a close by the user (the close button of the sheet) reaches the view model.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Bridge_CloseButton_ShouldCloseTheViewModel()
+	{
+		var host = RenderInDialogHost<CarDialog>();
+		await host.InvokeAsync(() => Resolve<CarViewModel>().Open());
+		await host.WaitForAssertionAsync(() => host.FindAll("#carForm").Should().HaveCount(1));
+
+		await host.Find(".rz-dialog-titlebar-close").ClickAsync();
+
+		await host.WaitForAssertionAsync(() => host.FindAll("#carForm").Should().BeEmpty());
+		Resolve<CarViewModel>().IsOpen.Should().BeFalse();
 	}
 	#endregion
 }

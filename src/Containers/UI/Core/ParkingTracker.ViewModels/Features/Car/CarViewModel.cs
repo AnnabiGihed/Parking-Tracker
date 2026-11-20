@@ -14,9 +14,10 @@ namespace ParkingTracker.ViewModels.Features.Car;
 /// Purpose     : The "My car" dialog and the car chip: saves where the user parked from the position or the pin that is on screen,
 ///              shows it on the map, opens Google Maps with walking directions back to it, and forgets it. It also holds the parking
 ///              alerts switch (which starts and stops the background service) and the parking timer (presets, start, stop, the line
-///              above the status block and the chip, which turns late 10 minutes before the end). The texts refresh every 30 seconds.
+///              above the status block and the chip, which turns late 10 minutes before the end). The texts refresh every 30 seconds. The dialog
+///              is drawn by a <c>DialogBridge</c> through <see cref="IDialogViewModel"/>, so this class never references Radzen.
 /// </summary>
-public sealed class CarViewModel : ViewModelBase, IDisposable
+public sealed class CarViewModel : ViewModelBase, IDialogViewModel, IDisposable
 {
 	#region Constants
 	/// <summary>

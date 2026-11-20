@@ -24,6 +24,8 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
 
 ### Changed
 
+- The card, car and welcome screens open as the same bottom sheets as the other screens, with the Android back button
+  closing them (the welcome screen still cannot be dismissed).
 - Form fields (text, drop-down, number and date) share one look in the app colours, in light and dark.
 - Setting Home or Work shows the place on the map with a pin you can drag, and saves only when you confirm. The
   Home and Work chips and the side menu open this map view; a saved place can be moved or removed there.

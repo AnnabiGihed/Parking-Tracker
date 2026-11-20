@@ -11,7 +11,8 @@ namespace ParkingTracker.Shared.Features.Card.Components;
 /// Purpose     : The card dialog where the user enters the residents' card by hand: municipality, the City sector with its tolerance
 ///              codes or the areas printed on the card, the validity dates, the plate and the number. "Scan my card" asks the
 ///              <see cref="CardViewModel"/> to read a photo and shows its status line. It saves through the
-///              <see cref="CardViewModel"/>, which writes the card to the settings store.
+///              <see cref="CardViewModel"/>, which writes the card to the settings store. It is shown as a bottom sheet through the
+///              <c>DialogBridge</c>, which also closes it with the back button of the phone.
 /// </summary>
 public sealed partial class CardDialog : ViewModelComponent<CardViewModel>
 {
@@ -107,11 +108,6 @@ public sealed partial class CardDialog : ViewModelComponent<CardViewModel>
 	{
 		await ViewModel.SaveAsync();
 	}
-
-	/// <summary>
-	/// Handles the close button.
-	/// </summary>
-	private void OnClose() => ViewModel.Close();
 	#endregion
 
 	#region Private Helpers
