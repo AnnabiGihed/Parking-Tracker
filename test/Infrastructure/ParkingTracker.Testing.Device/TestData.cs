@@ -4,14 +4,16 @@ using ParkingTracker.Domain.Features.ParkingSessions.Aggregates;
 using ParkingTracker.Domain.Features.ResidentCards.Aggregates;
 using ParkingTracker.Domain.Features.Sectors.ValueObjects;
 using ParkingTracker.Domain.Features.Shared.ValueObjects;
+using ParkingTracker.Domain.Features.Vehicles.Aggregates;
+using ParkingTracker.Domain.Features.Vehicles.ValueObjects;
 
 namespace ParkingTracker.Testing.Device;
 
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : The municipalities, cards, points and sessions that the persistence tests share, built through the aggregates'
-///              own factories so that a test never holds a value the domain would refuse.
+/// Purpose     : The municipalities, cards, points, sessions and vehicle profiles that the persistence tests share, built through
+///              the aggregates' own factories so that a test never holds a value the domain would refuse.
 /// </summary>
 public static class TestData
 {
@@ -72,6 +74,25 @@ public static class TestData
 		}
 
 		return session;
+	}
+
+	/// <summary>
+	/// Creates the profile of an electric car with two plugs, a battery, a range and a plate typed with a dash.
+	/// </summary>
+	/// <returns>The profile.</returns>
+	public static Vehicle ElectricVehicle()
+	{
+		var details = new VehicleDetails("tesla", "Model 3", 2023, FuelType.Electric, EuroNorm.Unknown, new ChargingDetails([ChargingConnector.Ccs, ChargingConnector.Type2], 57.5, 491), "2-xyz-987");
+		return Vehicle.Create(details, 2026).Value;
+	}
+
+	/// <summary>
+	/// Creates the profile of a petrol car without a model and without a plate.
+	/// </summary>
+	/// <returns>The profile.</returns>
+	public static Vehicle PetrolVehicle()
+	{
+		return Vehicle.Create(new VehicleDetails("other", null, 1990, FuelType.Petrol, EuroNorm.Euro1), 2026).Value;
 	}
 	#endregion
 }

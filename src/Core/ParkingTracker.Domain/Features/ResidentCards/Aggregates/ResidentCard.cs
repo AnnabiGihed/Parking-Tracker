@@ -2,6 +2,7 @@ using ParkingTracker.Domain.Features.Cards.ValueObjects;
 using ParkingTracker.Domain.Features.ResidentCards.Errors;
 using ParkingTracker.Domain.Features.ResidentCards.ValueObjects;
 using ParkingTracker.Domain.Features.Sectors.ValueObjects;
+using ParkingTracker.Domain.Features.Shared.ValueObjects;
 using Pivot.Framework.Domain.Primitives;
 using Pivot.Framework.Domain.Shared;
 

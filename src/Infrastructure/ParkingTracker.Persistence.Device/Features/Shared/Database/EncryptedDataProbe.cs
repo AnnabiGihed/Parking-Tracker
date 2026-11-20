@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using Microsoft.Extensions.Logging;
 using ParkingTracker.Persistence.Device.Features.Shared.Encryption;
 using Pivot.Framework.Domain.Shared;
@@ -8,21 +9,25 @@ namespace ParkingTracker.Persistence.Device.Features.Shared.Database;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : Answers <see cref="IEncryptedDataProbe"/> over the real tables: a card with a number or a plate, any saved place and any
-///              parking session hold encrypted values. A table that does not exist yet holds none, so a fresh phone gets its key; any other
-///              failure to read is reported as a failure and not as "none".
+/// Purpose     : Answers <see cref="IEncryptedDataProbe"/> over the real tables: a card with a number or a plate, any saved place, any
+///              parking session and a vehicle profile with a plate hold encrypted values. Each table is counted only when it exists: a
+///              table that does not exist yet holds none, so a fresh phone gets its key, and a phone whose schema is not yet at the
+///              latest step still finds the encrypted rows of the tables it has. Any other failure to read is reported as a failure
+///              and not as "none".
 /// </summary>
 public sealed partial class EncryptedDataProbe : IEncryptedDataProbe
 {
-	#region Constants
+	#region Static Instances
 	/// <summary>
-	/// Counts the rows that hold an encrypted value.
+	/// For each table that can hold an encrypted value, the SQL that counts its rows holding one.
 	/// </summary>
-	private const string CountSql = """
-		SELECT (SELECT COUNT(*) FROM resident_cards WHERE card_number IS NOT NULL OR plate IS NOT NULL)
-			+ (SELECT COUNT(*) FROM saved_places)
-			+ (SELECT COUNT(*) FROM parking_sessions)
-		""";
+	private static readonly FrozenDictionary<string, string> CountSqlByTable = new Dictionary<string, string>(StringComparer.Ordinal)
+	{
+		["resident_cards"] = "SELECT COUNT(*) FROM resident_cards WHERE card_number IS NOT NULL OR plate IS NOT NULL",
+		["saved_places"] = "SELECT COUNT(*) FROM saved_places",
+		["parking_sessions"] = "SELECT COUNT(*) FROM parking_sessions",
+		["vehicles"] = "SELECT COUNT(*) FROM vehicles WHERE plate IS NOT NULL",
+	}.ToFrozenDictionary(StringComparer.Ordinal);
 	#endregion
 
 	#region Fields
@@ -70,11 +75,15 @@ public sealed partial class EncryptedDataProbe : IEncryptedDataProbe
 		cancellationToken.ThrowIfCancellationRequested();
 		try
 		{
-			return await database.Connection.ExecuteScalarAsync<int>(CountSql).ConfigureAwait(false) > 0;
-		}
-		catch (SQLiteException exception) when (exception.Message.Contains("no such table", StringComparison.OrdinalIgnoreCase))
-		{
-			// The schema was never created: nothing is stored, so nothing can be lost.
+			var tables = await database.Connection.QueryScalarsAsync<string>("SELECT name FROM sqlite_master WHERE type = 'table'").ConfigureAwait(false);
+			foreach (var table in tables.Where(CountSqlByTable.ContainsKey))
+			{
+				if (await database.Connection.ExecuteScalarAsync<int>(CountSqlByTable[table]).ConfigureAwait(false) > 0)
+				{
+					return true;
+				}
+			}
+
 			return false;
 		}
 		catch (SQLiteException exception)

@@ -3,11 +3,13 @@ using ParkingTracker.Application.Features.ParkingSessions.Abstractions;
 using ParkingTracker.Application.Features.ResidentCards.Abstractions;
 using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
 using ParkingTracker.Application.Features.Shared.Abstractions;
+using ParkingTracker.Application.Features.Vehicles.Abstractions;
 using ParkingTracker.Persistence.Device.Features.ParkingSessions;
 using ParkingTracker.Persistence.Device.Features.ResidentCards;
 using ParkingTracker.Persistence.Device.Features.SavedPlaces;
 using ParkingTracker.Persistence.Device.Features.Shared.Database;
 using ParkingTracker.Persistence.Device.Features.Shared.Encryption;
+using ParkingTracker.Persistence.Device.Features.Vehicles;
 
 namespace ParkingTracker.Persistence.Device;
 
@@ -42,6 +44,7 @@ public static class DeviceDatabaseServiceCollectionExtensions
 		services.AddSingleton<IResidentCardRepository, ResidentCardRepository>();
 		services.AddSingleton<ISavedPlacesRepository, SavedPlacesRepository>();
 		services.AddSingleton<IParkingSessionRepository, ParkingSessionRepository>();
+		services.AddSingleton<IVehicleRepository, VehicleRepository>();
 		return services;
 	}
 	#endregion

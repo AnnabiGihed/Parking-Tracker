@@ -6,6 +6,7 @@ using ParkingTracker.Application.Features.ResidentCards.Abstractions;
 using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
 using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
+using ParkingTracker.Application.Features.Vehicles.Abstractions;
 using ParkingTracker.Persistence.Device.Features.Shared.Encryption;
 using ParkingTracker.Testing.Device;
 
@@ -44,6 +45,7 @@ public sealed class DeviceDatabaseServiceCollectionExtensionsTests
 		provider.GetRequiredService<IResidentCardRepository>().Should().BeSameAs(provider.GetRequiredService<IResidentCardRepository>());
 		provider.GetRequiredService<ISavedPlacesRepository>().Should().NotBeNull();
 		provider.GetRequiredService<IParkingSessionRepository>().Should().NotBeNull();
+		provider.GetRequiredService<IVehicleRepository>().Should().NotBeNull();
 		provider.GetRequiredService<IDeviceUnitOfWork>().Should().BeSameAs(provider.GetRequiredService<IDeviceUnitOfWork>());
 		provider.GetRequiredService<FieldCipher>().Should().BeSameAs(provider.GetRequiredService<FieldCipher>());
 		provider.GetRequiredService<IEncryptedDataProbe>().Should().BeSameAs(provider.GetRequiredService<IEncryptedDataProbe>());
