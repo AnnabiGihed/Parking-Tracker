@@ -229,6 +229,11 @@ public abstract class UiTestContext : BunitContext
 	{
 		JSInterop.SetupVoid(invocation => invocation.Identifier.StartsWith("Radzen.", StringComparison.Ordinal)).SetVoidResult();
 		_ = JSInterop.SetupModule(invocation => invocation.Identifier.StartsWith("Radzen.", StringComparison.Ordinal));
+
+		// The calls that open or close a dialog, or open the side menu, answer with a string that the tests do not read.
+		JSInterop.Setup<string>("Radzen.closeDialog", _ => true).SetResult(string.Empty);
+		JSInterop.Setup<string>("Radzen.openDialog", _ => true).SetResult(string.Empty);
+		JSInterop.Setup<string>("Radzen.openSideDialog", _ => true).SetResult(string.Empty);
 	}
 
 	/// <summary>

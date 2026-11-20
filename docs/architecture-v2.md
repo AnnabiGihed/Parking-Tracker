@@ -383,7 +383,21 @@ product. C contradicts R8.
 
 **Accepted negatives:** a larger APK; bUnit tests need Radzen's JS interop set up explicitly; the look changes.
 
-ADR: [0020](adr/0020-use-radzen-for-the-phone-screens-and-keep-leaflet-for-the-map.md).
+**Side menu, dialog bridge, layers and back button.** The app keeps one route (`/`), because the Leaflet map is a
+singleton that a second route would destroy. The menu button `#menuBtn` in the search bar opens `AppMenu`, a
+`RadzenPanelMenu` in a Radzen side dialog (left, mask, 300 px) with Home, Work and the parking card; `MenuViewModel`
+supplies the secondary texts ("Not set" or the saved address or card line). A tap closes the menu and then opens the
+existing dialog, so a Radzen dialog is never open over one of the app's own. `DialogBridge` joins an
+`IDialogViewModel` to `DialogService` (`OpenAsync`/`Close`, and `OnClose` back to the view model's `Close`), so view
+models stay free of Radzen; the four existing dialogs (`DialogShell`) move to it later. Layers: the search bar is 1000,
+the layers popover 1100, the app's dialog backdrop 1500, the Radzen mask 1500 and dialog 1501
+(`radzen-theme.css`), Radzen's popups 2000, the toast 2100, the map 0. The back button closes the newest open screen:
+`IBackNavigation` is a singleton stack that the menu, the bridge and each `DialogShell` with `OnBack` register in;
+`MainPage.OnBackButtonPressed` dispatches `TryGoBack` into Blazor through `BlazorWebView.TryDispatchAsync` and leaves
+the app only when nothing is open.
+
+ADR: [0020](adr/0020-use-radzen-for-the-phone-screens-and-keep-leaflet-for-the-map.md),
+[0030](adr/0030-keep-one-map-page-with-a-side-menu-and-dialogs-through-dialogservice.md).
 
 ### 3.13 Bounded contexts and project layout
 

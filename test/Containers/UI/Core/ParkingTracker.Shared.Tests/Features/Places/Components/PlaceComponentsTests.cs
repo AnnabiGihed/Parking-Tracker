@@ -7,6 +7,7 @@ using ParkingTracker.Shared.Features.Places.Components;
 using ParkingTracker.Shared.Tests.Features.Shared.TestDoubles;
 using ParkingTracker.ViewModels.Features.MapLayers;
 using ParkingTracker.ViewModels.Features.Places;
+using ParkingTracker.ViewModels.Features.Shared;
 using ParkingTracker.ViewModels.Features.SpotCheck;
 
 namespace ParkingTracker.Shared.Tests.Features.Places.Components;
@@ -15,7 +16,8 @@ namespace ParkingTracker.Shared.Tests.Features.Places.Components;
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
 /// Purpose     : Component tests for the Home and Work chips and the place dialog: the chips render, a tap on a place that is not set
-///              opens the dialog, a saved place gets an edit button, and the dialog offers Remove only when the place is saved.
+///              opens the dialog, a saved place gets no edit button, the dialog offers Remove only when the place is saved, and the
+///              back button closes the dialog.
 /// </summary>
 public sealed class PlaceComponentsTests : UiTestContext
 {
@@ -80,20 +82,21 @@ public sealed class PlaceComponentsTests : UiTestContext
 	}
 
 	/// <summary>
-	/// Verifies that a saved place gets an edit button that opens the dialog.
+	/// Verifies that a saved place gets no edit button: it is changed from the side menu.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
-	public async Task PlaceChips_HomeSaved_ShouldShowTheEditButtonThatOpensTheDialog()
+	public async Task PlaceChips_HomeSaved_ShouldHaveNoEditButtons()
 	{
 		Places.GetPlacesAsync(Arg.Any<CancellationToken>()).Returns([SavedHome]);
 		var chips = Render<PlaceChips>();
 
-		await chips.WaitForAssertionAsync(() => chips.Find("#placeHomeEdit").GetAttribute("aria-label").Should().Be("Edit home"));
-		await chips.Find("#placeHomeEdit").ClickAsync();
+		await chips.WaitForAssertionAsync(() => chips.Find("#placeHome").TextContent.Should().NotContain("Set"));
 
-		Resolve<PlacesViewModel>().IsOpen.Should().BeTrue();
+		chips.FindAll("#placeHomeEdit").Should().BeEmpty();
 		chips.FindAll("#placeWorkEdit").Should().BeEmpty();
+		chips.FindAll(".place-edit").Should().BeEmpty();
+		chips.FindAll("button").Should().BeEmpty();
 	}
 	#endregion
 
@@ -134,6 +137,27 @@ public sealed class PlaceComponentsTests : UiTestContext
 		await dialog.Find("#placeClear").ClickAsync();
 
 		await Places.Received(1).ClearPlaceAsync(PlaceKind.Home, Arg.Any<CancellationToken>());
+	}
+	#endregion
+
+	#region Back Button Tests
+	/// <summary>
+	/// Verifies that the back button closes the open place dialog and that the registration is gone afterwards.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task PlaceDialog_Open_ShouldCloseOnTheBackButton()
+	{
+		var dialog = Render<PlaceDialog>();
+		await dialog.InvokeAsync(() => Resolve<PlacesViewModel>().Open(PlaceKind.Home));
+		var back = Resolve<IBackNavigation>();
+		back.CanGoBack.Should().BeTrue();
+
+		var closed = await dialog.InvokeAsync(back.TryGoBack);
+
+		closed.Should().BeTrue();
+		await dialog.WaitForAssertionAsync(() => Resolve<PlacesViewModel>().IsOpen.Should().BeFalse());
+		back.CanGoBack.Should().BeFalse();
 	}
 	#endregion
 }

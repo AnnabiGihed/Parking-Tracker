@@ -1,7 +1,7 @@
 @namespace ParkingTracker.Shared.Features.SpotCheck.Components
 @inherits ViewModelComponent<SearchViewModel>
 <form id="searchForm" class="searchbar" role="search" @onsubmit="OnSubmitAsync" @onsubmit:preventDefault>
-    <span class="searchbar-logo"><Icon Name="parking" /></span>
+    <RadzenButton id="menuBtn" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Base" Variant="Variant.Text" class="menu-btn" title="Menu" aria-label="Open the menu" Click="OnOpenMenu"><Icon Name="menu" /></RadzenButton>
     <RadzenTextBox id="searchInput" type="search" Placeholder="Search a street or address" autocomplete="off" enterkeyhint="search"
                    @bind-Value="ViewModel.Text" Immediate="true" />
     <CardButton />

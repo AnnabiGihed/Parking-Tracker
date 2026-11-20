@@ -18,6 +18,8 @@
   --shadow: 0 6px 24px rgba(15, 23, 42, .14), 0 1px 3px rgba(15, 23, 42, .12);
   --radius: 18px;
   --sheet-h: 210px;
+  /* The dimmed layer behind a dialog: dark in both schemes (--fg and --bg swap in the dark scheme), 50% opaque where it is used. */
+  --scrim: #080c16;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -56,9 +58,10 @@ button, input, select { font: inherit; color: inherit; }
 .top { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; padding: 12px 12px 0; padding-top: max(12px, env(safe-area-inset-top));
   display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
 .searchbar { pointer-events: auto; width: 100%; max-width: 560px; display: flex; align-items: center; gap: 6px; background: var(--surface);
-  border-radius: 999px; box-shadow: var(--shadow); padding: 5px 5px 5px 12px; }
-.searchbar-logo { color: #fff; background: var(--brand); border-radius: 8px; padding: 3px; flex: none; }
-.searchbar-logo .ic { width: 20px; height: 20px; }
+  border-radius: 999px; box-shadow: var(--shadow); padding: 5px; }
+.searchbar .rz-button.menu-btn { flex: none; width: 42px; height: 42px; min-width: 0; padding: 0; border-radius: 50%; background: transparent; color: var(--fg); box-shadow: none; }
+.searchbar .rz-button.menu-btn:hover { background: var(--surface-2); }
+.searchbar .rz-button.menu-btn .ic { width: 24px; height: 24px; }
 .searchbar input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; padding: 9px 4px; font-size: 16px; }
 .searchbar input::placeholder { color: var(--muted); }
 .avatar { position: relative; flex: none; width: 42px; height: 42px; border-radius: 50%; border: 0; background: var(--surface-2);
@@ -73,12 +76,10 @@ button, input, select { font: inherit; color: inherit; }
 /* the Home and Work shortcuts sit in .top, which lets taps through to the map, so they take taps back; they use the surface,
    text and shadow of the search bar so they read on the map in the light and the dark scheme */
 .place-chips { pointer-events: auto; display: flex; gap: 8px; }
-.place-chip { display: inline-flex; align-items: center; gap: 2px; }
 .place-chips .rz-chip.place-go, .place-chips .rz-chip.place-go:not(.rz-state-disabled):hover, .place-chips .rz-chip.place-go:not(.rz-state-disabled):active {
   background-color: var(--surface); color: var(--fg); box-shadow: var(--shadow); border-radius: 999px; font-weight: 600; cursor: pointer; }
 .place-chips .rz-chip.place-go .place-label { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; white-space: nowrap; }
 .place-chips .rz-chip.place-go .ic { display: inline-block; flex: none; width: 18px; height: 18px; color: var(--brand); }
-.place-chips .rz-button.place-edit { background: var(--surface); color: var(--muted); box-shadow: var(--shadow); border-radius: 50%; }
 
 /* ---------- right controls ---------- */
 .controls { position: fixed; right: 12px; bottom: calc(var(--sheet-h) + 14px); z-index: 900; display: flex; flex-direction: column; gap: 10px; }
@@ -250,5 +251,20 @@ button.scan { width: 100%; margin-bottom: 8px; background: transparent; text-ali
 .leaflet-popup-content { font-size: 13.5px; line-height: 1.4; }
 .leaflet-popup-content .nav-row .btn { padding: 7px 10px; font-size: 13px; }
 
-.toast { position: fixed; left: 50%; top: calc(76px + env(safe-area-inset-top)); transform: translateX(-50%); z-index: 2000;
+.toast { position: fixed; left: 50%; top: calc(76px + env(safe-area-inset-top)); transform: translateX(-50%); z-index: 2100;
   background: #0f172a; color: #fff; padding: 10px 16px; border-radius: 999px; font-size: 14px; font-weight: 600; box-shadow: var(--shadow); max-width: calc(100vw - 32px); }
+
+/* ---------- side menu (ADR-0030) ---------- */
+/* Radzen's side dialog has its own padding and rounded corners; the menu fills it and rounds only the edge that faces the map. */
+.rz-dialog-side.app-menu-dialog { border-radius: 0 var(--radius) var(--radius) 0; max-width: 86vw; }
+.app-menu-dialog .rz-dialog-side-content { padding: 0; }
+.app-menu-head { display: flex; align-items: center; gap: 12px; padding: 16px 16px 14px; padding-top: max(16px, env(safe-area-inset-top)); border-bottom: 1px solid var(--line); }
+.app-menu-logo { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; color: #fff; background: var(--brand); }
+.app-menu-logo .ic { width: 24px; height: 24px; }
+.app-menu-name { font-size: 18px; font-weight: 700; color: var(--fg); }
+.app-menu-items { padding: 8px 0; }
+.app-menu-item { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.app-menu-item > .ic { flex: none; width: 24px; height: 24px; color: var(--brand); }
+.app-menu-text { display: flex; flex-direction: column; min-width: 0; }
+.app-menu-title { font-weight: 600; color: var(--fg); }
+.app-menu-sub { font-size: 13px; font-weight: 400; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

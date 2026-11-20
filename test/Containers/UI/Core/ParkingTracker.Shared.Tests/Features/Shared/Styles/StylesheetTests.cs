@@ -54,6 +54,17 @@ public sealed partial class StylesheetTests : UiTestContext
 	}
 
 	/// <summary>
+	/// Reads the z-index of the first rule whose selector list is exactly <paramref name="selector"/>.
+	/// </summary>
+	/// <param name="css">The stylesheet.</param>
+	/// <param name="selector">The selector of the rule.</param>
+	/// <returns>The z-index.</returns>
+	private static int LayerOf(string css, string selector)
+	{
+		return int.Parse(ZIndexDeclaration().Match(RuleOf(css, selector)).Groups["value"].Value, CultureInfo.InvariantCulture);
+	}
+
+	/// <summary>
 	/// Matches the z-index declaration of a rule.
 	/// </summary>
 	/// <returns>The expression, with the value in the group <c>value</c>.</returns>
@@ -78,6 +89,22 @@ public sealed partial class StylesheetTests : UiTestContext
 
 		var zIndex = int.Parse(ZIndexDeclaration().Match(rule).Groups["value"].Value, CultureInfo.InvariantCulture);
 		zIndex.Should().BeLessThan(RadzenPopupLayer);
+	}
+
+	/// <summary>
+	/// Verifies the order of the layers (ADR-0030): the Radzen mask and dialog sit above the search bar and the dialogs of the app, the
+	/// toast sits above the Radzen popups, and the map stays at the bottom.
+	/// </summary>
+	[Fact]
+	public void Layers_RadzenDialogsAndToast_ShouldKeepTheirOrder()
+	{
+		var theme = RuleOf(ReadStylesheet("radzen-theme.css"), ":root");
+		var css = ReadStylesheet("style.css");
+
+		theme.Should().MatchRegex(@"--rz-dialog-mask-zindex:\s*1500;").And.MatchRegex(@"--rz-dialog-zindex:\s*1501;");
+		LayerOf(css, ".toast").Should().Be(2100).And.BeGreaterThan(RadzenPopupLayer);
+		LayerOf(css, "#map").Should().Be(0);
+		LayerOf(css, ".top").Should().BeLessThan(LayerOf(css, ".dialog-backdrop"));
 	}
 	#endregion
 

@@ -8,7 +8,7 @@ namespace ParkingTracker.Shared.Features.Places.Components;
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
 /// Purpose     : The Home and Work chips under the search bar: a tap on a saved place shows it on the map, a tap on a place that is not
-///              set opens the place dialog, and a small pencil on a saved place opens the dialog to change or remove it.
+///              set opens the place dialog. A saved place is changed or removed from the side menu.
 /// </summary>
 public sealed partial class PlaceChips : ViewModelComponent<PlacesViewModel>
 {
@@ -32,15 +32,5 @@ public sealed partial class PlaceChips : ViewModelComponent<PlacesViewModel>
 	/// </summary>
 	/// <returns>A task that completes when the place was shown.</returns>
 	private Task OnGoWorkAsync() => ViewModel.GoAsync(PlaceKind.Work);
-
-	/// <summary>
-	/// Handles the pencil of the Home chip.
-	/// </summary>
-	private void OnEditHome() => ViewModel.Open(PlaceKind.Home);
-
-	/// <summary>
-	/// Handles the pencil of the Work chip.
-	/// </summary>
-	private void OnEditWork() => ViewModel.Open(PlaceKind.Work);
 	#endregion
 }
