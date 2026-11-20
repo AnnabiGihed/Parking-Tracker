@@ -1,7 +1,7 @@
 @namespace ParkingTracker.Shared.Features.Card.Components
 @inherits ViewModelComponent<CardViewModel>
 @using ParkingTracker.Domain.Features.Sectors.ValueObjects
-<DialogShell IsOpen="ViewModel.IsOpen" Label="My parking card">
+<DialogShell IsOpen="ViewModel.IsOpen" Label="My parking card" OnBack="OnClose">
     <RadzenTemplateForm TItem="CardViewModel" Data="ViewModel" Submit="OnSaveAsync" id="cardForm">
         <RadzenStack Gap="0.75rem">
             <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween" AlignItems="AlignItems.Center" class="dialog-head">

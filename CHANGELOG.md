@@ -15,6 +15,8 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
 - The privacy notice is published at <https://parking.pivotsoftwares.com/privacy>.
 - Home and Work shortcut chips under the search bar: tap one to see that place on the map and check it, or set it
   from an address or your position. The places stay on the phone, encrypted.
+- A side menu, opened from the button at the start of the search bar, with Home, Work and your parking card and what
+  is saved under each.
 
 ### Changed
 
@@ -32,6 +34,9 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
   may look slightly different. This completes the move of the screens to Radzen.
 - "Valid until" on the card form defaults to one year after "Valid from" unless you or a scan chose another date.
 - The plate is written in capitals as you type.
+- Home and Work are edited from the menu; the pencil buttons on the chips are gone. A chip for a place that is not set
+  still opens its dialog.
+- The back button closes the menu or the open dialog instead of leaving the app.
 
 ### Security
 

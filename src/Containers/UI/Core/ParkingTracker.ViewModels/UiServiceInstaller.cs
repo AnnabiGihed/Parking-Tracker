@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using ParkingTracker.ViewModels.Features.Car;
 using ParkingTracker.ViewModels.Features.Card;
 using ParkingTracker.ViewModels.Features.MapLayers;
+using ParkingTracker.ViewModels.Features.Menu;
 using ParkingTracker.ViewModels.Features.Places;
 using ParkingTracker.ViewModels.Features.Shared;
 using ParkingTracker.ViewModels.Features.SpotCheck;
@@ -29,6 +30,9 @@ public sealed class UiServiceInstaller : IServiceInstaller
 		ArgumentNullException.ThrowIfNull(configuration);
 
 		services.TryAddSingleton(TimeProvider.System);
+
+		// A singleton, unlike the view models: the host asks it when the back button is pressed, outside the Blazor scope.
+		services.TryAddSingleton<IBackNavigation, BackNavigation>();
 		services.AddScoped<ToastViewModel>();
 		services.AddScoped<LocationPermissionViewModel>();
 		services.AddScoped<WelcomeViewModel>();
@@ -38,6 +42,7 @@ public sealed class UiServiceInstaller : IServiceInstaller
 		services.AddScoped<SearchViewModel>();
 		services.AddScoped<CarViewModel>();
 		services.AddScoped<PlacesViewModel>();
+		services.AddScoped<MenuViewModel>();
 		services.AddScoped<ParkedOnScreenResponder>();
 		services.AddScoped<MapLayersViewModel>();
 	}

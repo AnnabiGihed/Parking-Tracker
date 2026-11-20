@@ -1,0 +1,25 @@
+@namespace ParkingTracker.Shared.Features.Menu.Components
+@inherits ViewModelComponent<MenuViewModel>
+<div id="appMenu" class="app-menu">
+    <header class="app-menu-head">
+        <span class="app-menu-logo"><Icon Name="parking" /></span>
+        <span class="app-menu-name">Parking Tracker</span>
+    </header>
+    <RadzenPanelMenu class="app-menu-items" AriaLabel="Menu">
+        <RadzenPanelMenuItem id="menuHome" Click="OnHomeAsync">
+            <Template>
+                <span class="app-menu-item"><Icon Name="home" /><span class="app-menu-text"><span class="app-menu-title">Home</span><span class="app-menu-sub">@ViewModel.HomeText</span></span></span>
+            </Template>
+        </RadzenPanelMenuItem>
+        <RadzenPanelMenuItem id="menuWork" Click="OnWorkAsync">
+            <Template>
+                <span class="app-menu-item"><Icon Name="work" /><span class="app-menu-text"><span class="app-menu-title">Work</span><span class="app-menu-sub">@ViewModel.WorkText</span></span></span>
+            </Template>
+        </RadzenPanelMenuItem>
+        <RadzenPanelMenuItem id="menuCard" Click="OnCardAsync">
+            <Template>
+                <span class="app-menu-item"><Icon Name="card" /><span class="app-menu-text"><span class="app-menu-title">Parking card</span><span class="app-menu-sub">@ViewModel.CardText</span></span></span>
+            </Template>
+        </RadzenPanelMenuItem>
+    </RadzenPanelMenu>
+</div>

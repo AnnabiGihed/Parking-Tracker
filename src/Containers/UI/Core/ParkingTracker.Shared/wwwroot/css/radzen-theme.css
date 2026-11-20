@@ -27,6 +27,23 @@
   --rz-chip-background-color: var(--surface);
   --rz-chip-color: var(--fg);
   --rz-dialog-background-color: var(--surface);
+  /* Layers (ADR-0030): the mask and the dialogs of Radzen sit above the search bar (1000), the popover (1100) and the dialogs of the
+     app (1500); the popups Radzen.Blazor.js moves to the end of the page (2000) and the toast (2100) stay above them. */
+  --rz-dialog-mask-zindex: 1500;
+  --rz-dialog-zindex: 1501;
+  --rz-dialog-mask-background-color: var(--scrim);
+  --rz-dialog-title-background-color: var(--surface);
+  /* The side menu: Radzen draws the panel menu for a dark side bar, the app draws it on its surface in both schemes. */
+  --rz-panel-menu-item-background-color: transparent;
+  --rz-panel-menu-item-color: var(--fg);
+  --rz-panel-menu-item-border: none;
+  --rz-panel-menu-item-hover-background-color: var(--surface-2);
+  --rz-panel-menu-item-hover-color: var(--fg);
+  --rz-panel-menu-item-active-background-color: var(--surface-2);
+  --rz-panel-menu-item-active-color: var(--fg);
+  --rz-panel-menu-item-active-indicator: var(--brand);
+  --rz-panel-menu-item-padding-block: 0.5rem;
+  --rz-panel-menu-item-padding-inline: 1rem;
   --rz-card-background-color: var(--surface);
   --rz-text-color: var(--fg);
   --rz-text-title-color: var(--fg);

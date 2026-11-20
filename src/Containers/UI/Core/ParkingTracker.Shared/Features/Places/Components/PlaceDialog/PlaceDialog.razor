@@ -1,6 +1,6 @@
 @namespace ParkingTracker.Shared.Features.Places.Components
 @inherits ViewModelComponent<PlacesViewModel>
-<DialogShell IsOpen="ViewModel.IsOpen" Label="@Title">
+<DialogShell IsOpen="ViewModel.IsOpen" Label="@Title" OnBack="OnClose">
     <RadzenStack Gap="0.75rem" class="dialog-form" id="placeDialog">
         <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween" AlignItems="AlignItems.Center" class="dialog-head">
             <RadzenText TextStyle="TextStyle.H5" TagName="TagName.H2">@Title</RadzenText>
