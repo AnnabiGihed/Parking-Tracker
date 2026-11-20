@@ -48,5 +48,14 @@ public interface IVehicleRepository
 	/// </summary>
 	/// <param name="scope">The scope of the operation.</param>
 	void Remove(IDeviceChangeScope scope);
+
+	/// <summary>
+	/// Stages the clearing of the stored plate for the next commit, and nothing else of the profile. It is used when the key of the
+	/// encrypted fields was lost: the plate is the only encrypted field, so the rest of the profile is still readable and is kept.
+	/// Nothing happens at commit when none is stored or it has no plate.
+	/// </summary>
+	/// <param name="scope">The scope of the operation.</param>
+	/// <exception cref="ArgumentNullException"><paramref name="scope"/> is <see langword="null"/>.</exception>
+	void ClearPlate(IDeviceChangeScope scope);
 	#endregion
 }

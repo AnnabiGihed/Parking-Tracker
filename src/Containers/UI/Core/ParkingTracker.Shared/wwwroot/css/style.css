@@ -251,10 +251,10 @@ button, input, select { font: inherit; color: inherit; }
 .app-sheet .rz-dialog-content { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; background: var(--surface); color: var(--fg); padding-bottom: max(16px, env(safe-area-inset-bottom)); }
 .dialog-head { display: flex; justify-content: space-between; align-items: center; }
 .dialog-head h2 { margin: 0; font-size: 20px; }
+/* Input look (fill, border, radius, height, padding, colours) comes from the --rz-input-* variables in radzen-theme.css, so that the
+   text box, drop-down, numeric box and date picker of every form render alike; no rule here styles their inputs. */
 .field { display: flex; flex-direction: column; gap: 5px; }
 .field label { font-size: 12.5px; font-weight: 600; color: var(--muted); }
-.field input, .field select { padding: 11px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); font-size: 16px; width: 100%; }
-.field input:focus, .field select:focus { outline: 2px solid var(--brand); outline-offset: -1px; }
 .plate-input { text-transform: uppercase; }
 .field.end { justify-content: flex-end; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -339,3 +339,5 @@ button.scan { width: 100%; margin-bottom: 8px; background: transparent; text-ali
 .favourite-address { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .favourites-empty, .favourites-reason { margin: 0; font-size: 14px; color: var(--muted); }
 .favourite-add.rz-button { align-self: stretch; }
+
+.vehicle-actions { align-items: stretch; }

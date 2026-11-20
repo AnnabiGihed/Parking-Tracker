@@ -1,0 +1,82 @@
+@namespace ParkingTracker.Shared.Features.Vehicles.Components
+@inherits ViewModelComponent<VehicleViewModel>
+@using ParkingTracker.Domain.Features.Vehicles.Aggregates
+@using ParkingTracker.Domain.Features.Vehicles.ValueObjects
+@using ParkingTracker.Shared.Features.Shared.Dialogs
+<DialogBridge ViewModel="ViewModel" Title="My vehicle">
+    <RadzenTemplateForm TItem="VehicleViewModel" Data="ViewModel" Submit="OnSaveAsync" id="vehicleForm" class="vehicle-form">
+        <RadzenStack Gap="0.75rem">
+            <RadzenStack Gap="0.3rem" class="field">
+                <RadzenLabel Text="Make" Component="vehicleMakeField" />
+                <RadzenDropDown TValue="string" Name="vehicleMakeField" id="vehicleMake" Style="width:100%" Data="VehicleOptions.Makes" TextProperty="Text" ValueProperty="Value"
+                                Placeholder="Pick a make" Value="ViewModel.Make" ValueChanged="OnMakeChanged" AllowClear="false" />
+            </RadzenStack>
+            <RadzenStack Gap="0.3rem" class="field">
+                <RadzenLabel Text="Model" Component="vehicleModel" />
+                <RadzenTextBox Name="vehicleModel" id="vehicleModel" Style="width:100%" MaxLength="@Vehicle.ModelMaximumLength" Placeholder="Model (optional)" @bind-Value="ViewModel.Model" />
+            </RadzenStack>
+            <div class="grid2">
+                <RadzenStack Gap="0.3rem" class="field">
+                    <RadzenLabel Text="Year" Component="vehicleYearField" />
+                    <RadzenNumeric TValue="int?" Name="vehicleYearField" id="vehicleYear" Style="width:100%" Min="VehicleViewModel.MinimumYear" Max="ViewModel.MaximumYear" Format="0"
+                                   ShowUpDown="false" Placeholder="Year" Value="ViewModel.Year" ValueChanged="OnYearChanged" />
+                </RadzenStack>
+                <RadzenStack Gap="0.3rem" class="field">
+                    <RadzenLabel Text="Fuel" Component="vehicleFuelField" />
+                    <RadzenDropDown TValue="FuelType" Name="vehicleFuelField" id="vehicleFuel" Style="width:100%" Data="VehicleOptions.Fuels" TextProperty="Text" ValueProperty="Value"
+                                    Value="ViewModel.Fuel" ValueChanged="OnFuelChanged" AllowClear="false" />
+                </RadzenStack>
+            </div>
+            @if (ViewModel.ShowsEuroNorm)
+            {
+                <RadzenStack Gap="0.3rem" class="field">
+                    <RadzenLabel Text="Emission standard" Component="vehicleEuroField" />
+                    <RadzenDropDown TValue="EuroNorm" Name="vehicleEuroField" id="vehicleEuro" Style="width:100%" Data="VehicleOptions.EuroNorms" TextProperty="Text" ValueProperty="Value"
+                                    Value="ViewModel.EuroNorm" ValueChanged="OnEuroNormChanged" AllowClear="false" />
+                </RadzenStack>
+            }
+            @if (ViewModel.ShowsChargingFields)
+            {
+                <RadzenStack Gap="0.3rem" class="field" id="vehicleCharging">
+                    <RadzenLabel Text="Plugs" Component="vehicleConnectorsField" />
+                    <RadzenCheckBoxList TValue="ChargingConnector" Name="vehicleConnectorsField" id="vehicleConnectors" Orientation="Orientation.Horizontal" Value="ViewModel.Connectors" ValueChanged="OnConnectorsChanged">
+                        <Items>
+                            @foreach (var connector in VehicleOptions.Connectors)
+                            {
+                                <RadzenCheckBoxListItem TValue="ChargingConnector" Value="connector.Value" Text="@connector.Text" />
+                            }
+                        </Items>
+                    </RadzenCheckBoxList>
+                </RadzenStack>
+                <div class="grid2">
+                    <RadzenStack Gap="0.3rem" class="field">
+                        <RadzenLabel Text="Battery (kWh)" Component="vehicleBatteryField" />
+                        <RadzenNumeric TValue="double?" Name="vehicleBatteryField" id="vehicleBattery" Style="width:100%" Min="(decimal)Vehicle.MinimumBatteryKwh" Max="(decimal)Vehicle.MaximumBatteryKwh"
+                                       Step="0.1" ShowUpDown="false" Placeholder="kWh" Value="ViewModel.BatteryKwh" ValueChanged="OnBatteryChanged" />
+                    </RadzenStack>
+                    <RadzenStack Gap="0.3rem" class="field">
+                        <RadzenLabel Text="Range (km)" Component="vehicleRangeField" />
+                        <RadzenNumeric TValue="int?" Name="vehicleRangeField" id="vehicleRange" Style="width:100%" Min="Vehicle.MinimumRangeKm" Max="Vehicle.MaximumRangeKm" Format="0"
+                                       ShowUpDown="false" Placeholder="km" Value="ViewModel.RangeKm" ValueChanged="OnRangeChanged" />
+                    </RadzenStack>
+                </div>
+            }
+            <RadzenStack Gap="0.3rem" class="field">
+                <RadzenLabel Text="Plate" Component="vehiclePlate" />
+                <RadzenTextBox Name="vehiclePlate" id="vehiclePlate" Placeholder="1ABC234" Style="width:100%" class="plate-input" autocapitalize="characters" Immediate="true" Value="@ViewModel.Plate" ValueChanged="OnPlateChanged" />
+            </RadzenStack>
+            @if (!string.IsNullOrEmpty(ViewModel.FormError))
+            {
+                <RadzenAlert id="vehicleError" AlertStyle="AlertStyle.Warning" Variant="Variant.Flat" Shade="Shade.Lighter" AllowClose="false" ShowIcon="false" role="alert">@ViewModel.FormError</RadzenAlert>
+            }
+            <RadzenText TextStyle="TextStyle.Body2" TagName="TagName.P" class="muted small">Stored only on this phone.</RadzenText>
+            <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" class="vehicle-actions">
+                @if (ViewModel.HasVehicle)
+                {
+                    <RadzenButton id="vehicleRemove" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Outlined" Text="Remove" Disabled="ViewModel.IsBusy" Click="OnRemoveAsync" />
+                }
+                <RadzenButton id="vehicleSave" ButtonType="ButtonType.Submit" ButtonStyle="ButtonStyle.Primary" Text="Save vehicle" Disabled="ViewModel.IsBusy" Style="flex:1" />
+            </RadzenStack>
+        </RadzenStack>
+    </RadzenTemplateForm>
+</DialogBridge>

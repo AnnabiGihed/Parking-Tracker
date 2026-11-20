@@ -4,6 +4,7 @@ using ParkingTracker.Application.Features.ResidentCards.Abstractions;
 using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
 using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
+using ParkingTracker.Application.Features.Vehicles.Abstractions;
 using ParkingTracker.Domain.Features.Cards.ValueObjects;
 using ParkingTracker.Domain.Features.Cars.ValueObjects;
 using ParkingTracker.Domain.Features.MapLayers.ValueObjects;
@@ -58,6 +59,11 @@ public sealed partial class DeviceSettingsStore : ISettingsStore, IDisposable
 	/// The repository of the saved places, whose encrypted rows go with the others when the key was lost.
 	/// </summary>
 	private readonly ISavedPlacesRepository places;
+
+	/// <summary>
+	/// The repository of the vehicle profile, whose encrypted plate goes with the other rows when the key was lost.
+	/// </summary>
+	private readonly IVehicleRepository vehicles;
 
 	/// <summary>
 	/// Begins the scope in which the repositories stage the changes of one write.
@@ -123,6 +129,7 @@ public sealed partial class DeviceSettingsStore : ISettingsStore, IDisposable
 	/// <param name="cards">The repository of the residents' card.</param>
 	/// <param name="sessions">The repository of the parking session.</param>
 	/// <param name="places">The repository of the saved places.</param>
+	/// <param name="vehicles">The repository of the vehicle profile.</param>
 	/// <param name="unitOfWork">Begins the scope in which the repositories stage the changes of one write.</param>
 	/// <param name="initializer">Makes sure the schema exists; it returns at once once the schema is current.</param>
 	/// <param name="gate">The start-up gate that finishes before the saved values are read.</param>
@@ -135,6 +142,7 @@ public sealed partial class DeviceSettingsStore : ISettingsStore, IDisposable
 		IResidentCardRepository cards,
 		IParkingSessionRepository sessions,
 		ISavedPlacesRepository places,
+		IVehicleRepository vehicles,
 		IDeviceUnitOfWork unitOfWork,
 		IDeviceDatabaseInitializer initializer,
 		IStartupGate gate,
@@ -146,6 +154,7 @@ public sealed partial class DeviceSettingsStore : ISettingsStore, IDisposable
 		ArgumentNullException.ThrowIfNull(cards);
 		ArgumentNullException.ThrowIfNull(sessions);
 		ArgumentNullException.ThrowIfNull(places);
+		ArgumentNullException.ThrowIfNull(vehicles);
 		ArgumentNullException.ThrowIfNull(unitOfWork);
 		ArgumentNullException.ThrowIfNull(initializer);
 		ArgumentNullException.ThrowIfNull(gate);
@@ -156,6 +165,7 @@ public sealed partial class DeviceSettingsStore : ISettingsStore, IDisposable
 		this.cards = cards;
 		this.sessions = sessions;
 		this.places = places;
+		this.vehicles = vehicles;
 		this.unitOfWork = unitOfWork;
 		this.initializer = initializer;
 		this.gate = gate;
@@ -467,12 +477,9 @@ public sealed partial class DeviceSettingsStore : ISettingsStore, IDisposable
 	private async Task<Result> ReplaceLostDataAsync(IDeviceChangeScope scope, ResidentCard aggregate)
 	{
 		LogStaleRowsRemoved(logger);
-		cards.Remove(scope);
-		sessions.Remove(scope);
-		places.Remove(scope);
-		await CommitAsync(scope).ConfigureAwait(false);
-		ForgetUnreadableSession();
-		resetNotice.Raise();
+
+		// Raising the notice also makes this store forget the cached card and every remembered unreadable state.
+		await LostKeyCleanup.RemoveStaleRowsAsync(scope, cards, sessions, places, vehicles, resetNotice).ConfigureAwait(false);
 		return await cards.UpdateAsync(scope, aggregate).ConfigureAwait(false);
 	}
 

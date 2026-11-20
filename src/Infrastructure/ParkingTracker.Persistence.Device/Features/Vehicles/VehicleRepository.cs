@@ -155,6 +155,9 @@ public sealed partial class VehicleRepository : IVehicleRepository
 
 	/// <inheritdoc />
 	public void Remove(IDeviceChangeScope scope) => DeviceChangeScope.From(scope).Stage(connection => connection.Execute("DELETE FROM vehicles"));
+
+	/// <inheritdoc />
+	public void ClearPlate(IDeviceChangeScope scope) => DeviceChangeScope.From(scope).Stage(connection => connection.Execute("UPDATE vehicles SET plate = NULL WHERE plate IS NOT NULL"));
 	#endregion
 
 	#region Private Helpers

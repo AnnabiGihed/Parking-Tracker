@@ -3,6 +3,7 @@ using ParkingTracker.Application.Features.ParkingSessions.Abstractions;
 using ParkingTracker.Application.Features.ResidentCards.Abstractions;
 using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
 using ParkingTracker.Application.Features.Shared.Abstractions;
+using ParkingTracker.Application.Features.Vehicles.Abstractions;
 using ParkingTracker.Domain.Features.SavedPlaces.Aggregates;
 using ParkingTracker.Domain.Features.SavedPlaces.ValueObjects;
 using ParkingTracker.Domain.Features.Shared.ValueObjects;
@@ -34,6 +35,11 @@ public sealed partial class DevicePlacesStore : IPlacesStore
 	/// The repository of the residents' card, whose encrypted rows go with the others when the key was lost.
 	/// </summary>
 	private readonly IResidentCardRepository cards;
+
+	/// <summary>
+	/// The repository of the vehicle profile, whose encrypted plate goes with the other rows when the key was lost.
+	/// </summary>
+	private readonly IVehicleRepository vehicles;
 
 	/// <summary>
 	/// The repository of the parking session, whose encrypted rows go with the others when the key was lost.
@@ -72,6 +78,7 @@ public sealed partial class DevicePlacesStore : IPlacesStore
 	/// </summary>
 	/// <param name="places">The repository of the saved places list.</param>
 	/// <param name="cards">The repository of the residents' card.</param>
+	/// <param name="vehicles">The repository of the vehicle profile.</param>
 	/// <param name="sessions">The repository of the parking session.</param>
 	/// <param name="unitOfWork">Begins the scope in which the repositories stage the changes of one write.</param>
 	/// <param name="initializer">Makes sure the schema exists; it returns at once once the schema is current.</param>
@@ -82,6 +89,7 @@ public sealed partial class DevicePlacesStore : IPlacesStore
 	public DevicePlacesStore(
 		ISavedPlacesRepository places,
 		IResidentCardRepository cards,
+		IVehicleRepository vehicles,
 		IParkingSessionRepository sessions,
 		IDeviceUnitOfWork unitOfWork,
 		IDeviceDatabaseInitializer initializer,
@@ -91,6 +99,7 @@ public sealed partial class DevicePlacesStore : IPlacesStore
 	{
 		ArgumentNullException.ThrowIfNull(places);
 		ArgumentNullException.ThrowIfNull(cards);
+		ArgumentNullException.ThrowIfNull(vehicles);
 		ArgumentNullException.ThrowIfNull(sessions);
 		ArgumentNullException.ThrowIfNull(unitOfWork);
 		ArgumentNullException.ThrowIfNull(initializer);
@@ -99,6 +108,7 @@ public sealed partial class DevicePlacesStore : IPlacesStore
 		ArgumentNullException.ThrowIfNull(resetNotice);
 		this.places = places;
 		this.cards = cards;
+		this.vehicles = vehicles;
 		this.sessions = sessions;
 		this.unitOfWork = unitOfWork;
 		this.initializer = initializer;
@@ -285,11 +295,7 @@ public sealed partial class DevicePlacesStore : IPlacesStore
 	private async Task<Result> ReplaceLostDataAsync(IDeviceChangeScope scope, PlaceList list, CancellationToken cancellationToken)
 	{
 		LogStaleRowsRemoved(logger);
-		cards.Remove(scope);
-		sessions.Remove(scope);
-		places.Remove(scope);
-		await CommitAsync(scope, cancellationToken).ConfigureAwait(false);
-		resetNotice.Raise();
+		await LostKeyCleanup.RemoveStaleRowsAsync(scope, cards, sessions, places, vehicles, resetNotice, cancellationToken).ConfigureAwait(false);
 		return await places.UpdateAsync(scope, list, cancellationToken).ConfigureAwait(false);
 	}
 

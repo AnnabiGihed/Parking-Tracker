@@ -19,9 +19,12 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
   is saved under each.
 - Favourite places in the side menu, saved with the same pin-and-confirm picker (with a name you choose, up to 40
   characters, and at most 20 places) and shown as shortcuts under the search bar.
+- "My vehicle" in the side menu: make, model, year, fuel, emission norm and, for electric and plug-in cars, connectors,
+  battery and range; stored only on the phone.
 
 ### Changed
 
+- Form fields (text, drop-down, number and date) share one look in the app colours, in light and dark.
 - Setting Home or Work shows the place on the map with a pin you can drag, and saves only when you confirm. The
   Home and Work chips and the side menu open this map view; a saved place can be moved or removed there.
 - Searching an address shows all the matching places to choose from; one match still goes straight to the map.

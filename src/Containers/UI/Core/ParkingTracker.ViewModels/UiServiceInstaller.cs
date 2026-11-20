@@ -8,6 +8,7 @@ using ParkingTracker.ViewModels.Features.Menu;
 using ParkingTracker.ViewModels.Features.Places;
 using ParkingTracker.ViewModels.Features.Shared;
 using ParkingTracker.ViewModels.Features.SpotCheck;
+using ParkingTracker.ViewModels.Features.Vehicles;
 using ParkingTracker.ViewModels.Features.Welcome;
 using Pivot.Framework.Tools.DependencyInjection.Abstractions;
 
@@ -44,6 +45,7 @@ public sealed class UiServiceInstaller : IServiceInstaller
 		services.AddScoped<PlacesViewModel>();
 		services.AddScoped<PlacePickerViewModel>();
 		services.AddScoped<FavouritesViewModel>();
+		services.AddScoped<VehicleViewModel>();
 		services.AddScoped<MenuViewModel>();
 		services.AddScoped<ParkedOnScreenResponder>();
 		services.AddScoped<MapLayersViewModel>();

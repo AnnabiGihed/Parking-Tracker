@@ -7,6 +7,8 @@ using ParkingTracker.Domain.Features.SavedPlaces.Aggregates;
 using ParkingTracker.Domain.Features.SavedPlaces.Errors;
 using ParkingTracker.Domain.Features.SavedPlaces.ValueObjects;
 using ParkingTracker.Domain.Features.Shared.ValueObjects;
+using ParkingTracker.Domain.Features.Vehicles.Aggregates;
+using ParkingTracker.Domain.Features.Vehicles.ValueObjects;
 using ParkingTracker.Testing.Device;
 using ParkingTracker.ViewModels.Features.Shared.Settings;
 using ParkingTracker.ViewModels.Tests.Features.Shared.TestDoubles;
@@ -44,7 +46,7 @@ public sealed class DevicePlacesStoreTests
 	/// <returns>The store.</returns>
 	private static DevicePlacesStore NewStore(DeviceTestDatabase db, DeviceDataResetNotice? notice = null)
 	{
-		return new DevicePlacesStore(db.Places, db.Cards, db.Sessions, db.UnitOfWork, db.Initializer, new FakeStartupGate(), NullLogger<DevicePlacesStore>.Instance, notice ?? new DeviceDataResetNotice());
+		return new DevicePlacesStore(db.Places, db.Cards, db.Vehicles, db.Sessions, db.UnitOfWork, db.Initializer, new FakeStartupGate(), NullLogger<DevicePlacesStore>.Instance, notice ?? new DeviceDataResetNotice());
 	}
 	#endregion
 
@@ -378,7 +380,7 @@ public sealed class DevicePlacesStoreTests
 		notice.StaleRowsRemoved += (_, _) => raised++;
 		var store = NewStore(db, notice);
 		await store.SavePlaceAsync(PlaceKind.Home, GrandPlace, null);
-		var settings = new DeviceSettingsStore(new SettingsStore(new InMemoryKeyValueStorage(), new InMemoryKeyValueStorage()), db.Cards, db.Sessions, db.Places, db.UnitOfWork, db.Initializer, new FakeStartupGate(), db.ReferenceData, NullLogger<DeviceSettingsStore>.Instance, new DeviceDataResetNotice());
+		var settings = new DeviceSettingsStore(new SettingsStore(new InMemoryKeyValueStorage(), new InMemoryKeyValueStorage()), db.Cards, db.Sessions, db.Places, db.Vehicles, db.UnitOfWork, db.Initializer, new FakeStartupGate(), db.ReferenceData, NullLogger<DeviceSettingsStore>.Instance, new DeviceDataResetNotice());
 		await settings.SaveCardAsync(new ParkingCard("bruxelles", null, new CardPeriod(null, null), [], [], [], "N-1", "1ABC234"));
 		await settings.SaveCarAsync(new ParkedCar(GrandPlace, DateTimeOffset.UnixEpoch, "Paid parking", "Rue de la Loi"));
 		db.MemoryKeys.Lose();
@@ -393,6 +395,45 @@ public sealed class DevicePlacesStoreTests
 		(await db.ScalarAsync<int>("SELECT COUNT(*) FROM resident_cards")).Should().Be(0);
 		(await db.ScalarAsync<int>("SELECT COUNT(*) FROM parking_sessions")).Should().Be(0);
 		(await store.GetPlacesAsync()).Should().ContainSingle().Which.Kind.Should().Be(PlaceKind.Work);
+	}
+
+	/// <summary>
+	/// Verifies that saving a place after a lost key clears only the unreadable plate of the vehicle and keeps the row and its other values.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task KeyLost_SaveShouldClearOnlyThePlateOfTheVehicle()
+	{
+		await using var db = await DeviceTestDatabase.CreateAsync();
+		var store = NewStore(db);
+		await store.SavePlaceAsync(PlaceKind.Home, GrandPlace, null);
+		var vehicle = Vehicle.Create(new VehicleDetails("renault", "Clio", 2019, FuelType.Petrol, EuroNorm.Euro6, null, "1ABC234"), 2026).Value;
+		(await db.ApplyAsync(scope => db.Vehicles.AddAsync(scope, vehicle))).IsSuccess.Should().BeTrue();
+		db.MemoryKeys.Lose();
+
+		(await store.SavePlaceAsync(PlaceKind.Work, Ixelles, null)).IsSuccess.Should().BeTrue();
+
+		(await db.ScalarAsync<int>("SELECT COUNT(*) FROM vehicles")).Should().Be(1);
+		(await db.Vehicles.GetAsync()).Value.ToDetails().Should().BeEquivalentTo(vehicle.ToDetails() with { Plate = null });
+	}
+
+	/// <summary>
+	/// Verifies that a vehicle without a plate survives the cleanup of a lost key with all its details.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task KeyLost_SaveShouldKeepAVehicleWithoutAPlate()
+	{
+		await using var db = await DeviceTestDatabase.CreateAsync();
+		var store = NewStore(db);
+		await store.SavePlaceAsync(PlaceKind.Home, GrandPlace, null);
+		var vehicle = Vehicle.Create(new VehicleDetails("tesla", "Model 3", 2022, FuelType.Electric, EuroNorm.Unknown, new ChargingDetails([ChargingConnector.Ccs], 57.5, 450), null), 2026).Value;
+		(await db.ApplyAsync(scope => db.Vehicles.AddAsync(scope, vehicle))).IsSuccess.Should().BeTrue();
+		db.MemoryKeys.Lose();
+
+		(await store.SavePlaceAsync(PlaceKind.Work, Ixelles, null)).IsSuccess.Should().BeTrue();
+
+		(await db.Vehicles.GetAsync()).Value.ToDetails().Should().BeEquivalentTo(vehicle.ToDetails());
 	}
 	#endregion
 
@@ -422,7 +463,7 @@ public sealed class DevicePlacesStoreTests
 	{
 		await using var db = DeviceTestDatabase.CreateEmpty();
 
-		var noPlaces = () => new DevicePlacesStore(null!, db.Cards, db.Sessions, db.UnitOfWork, db.Initializer, new FakeStartupGate(), NullLogger<DevicePlacesStore>.Instance, new DeviceDataResetNotice()); // null on purpose: proves the guard clause rejects it
+		var noPlaces = () => new DevicePlacesStore(null!, db.Cards, db.Vehicles, db.Sessions, db.UnitOfWork, db.Initializer, new FakeStartupGate(), NullLogger<DevicePlacesStore>.Instance, new DeviceDataResetNotice()); // null on purpose: proves the guard clause rejects it
 
 		noPlaces.Should().Throw<ArgumentNullException>();
 	}

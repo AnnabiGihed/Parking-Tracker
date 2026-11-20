@@ -3,14 +3,15 @@ using ParkingTracker.Domain.Features.SavedPlaces.ValueObjects;
 using ParkingTracker.ViewModels.Features.Card;
 using ParkingTracker.ViewModels.Features.Places;
 using ParkingTracker.ViewModels.Features.Shared;
+using ParkingTracker.ViewModels.Features.Vehicles;
 
 namespace ParkingTracker.ViewModels.Features.Menu;
 
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : The side menu: the text under Home, Work, the favourite places and the parking card, taken from the places and the card line the screen
-///              already holds, and what each entry opens (Home and Work start the map picker, favourite places open the list). The menu itself is closed by the
+/// Purpose     : The side menu: the text under Home, Work, the favourite places, the vehicle and the parking card, taken from the places and the card line the screen
+///              already holds, and what each entry opens (Home and Work start the map picker, favourite places open the list, My vehicle opens its dialog). The menu itself is closed by the
 ///              component before an entry opens its screen, so that two screens are never open at once.
 /// </summary>
 public sealed class MenuViewModel : ViewModelBase
@@ -49,6 +50,11 @@ public sealed class MenuViewModel : ViewModelBase
 	private readonly FavouritesViewModel favourites;
 
 	/// <summary>
+	/// The saved vehicle and the dialog that edits it.
+	/// </summary>
+	private readonly VehicleViewModel vehicle;
+
+	/// <summary>
 	/// The saved card and the dialog that edits it.
 	/// </summary>
 	private readonly CardViewModel card;
@@ -61,21 +67,25 @@ public sealed class MenuViewModel : ViewModelBase
 	/// <param name="places">The saved places.</param>
 	/// <param name="picker">The map picker that sets Home and Work.</param>
 	/// <param name="favourites">The list of favourite places that its entry opens.</param>
+	/// <param name="vehicle">The saved vehicle and the dialog that edits it.</param>
 	/// <param name="card">The saved card and the dialog that edits it.</param>
 	/// <exception cref="ArgumentNullException">Thrown when an argument is <see langword="null"/>.</exception>
-	public MenuViewModel(PlacesViewModel places, PlacePickerViewModel picker, FavouritesViewModel favourites, CardViewModel card)
+	public MenuViewModel(PlacesViewModel places, PlacePickerViewModel picker, FavouritesViewModel favourites, VehicleViewModel vehicle, CardViewModel card)
 	{
 		ArgumentNullException.ThrowIfNull(places);
 		ArgumentNullException.ThrowIfNull(picker);
 		ArgumentNullException.ThrowIfNull(favourites);
+		ArgumentNullException.ThrowIfNull(vehicle);
 		ArgumentNullException.ThrowIfNull(card);
 		this.places = places;
 		this.picker = picker;
 		this.favourites = favourites;
+		this.vehicle = vehicle;
 		this.card = card;
 
-		// Both are scoped like this view model and live as long as it does, so there is nothing to unsubscribe.
+		// All are scoped like this view model and live as long as it does, so there is nothing to unsubscribe.
 		places.Changed += OnSourceChanged;
+		vehicle.Changed += OnSourceChanged;
 		card.Changed += OnSourceChanged;
 	}
 	#endregion
@@ -97,6 +107,11 @@ public sealed class MenuViewModel : ViewModelBase
 	public string FavouritesText => places.Favourites.Count == 0 ? NoFavouritesText : $"{places.Favourites.Count} saved";
 
 	/// <summary>
+	/// Gets the text under My vehicle: "Make Model · Year", or <see cref="NotSetText"/> when no vehicle is saved.
+	/// </summary>
+	public string VehicleText => vehicle.SummaryText;
+
+	/// <summary>
 	/// Gets the text under the parking card: the card summary line, or <see cref="NotSetText"/> when there is no card.
 	/// </summary>
 	public string CardText => card.Line.Dot == CardDot.None ? NotSetText : card.Line.Pill;
@@ -113,6 +128,11 @@ public sealed class MenuViewModel : ViewModelBase
 	/// Opens the list of favourite places.
 	/// </summary>
 	public void OpenFavourites() => favourites.Open();
+
+	/// <summary>
+	/// Opens the My vehicle dialog.
+	/// </summary>
+	public void OpenVehicle() => vehicle.Open();
 
 	/// <summary>
 	/// Opens the card dialog.
@@ -138,7 +158,7 @@ public sealed class MenuViewModel : ViewModelBase
 	}
 
 	/// <summary>
-	/// Passes on a change of the places or the card line.
+	/// Passes on a change of the places, the vehicle or the card line.
 	/// </summary>
 	/// <param name="sender">The view model that changed.</param>
 	/// <param name="e">Not used.</param>
