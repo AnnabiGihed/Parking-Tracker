@@ -1,7 +1,10 @@
 using Bunit;
 using NSubstitute;
+using ParkingTracker.Application.Features.AddressSearch.Queries.SearchAddress;
 using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
+using ParkingTracker.Domain.Features.AddressSearch.ValueObjects;
 using ParkingTracker.Domain.Features.SavedPlaces.ValueObjects;
+using ParkingTracker.Domain.Features.Shared.ValueObjects;
 using ParkingTracker.Domain.Features.SpotDecisions.ValueObjects;
 using ParkingTracker.Shared.Features.Places.Components;
 using ParkingTracker.Shared.Tests.Features.Shared.TestDoubles;
@@ -9,15 +12,17 @@ using ParkingTracker.ViewModels.Features.MapLayers;
 using ParkingTracker.ViewModels.Features.Places;
 using ParkingTracker.ViewModels.Features.Shared;
 using ParkingTracker.ViewModels.Features.SpotCheck;
+using Pivot.Framework.Domain.Shared;
 
 namespace ParkingTracker.Shared.Tests.Features.Places.Components;
 
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : Component tests for the Home and Work chips and the place dialog: the chips render, a tap on a place that is not set
-///              opens the dialog, a saved place gets no edit button, the dialog offers Remove only when the place is saved, and the
-///              back button closes the dialog.
+/// Purpose     : Component tests for the Home and Work chips, the picker header and the confirm bar: the chips render, a tap on a
+///              place that is not set starts the picker, a saved place is shown on the map; the header shows the title, searches,
+///              lists several matches and uses the position; the confirm bar shows the label and the hint, saves only on Save,
+///              disables Save outside Brussels and removes a saved place; the back button closes the list first and then cancels.
 /// </summary>
 public sealed class PlaceComponentsTests : UiTestContext
 {
@@ -26,15 +31,50 @@ public sealed class PlaceComponentsTests : UiTestContext
 	/// A saved home.
 	/// </summary>
 	private static readonly PlaceShortcut SavedHome = new(PlaceKind.Home, "Home", Here, "Rue de la Loi 1");
+
+	/// <summary>
+	/// A match with a label and a locality.
+	/// </summary>
+	private static readonly AddressMatch First = new(Here, "Rue de la Loi 1, 1000 Bruxelles", "Rue de la Loi 1", "1000 Bruxelles");
+
+	/// <summary>
+	/// A second match.
+	/// </summary>
+	private static readonly AddressMatch Second = new(new GeoPoint(50.8467, 4.3525), "Rue de la Loi 2, 1000 Bruxelles", "Rue de la Loi 2", "1000 Bruxelles");
+
+	/// <summary>
+	/// Makes the address search answer with matches.
+	/// </summary>
+	/// <param name="matches">The matches.</param>
+	private void AnswerMatches(params AddressMatch[] matches)
+	{
+		Sender.Send(Arg.Any<SearchAddressQuery>(), Arg.Any<CancellationToken>()).Returns(Result.Success(new SearchAddressResponse(matches)));
+		Places.SavePlaceAsync(Arg.Any<PlaceKind>(), Arg.Any<GeoPoint>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Result.Success());
+	}
+
+	/// <summary>
+	/// Renders the header and types a search that finds matches.
+	/// </summary>
+	/// <param name="matches">The matches the search finds.</param>
+	/// <returns>The rendered header.</returns>
+	private async Task<IRenderedComponent<PlacePickerHeader>> SearchAsync(params AddressMatch[] matches)
+	{
+		AnswerMatches(matches);
+		var header = Render<PlacePickerHeader>();
+		Resolve<PlacePickerViewModel>().Start(PlaceKind.Home);
+		await header.Find("#pickerSearch").InputAsync("loi").ConfigureAwait(false);
+		await header.Find("#pickerForm").SubmitAsync().ConfigureAwait(false);
+		return header;
+	}
 	#endregion
 
 	#region Chip Tests
 	/// <summary>
-	/// Verifies that both chips render without edit buttons while no place is saved, and that a tap opens the dialog of that kind.
+	/// Verifies that both chips render without edit buttons while no place is saved, and that a tap starts the picker of that kind.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
-	public async Task PlaceChips_NothingSaved_ShouldRenderTwoChipsAndOpenTheDialogOnTap()
+	public async Task PlaceChips_NothingSaved_ShouldRenderTwoChipsAndStartThePickerOnTap()
 	{
 		var chips = Render<PlaceChips>();
 
@@ -44,9 +84,9 @@ public sealed class PlaceComponentsTests : UiTestContext
 
 		await chips.Find("#placeWork").ClickAsync();
 
-		var model = Resolve<PlacesViewModel>();
-		model.IsOpen.Should().BeTrue();
-		model.EditingKind.Should().Be(PlaceKind.Work);
+		var picker = Resolve<PlacePickerViewModel>();
+		picker.IsActive.Should().BeTrue();
+		picker.Kind.Should().Be(PlaceKind.Work);
 	}
 
 	/// <summary>
@@ -62,7 +102,7 @@ public sealed class PlaceComponentsTests : UiTestContext
 	}
 
 	/// <summary>
-	/// Verifies that a saved place reads "Home" and that a tap on it shows the place instead of opening the dialog.
+	/// Verifies that a saved place reads "Home" and that a tap on it shows the place instead of starting the picker.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
@@ -78,7 +118,7 @@ public sealed class PlaceComponentsTests : UiTestContext
 		await chips.Find("#placeHome").ClickAsync();
 
 		view.Should().NotBeNull();
-		Resolve<PlacesViewModel>().IsOpen.Should().BeFalse();
+		Resolve<PlacePickerViewModel>().IsActive.Should().BeFalse();
 	}
 
 	/// <summary>
@@ -100,64 +140,190 @@ public sealed class PlaceComponentsTests : UiTestContext
 	}
 	#endregion
 
-	#region Dialog Tests
+	#region Picker Header Tests
 	/// <summary>
-	/// Verifies that the dialog of a place that is not set offers no Remove button and is titled with its kind.
+	/// Verifies that the header shows the title of the kind, a back arrow, "Use my position" and a search box.
 	/// </summary>
-	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
-	public async Task PlaceDialog_NotSet_ShouldOfferNoRemove()
+	public void PickerHeader_Started_ShouldShowTitleBackSearchAndPosition()
 	{
-		var dialog = Render<PlaceDialog>();
+		var header = Render<PlacePickerHeader>();
 
-		await dialog.InvokeAsync(() => Resolve<PlacesViewModel>().Open(PlaceKind.Work));
+		Resolve<PlacePickerViewModel>().Start(PlaceKind.Work);
 
-		dialog.Markup.Should().Contain("Work");
-		dialog.Find("#placeSearch").TextContent.Should().Contain("Search");
-		dialog.Find("#placeHere").TextContent.Should().Contain("Use my position");
-		dialog.FindAll("#placeClear").Should().BeEmpty();
+		header.Find("#pickerTitle").TextContent.Should().Be("Set work");
+		header.Find("#pickerBack").ClassList.Should().Contain("rz-button");
+		header.Find("#pickerHere").TextContent.Should().Contain("Use my position");
+		header.Find("#pickerSearch").GetAttribute("placeholder").Should().Be("Search a street or address");
 	}
 
 	/// <summary>
-	/// Verifies that the dialog of a saved place offers Remove, and that Remove clears the place.
+	/// Verifies that a submit searches the typed text, closes the keyboard, and that one match goes to the confirm step without saving.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
-	public async Task PlaceDialog_Saved_ShouldOfferRemoveThatClearsThePlace()
+	public async Task PickerHeader_SearchOneMatch_ShouldChooseItWithoutSaving()
 	{
-		Places.GetPlacesAsync(Arg.Any<CancellationToken>()).Returns([SavedHome]);
-		var dialog = Render<PlaceDialog>();
-		await dialog.InvokeAsync(async () =>
-		{
-			var model = Resolve<PlacesViewModel>();
-			await model.LoadAsync().ConfigureAwait(false);
-			model.Open(PlaceKind.Home);
-		});
+		await SearchAsync(First);
 
-		await dialog.Find("#placeClear").ClickAsync();
+		var picker = Resolve<PlacePickerViewModel>();
+		picker.State.Should().Be(PlacePickerState.Confirming);
+		picker.Candidate.Should().Be(Here);
+		JSInterop.VerifyInvoke("document.activeElement.blur");
+		await Places.DidNotReceiveWithAnyArgs().SavePlaceAsync(default, default, default);
+	}
 
-		await Places.Received(1).ClearPlaceAsync(PlaceKind.Home, Arg.Any<CancellationToken>());
+	/// <summary>
+	/// Verifies that several matches open the list under the box and that a pick chooses the match and closes the list.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task PickerHeader_SearchSeveralMatches_ShouldListThemAndPick()
+	{
+		var header = await SearchAsync(First, Second);
+
+		header.FindAll("#addressResults .address-result").Should().HaveCount(2);
+		await header.FindAll("#addressResults .address-result")[1].ClickAsync();
+
+		var picker = Resolve<PlacePickerViewModel>();
+		picker.Candidate.Should().Be(Second.Point);
+		header.FindAll("#addressResults").Should().BeEmpty();
+	}
+
+	/// <summary>
+	/// Verifies that "Use my position" chooses the position on screen.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task PickerHeader_UseMyPosition_ShouldChooseThePositionOnScreen()
+	{
+		AnswerChecks(SpotDecision.Create(Verdict.Pay, "x"));
+		await Resolve<SpotCheckViewModel>().HandleMapClickAsync(Here);
+		var header = Render<PlacePickerHeader>();
+		Resolve<PlacePickerViewModel>().Start(PlaceKind.Home);
+
+		await header.Find("#pickerHere").ClickAsync();
+
+		Resolve<PlacePickerViewModel>().Candidate.Should().Be(Here);
+	}
+
+	/// <summary>
+	/// Verifies that the back arrow cancels the picker.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task PickerHeader_BackArrow_ShouldCancelThePicker()
+	{
+		var header = Render<PlacePickerHeader>();
+		Resolve<PlacePickerViewModel>().Start(PlaceKind.Home);
+
+		await header.Find("#pickerBack").ClickAsync();
+
+		Resolve<PlacePickerViewModel>().IsActive.Should().BeFalse();
+	}
+
+	/// <summary>
+	/// Verifies that the back button of the phone closes the list of matches first and cancels the picker on the second press.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task PickerHeader_BackButton_ShouldCloseTheListThenCancel()
+	{
+		var header = await SearchAsync(First, Second);
+		var back = Resolve<IBackNavigation>();
+		var picker = Resolve<PlacePickerViewModel>();
+
+		var firstPress = await header.InvokeAsync(back.TryGoBack);
+
+		firstPress.Should().BeTrue();
+		await header.WaitForAssertionAsync(() => picker.State.Should().Be(PlacePickerState.Searching));
+		picker.IsActive.Should().BeTrue();
+		var secondPress = await header.InvokeAsync(back.TryGoBack);
+		secondPress.Should().BeTrue();
+		await header.WaitForAssertionAsync(() => picker.IsActive.Should().BeFalse());
+		back.CanGoBack.Should().BeFalse();
+		await Places.DidNotReceiveWithAnyArgs().SavePlaceAsync(default, default, default);
 	}
 	#endregion
 
-	#region Back Button Tests
+	#region Confirm Bar Tests
 	/// <summary>
-	/// Verifies that the back button closes the open place dialog and that the registration is gone afterwards.
+	/// Verifies that the confirm bar is empty until a place is chosen, then shows the label, the hint, Cancel and Save.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
-	public async Task PlaceDialog_Open_ShouldCloseOnTheBackButton()
+	public async Task ConfirmBar_PlaceChosen_ShouldShowLabelHintAndButtons()
 	{
-		var dialog = Render<PlaceDialog>();
-		await dialog.InvokeAsync(() => Resolve<PlacesViewModel>().Open(PlaceKind.Home));
-		var back = Resolve<IBackNavigation>();
-		back.CanGoBack.Should().BeTrue();
+		var bar = Render<PlaceConfirmBar>();
+		var picker = Resolve<PlacePickerViewModel>();
+		picker.Start(PlaceKind.Home);
+		bar.FindAll("#placeConfirm").Should().BeEmpty();
 
-		var closed = await dialog.InvokeAsync(back.TryGoBack);
+		await bar.InvokeAsync(() => picker.MoveCandidate(Here));
 
-		closed.Should().BeTrue();
-		await dialog.WaitForAssertionAsync(() => Resolve<PlacesViewModel>().IsOpen.Should().BeFalse());
-		back.CanGoBack.Should().BeFalse();
+		bar.Find("#placeConfirmLabel").TextContent.Should().Be(PlacePickerViewModel.MovedLabel);
+		bar.Find(".place-confirm-hint").TextContent.Should().Be("Drag the pin to adjust");
+		bar.Find("#placeCancel").TextContent.Should().Be("Cancel");
+		bar.Find("#placeSave").TextContent.Should().Be("Save");
+		bar.Find("#placeSave").HasAttribute("disabled").Should().BeFalse();
+		bar.FindAll("#placeRemove").Should().BeEmpty();
+	}
+
+	/// <summary>
+	/// Verifies that Save writes exactly once with the chosen point and leaves the picker, and that Cancel writes nothing.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task ConfirmBar_SaveAndCancel_ShouldSaveOnlyOnSave()
+	{
+		Places.SavePlaceAsync(Arg.Any<PlaceKind>(), Arg.Any<GeoPoint>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Result.Success());
+		var bar = Render<PlaceConfirmBar>();
+		var picker = Resolve<PlacePickerViewModel>();
+		picker.Start(PlaceKind.Home);
+		await bar.InvokeAsync(() => picker.MoveCandidate(Here));
+		await bar.Find("#placeCancel").ClickAsync();
+		await Places.DidNotReceiveWithAnyArgs().SavePlaceAsync(default, default, default);
+		picker.Start(PlaceKind.Home);
+		await bar.InvokeAsync(() => picker.MoveCandidate(Here));
+
+		await bar.Find("#placeSave").ClickAsync();
+
+		await Places.Received(1).SavePlaceAsync(PlaceKind.Home, Here, null, Arg.Any<CancellationToken>());
+		picker.IsActive.Should().BeFalse();
+	}
+
+	/// <summary>
+	/// Verifies that a place outside Brussels disables Save and shows the reason.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task ConfirmBar_OutsideBrussels_ShouldDisableSaveAndSayWhy()
+	{
+		var bar = Render<PlaceConfirmBar>();
+		var picker = Resolve<PlacePickerViewModel>();
+		picker.Start(PlaceKind.Home);
+
+		await bar.InvokeAsync(() => picker.MoveCandidate(new GeoPoint(48.8566, 2.3522)));
+
+		bar.Find("#placeSave").HasAttribute("disabled").Should().BeTrue();
+		bar.Find("#placeConfirmError").TextContent.Should().Contain("Brussels");
+	}
+
+	/// <summary>
+	/// Verifies that a saved place is shown with Remove, which clears it.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task ConfirmBar_PlaceSaved_ShouldOfferRemoveThatClearsThePlace()
+	{
+		Places.GetPlacesAsync(Arg.Any<CancellationToken>()).Returns([SavedHome]);
+		await Resolve<PlacesViewModel>().LoadAsync();
+		var bar = Render<PlaceConfirmBar>();
+		await bar.InvokeAsync(() => Resolve<PlacePickerViewModel>().Start(PlaceKind.Home));
+
+		await bar.Find("#placeRemove").ClickAsync();
+
+		await Places.Received(1).ClearPlaceAsync(PlaceKind.Home, Arg.Any<CancellationToken>());
 	}
 	#endregion
 }

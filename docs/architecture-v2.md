@@ -387,7 +387,8 @@ product. C contradicts R8.
 singleton that a second route would destroy. The menu button `#menuBtn` in the search bar opens `AppMenu`, a
 `RadzenPanelMenu` in a Radzen side dialog (left, mask, 300 px) with Home, Work and the parking card; `MenuViewModel`
 supplies the secondary texts ("Not set" or the saved address or card line). A tap closes the menu and then opens the
-existing dialog, so a Radzen dialog is never open over one of the app's own. `DialogBridge` joins an
+existing dialog, so a Radzen dialog is never open over one of the app's own; Home and Work start the map picker
+instead (below). `DialogBridge` joins an
 `IDialogViewModel` to `DialogService` (`OpenAsync`/`Close`, and `OnClose` back to the view model's `Close`), so view
 models stay free of Radzen; the four existing dialogs (`DialogShell`) move to it later. Layers: the search bar is 1000,
 the layers popover 1100, the app's dialog backdrop 1500, the Radzen mask 1500 and dialog 1501
@@ -395,6 +396,17 @@ the layers popover 1100, the app's dialog backdrop 1500, the Radzen mask 1500 an
 `IBackNavigation` is a singleton stack that the menu, the bridge and each `DialogShell` with `OnBack` register in;
 `MainPage.OnBackButtonPressed` dispatches `TryGoBack` into Blazor through `BlazorWebView.TryDispatchAsync` and leaves
 the app only when nothing is open.
+
+**Map picker for Home and Work.** Setting a place is a map mode, not a dialog (`PlacePickerViewModel`: Idle, Searching,
+Results, Confirming, Saving). The chips of a place that is not set and the menu entries start it; `Home` gives its root
+the class `picking`, which hides the bottom sheet, the find button and the right-hand controls, and the top bar becomes
+`PlacePickerHeader` (back, "Set home" or "Set work", "Use my position", a search box and the `AddressResults` list).
+One match goes straight to the confirm step, several are listed; a pick, the position, a tap on the map or a drag of
+the pin moves a separate draggable marker (`map.js` `setCandidate`, reported back as `OnCandidateMoved`) and
+`PlaceConfirmBar` shows its label, "Drag the pin to adjust", Cancel and Save, plus Remove when the place is already
+saved (a saved place opens with its pin). Nothing is written before Save; Save is disabled outside the Brussels box and
+the domain still refuses such a place. The back button closes the list first and then cancels the picker. The old place
+dialog is gone.
 
 ADR: [0020](adr/0020-use-radzen-for-the-phone-screens-and-keep-leaflet-for-the-map.md),
 [0030](adr/0030-keep-one-map-page-with-a-side-menu-and-dialogs-through-dialogservice.md).

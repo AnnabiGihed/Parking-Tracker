@@ -95,6 +95,30 @@ button, input, select { font: inherit; color: inherit; }
 .place-chips .rz-chip.place-go .place-label { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; white-space: nowrap; }
 .place-chips .rz-chip.place-go .ic { display: inline-block; flex: none; width: 18px; height: 18px; color: var(--brand); }
 
+/* ---------- picker: header, confirm bar and the candidate pin (ADR-0030) ---------- */
+.picker-header { pointer-events: auto; width: 100%; max-width: 560px; display: flex; flex-direction: column; gap: 8px; }
+.picker-head-row { display: flex; align-items: center; gap: 4px; background: var(--surface); color: var(--fg); border-radius: 999px; box-shadow: var(--shadow); padding: 5px; }
+.picker-title { flex: 1; min-width: 0; margin: 0; font-size: 17px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picker-header .rz-button.picker-back, .picker-header .rz-button.picker-search-btn { flex: none; width: 42px; height: 42px; min-width: 0; padding: 0; border-radius: 50%; background: transparent; color: var(--fg); box-shadow: none; }
+.picker-header .rz-button.picker-here { flex: none; background: transparent; color: var(--brand); box-shadow: none; font-weight: 600; border-radius: 999px; }
+.picker-header .rz-button.picker-here:hover, .picker-header .rz-button.picker-back:hover { background: var(--surface-2); }
+.picker-header .rz-button .ic { width: 22px; height: 22px; }
+.picker-header .rz-button.picker-here span { margin-left: 4px; }
+.picker-header .searchbar { padding: 5px 5px 5px 16px; }
+.place-confirm { position: fixed; left: 0; right: 0; bottom: 0; z-index: 950; background: var(--surface); color: var(--fg); border-radius: 22px 22px 0 0;
+  box-shadow: 0 -6px 24px rgba(15, 23, 42, .18); padding: 16px 16px 14px; padding-bottom: max(14px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 14px; }
+@media (min-width: 720px) { .place-confirm { left: 16px; right: auto; bottom: 16px; width: 420px; border-radius: 22px; } }
+.place-confirm-place { display: flex; align-items: flex-start; gap: 10px; }
+.place-confirm-place .ic { flex: none; width: 26px; height: 26px; color: var(--brand); }
+.place-confirm-text { display: flex; flex-direction: column; min-width: 0; }
+.place-confirm-label { font-size: 16px; overflow-wrap: anywhere; }
+.place-confirm-hint { font-size: 13px; color: var(--muted); }
+.place-confirm-error { font-size: 13px; color: var(--pay); font-weight: 600; }
+.place-confirm-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
+.place-confirm-actions .rz-button { min-width: 88px; }
+.place-confirm-actions .rz-button.place-cancel { background: transparent; color: var(--fg); border-color: var(--line); box-shadow: inset 0 0 0 1px var(--line); }
+.picking .controls, .picking .cta, .picking .sheet, .picking .popover { display: none; }
+
 /* ---------- right controls ---------- */
 .controls { position: fixed; right: 12px; bottom: calc(var(--sheet-h) + 14px); z-index: 900; display: flex; flex-direction: column; gap: 10px; }
 .ctrl { width: 48px; height: 48px; border-radius: 50%; border: 0; background: var(--surface); color: var(--fg); box-shadow: var(--shadow);
@@ -257,6 +281,8 @@ button.scan { width: 100%; margin-bottom: 8px; background: transparent; text-ali
 .me-dot { width: 18px; height: 18px; border-radius: 50%; background: #1d4ed8; border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(29, 78, 216, .2), 0 1px 4px rgba(0,0,0,.4); }
 .pin-marker { color: var(--pay); filter: drop-shadow(0 2px 2px rgba(0,0,0,.35)); }
 .pin-marker .ic { width: 38px; height: 38px; }
+.candidate-marker { color: var(--brand); filter: drop-shadow(0 3px 3px rgba(0,0,0,.4)); }
+.candidate-marker .ic { width: 48px; height: 48px; }
 .car-marker { width: 36px; height: 36px; border-radius: 50%; background: var(--brand); color: #fff; display: grid; place-items: center; border: 3px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.35); }
 .car-marker .ic { width: 20px; height: 20px; }
 .target-marker { width: 30px; height: 30px; border-radius: 50%; background: var(--free); color: #fff; display: grid; place-items: center; border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(21, 128, 61, .25), 0 2px 6px rgba(0,0,0,.35); }

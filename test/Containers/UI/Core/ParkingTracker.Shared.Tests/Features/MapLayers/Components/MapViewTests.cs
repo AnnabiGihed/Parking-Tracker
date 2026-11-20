@@ -53,7 +53,7 @@ public sealed class MapViewTests : UiTestContext
 	}
 
 	/// <summary>
-	/// Verifies that the four callbacks of the script reach the component callbacks with their values.
+	/// Verifies that the five callbacks of the script reach the component callbacks with their values.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
@@ -63,21 +63,25 @@ public sealed class MapViewTests : UiTestContext
 		module.SetupVoid("init", _ => true).SetVoidResult();
 		GeoPoint? clicked = null;
 		GeoPoint? moved = null;
+		GeoPoint? candidateMoved = null;
 		MapViewChange? changed = null;
 		MapPopupAction? action = null;
 		var cut = Render<MapView>(parameters => parameters
 			.Add(map => map.OnMapClick, point => clicked = point)
 			.Add(map => map.OnPinMoved, point => moved = point)
+			.Add(map => map.OnCandidateMoved, point => candidateMoved = point)
 			.Add(map => map.OnViewChanged, change => changed = change)
 			.Add(map => map.OnPopupAction, popup => action = popup));
 
 		await cut.InvokeAsync(() => cut.Instance.OnMapClickAsync(50.8, 4.3));
 		await cut.InvokeAsync(() => cut.Instance.OnPinMovedAsync(50.81, 4.31));
+		await cut.InvokeAsync(() => cut.Instance.OnCandidateMovedAsync(50.82, 4.32));
 		await cut.InvokeAsync(() => cut.Instance.OnViewChangedAsync(50.8, 4.3, 50.9, 4.4, 16));
 		await cut.InvokeAsync(() => cut.Instance.OnPopupActionAsync("waze", "50.8,4.3"));
 
 		clicked.Should().Be(new GeoPoint(50.8, 4.3));
 		moved.Should().Be(new GeoPoint(50.81, 4.31));
+		candidateMoved.Should().Be(new GeoPoint(50.82, 4.32));
 		changed.Should().Be(new MapViewChange(new MapBounds(50.8, 4.3, 50.9, 4.4), 16));
 		action.Should().Be(new MapPopupAction("waze", "50.8,4.3"));
 	}
@@ -117,6 +121,9 @@ public sealed class MapViewTests : UiTestContext
 		await script.FitBoundsAsync(Here, new GeoPoint(50.83, 4.37));
 		await script.SetMeAsync(Here, 12);
 		await script.SetPinAsync(null);
+		await script.SetCandidateAsync(Here);
+		await script.SetCandidateAsync(null);
+		await script.InvalidateSizeAsync();
 		await script.SetCarAsync(Here, "<b>My car</b>");
 		await script.OpenCarPopupAsync();
 		await script.SetTargetAsync(Here);
@@ -125,9 +132,11 @@ public sealed class MapViewTests : UiTestContext
 		await script.ShowZonesWmsAsync(true);
 		await script.ClearAsync("works");
 
-		module.Invocations.Select(invocation => invocation.Identifier).Should().Equal("init", "setView", "setViewAtLeast", "fitBounds", "setMe", "setPin", "setCar", "openCarPopup", "setTarget", "drawSurfaces", "drawPoints", "showZonesWms", "clear");
+		module.Invocations.Select(invocation => invocation.Identifier).Should().Equal("init", "setView", "setViewAtLeast", "fitBounds", "setMe", "setPin", "setCandidate", "setCandidate", "invalidateSize", "setCar", "openCarPopup", "setTarget", "drawSurfaces", "drawPoints", "showZonesWms", "clear");
 		module.Invocations["setView"].Single().Arguments.Should().Equal(50.825, 4.3606, null);
 		module.Invocations["setViewAtLeast"].Single().Arguments.Should().Equal(50.825, 4.3606, 17);
+		module.Invocations["setCandidate"][0].Arguments.Should().Equal(50.825, 4.3606);
+		module.Invocations["setCandidate"][1].Arguments.Should().Equal(new object?[] { null, null });
 		module.Invocations["drawSurfaces"].Single().Arguments[0].Should().Be("streets");
 	}
 	#endregion

@@ -1,11 +1,15 @@
 using Bunit;
 using NSubstitute;
+using ParkingTracker.Domain.Features.Shared.ValueObjects;
 using ParkingTracker.Domain.Features.SpotDecisions.ValueObjects;
 using ParkingTracker.Shared.Features.MapLayers.Components;
 using ParkingTracker.Shared.Features.MapLayers.Services;
 using ParkingTracker.Shared.Features.Shared.Components;
 using ParkingTracker.Shared.Features.SpotCheck.Pages;
+using ParkingTracker.Domain.Features.SavedPlaces.ValueObjects;
 using ParkingTracker.Shared.Tests.Features.Shared.TestDoubles;
+using ParkingTracker.ViewModels.Features.Places;
+using ParkingTracker.ViewModels.Features.SpotCheck;
 
 namespace ParkingTracker.Shared.Tests.Features.SpotCheck.Pages;
 
@@ -29,6 +33,8 @@ public sealed class HomeTests : UiTestContext
 		module.SetupVoid("init", _ => true).SetVoidResult();
 		module.SetupVoid("observeSheet", _ => true).SetVoidResult();
 		module.SetupVoid("setPin", _ => true).SetVoidResult();
+		module.SetupVoid("setCandidate", _ => true).SetVoidResult();
+		module.SetupVoid("invalidateSize").SetVoidResult();
 		module.SetupVoid("dispose").SetVoidResult();
 		return module;
 	}
@@ -90,6 +96,39 @@ public sealed class HomeTests : UiTestContext
 		cut.Find(".hero-sub").TextContent.Should().Be("Could not read parking.brussels.");
 		module.Invocations["setPin"].Should().NotBeEmpty();
 		cut.Find("#trackBtn").ClassList.Should().NotContain("active");
+	}
+
+	/// <summary>
+	/// Verifies that while the picker is open the root has the picking class, the top bar is the picker header with the confirm bar
+	/// below, a tap on the map moves the pin of the picker instead of checking a spot, and the map is told of the new layout.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Picker_Open_ShouldSwitchToPickerModeAndRouteMapTapsToThePin()
+	{
+		var module = SetUpMap();
+		var cut = Render<Home>();
+		var map = cut.FindComponent<MapView>();
+		var picker = Resolve<PlacePickerViewModel>();
+
+		await cut.InvokeAsync(() => picker.Start(PlaceKind.Home));
+
+		await cut.WaitForAssertionAsync(() => cut.Find("#homeRoot").ClassList.Should().Contain("picking"));
+		cut.Find("#pickerTitle").TextContent.Should().Be("Set home");
+		cut.FindAll("#searchInput").Should().BeEmpty();
+		await cut.InvokeAsync(() => map.Instance.OnMapClickAsync(50.83, 4.36));
+		picker.Candidate.Should().Be(new GeoPoint(50.83, 4.36));
+		cut.FindAll("#placeSave").Should().HaveCount(1);
+		Resolve<SpotCheckViewModel>().Pin.Should().BeNull();
+		await cut.WaitForAssertionAsync(() => module.Invocations["setCandidate"].Should().NotBeEmpty());
+		await cut.WaitForAssertionAsync(() => module.Invocations["invalidateSize"].Should().NotBeEmpty());
+
+		await cut.InvokeAsync(() => map.Instance.OnCandidateMovedAsync(50.84, 4.37));
+		picker.Candidate.Should().Be(new GeoPoint(50.84, 4.37));
+		await cut.Find("#placeCancel").ClickAsync();
+
+		await cut.WaitForAssertionAsync(() => cut.Find("#homeRoot").ClassList.Should().NotContain("picking"));
+		cut.Find("#searchInput").Should().NotBeNull();
 	}
 
 	/// <summary>

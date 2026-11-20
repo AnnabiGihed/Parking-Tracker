@@ -10,8 +10,8 @@ namespace ParkingTracker.ViewModels.Features.Menu;
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
 /// Purpose     : The side menu: the text under Home, Work and the parking card, taken from the places and the card line the screen
-///              already holds, and what each entry opens. The menu itself is closed by the component before an entry opens its screen,
-///              so that two dialogs are never open at once.
+///              already holds, and what each entry opens (Home and Work start the map picker). The menu itself is closed by the
+///              component before an entry opens its screen, so that two screens are never open at once.
 /// </summary>
 public sealed class MenuViewModel : ViewModelBase
 {
@@ -29,9 +29,14 @@ public sealed class MenuViewModel : ViewModelBase
 
 	#region Fields
 	/// <summary>
-	/// The saved places and the dialog that edits them.
+	/// The saved places.
 	/// </summary>
 	private readonly PlacesViewModel places;
+
+	/// <summary>
+	/// The map picker that sets Home and Work.
+	/// </summary>
+	private readonly PlacePickerViewModel picker;
 
 	/// <summary>
 	/// The saved card and the dialog that edits it.
@@ -43,14 +48,17 @@ public sealed class MenuViewModel : ViewModelBase
 	/// <summary>
 	/// Initializes a new instance of the <see cref="MenuViewModel"/> class.
 	/// </summary>
-	/// <param name="places">The saved places and the dialog that edits them.</param>
+	/// <param name="places">The saved places.</param>
+	/// <param name="picker">The map picker that sets Home and Work.</param>
 	/// <param name="card">The saved card and the dialog that edits it.</param>
 	/// <exception cref="ArgumentNullException">Thrown when an argument is <see langword="null"/>.</exception>
-	public MenuViewModel(PlacesViewModel places, CardViewModel card)
+	public MenuViewModel(PlacesViewModel places, PlacePickerViewModel picker, CardViewModel card)
 	{
 		ArgumentNullException.ThrowIfNull(places);
+		ArgumentNullException.ThrowIfNull(picker);
 		ArgumentNullException.ThrowIfNull(card);
 		this.places = places;
+		this.picker = picker;
 		this.card = card;
 
 		// Both are scoped like this view model and live as long as it does, so there is nothing to unsubscribe.
@@ -78,10 +86,10 @@ public sealed class MenuViewModel : ViewModelBase
 
 	#region Public Methods
 	/// <summary>
-	/// Opens the place dialog for a kind of place.
+	/// Opens the map picker for a kind of place; a saved place is shown with its pin.
 	/// </summary>
 	/// <param name="kind">Home or work.</param>
-	public void OpenPlace(PlaceKind kind) => places.Open(kind);
+	public void OpenPlace(PlaceKind kind) => picker.Start(kind);
 
 	/// <summary>
 	/// Opens the card dialog.

@@ -72,6 +72,11 @@ public sealed class SpotCheckViewModel : ViewModelBase, IDisposable
 	private bool isTracking;
 
 	/// <summary>
+	/// Whether the map must not be moved to the position of the user, because another screen (the place picker) owns the map.
+	/// </summary>
+	private bool isFollowSuspended;
+
+	/// <summary>
 	/// The last usable fix of the user.
 	/// </summary>
 	private PositionFix? me;
@@ -123,6 +128,20 @@ public sealed class SpotCheckViewModel : ViewModelBase, IDisposable
 			lock (gate)
 			{
 				return isTracking;
+			}
+		}
+	}
+
+	/// <summary>
+	/// Gets a value indicating whether the map is kept where it is while the position is still followed.
+	/// </summary>
+	public bool IsFollowSuspended
+	{
+		get
+		{
+			lock (gate)
+			{
+				return isFollowSuspended;
 			}
 		}
 	}
@@ -267,6 +286,29 @@ public sealed class SpotCheckViewModel : ViewModelBase, IDisposable
 
 		NotifyChanged();
 		await tracker.StopAsync(cancellationToken).ConfigureAwait(false);
+	}
+
+	/// <summary>
+	/// Keeps the map where it is: fixes still update the blue dot and the following state stays as it is, but no fix moves the map,
+	/// so that a screen that places its own marker on the map is not panned away.
+	/// </summary>
+	public void SuspendFollowing()
+	{
+		lock (gate)
+		{
+			isFollowSuspended = true;
+		}
+	}
+
+	/// <summary>
+	/// Lets the following of the position move the map again, as it did before <see cref="SuspendFollowing"/>.
+	/// </summary>
+	public void ResumeFollowing()
+	{
+		lock (gate)
+		{
+			isFollowSuspended = false;
+		}
 	}
 
 	/// <summary>
@@ -466,14 +508,16 @@ public sealed class SpotCheckViewModel : ViewModelBase, IDisposable
 
 		bool first;
 		bool following;
+		bool mapFree;
 		lock (gate)
 		{
 			first = me is null;
 			me = new PositionFix(fix, now);
 			following = isTracking;
+			mapFree = !isFollowSuspended;
 		}
 
-		if (first || following)
+		if (mapFree && (first || following))
 		{
 			ViewRequested?.Invoke(this, new ValueEventArgs<MapViewRequest>(new MapViewRequest(fix.Point, first ? FirstFixZoom : null)));
 		}

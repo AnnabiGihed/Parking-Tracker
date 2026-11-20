@@ -50,13 +50,13 @@ public sealed partial class AppMenu : ViewModelComponent<MenuViewModel>
 	/// <summary>
 	/// Handles a tap on Home.
 	/// </summary>
-	/// <returns>A task that completes when the place dialog opened.</returns>
+	/// <returns>A task that completes when the picker opened.</returns>
 	private Task OnHomeAsync() => CloseThenAsync(() => OpenPlace(PlaceKind.Home));
 
 	/// <summary>
 	/// Handles a tap on Work.
 	/// </summary>
-	/// <returns>A task that completes when the place dialog opened.</returns>
+	/// <returns>A task that completes when the picker opened.</returns>
 	private Task OnWorkAsync() => CloseThenAsync(() => OpenPlace(PlaceKind.Work));
 
 	/// <summary>
@@ -93,10 +93,10 @@ public sealed partial class AppMenu : ViewModelComponent<MenuViewModel>
 	}
 
 	/// <summary>
-	/// Opens the place dialog of a kind of place.
+	/// Opens the map picker of a kind of place.
 	/// </summary>
 	/// <param name="kind">Home or work.</param>
-	/// <returns>A task that is already complete, because the dialog opens at once.</returns>
+	/// <returns>A task that is already complete, because the picker opens at once.</returns>
 	private Task OpenPlace(PlaceKind kind)
 	{
 		ViewModel.OpenPlace(kind);

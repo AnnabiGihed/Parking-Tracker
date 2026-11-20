@@ -31,6 +31,7 @@ let zonesWms = null;
 let me = null;
 let meAccuracy = null;
 let pin = null;
+let candidate = null;
 let car = null;
 let target = null;
 let sheetObserver = null;
@@ -157,6 +158,22 @@ export function setPin(lat, lon) {
   pin.on('dragend', () => { const p = pin.getLatLng(); report('OnPinMoved', p.lat, p.lng); });
 }
 
+/** The place being chosen for Home or Work: a draggable marker of its own, apart from the pin; null removes it. Pans to it. */
+export function setCandidate(lat, lon) {
+  if (lat == null) { candidate = drop(candidate); return; }
+  if (candidate) candidate.setLatLng([lat, lon]);
+  else {
+    candidate = L.marker([lat, lon], { draggable: true, zIndexOffset: 1000, icon: divIcon('candidate-marker', svg('pin'), [48, 48], [24, 46]) }).addTo(map);
+    candidate.on('dragend', () => { const p = candidate.getLatLng(); report('OnCandidateMoved', p.lat, p.lng); });
+  }
+  map.setView([lat, lon], Math.max(map.getZoom(), 17));
+}
+
+/** Tells Leaflet that the size of its element changed, for example when the layout switches to the picker. */
+export function invalidateSize() {
+  if (map) map.invalidateSize();
+}
+
 /** The parked car with its popup (escaped by C#); null removes it. */
 export function setCar(lat, lon, popup) {
   car = drop(car);
@@ -226,6 +243,6 @@ export function dispose() {
   if (map) map.remove();
   map = null;
   callbacks = null;
-  zonesWms = me = meAccuracy = pin = car = target = null;
+  zonesWms = me = meAccuracy = pin = candidate = car = target = null;
   for (const name of Object.keys(groups)) delete groups[name];
 }

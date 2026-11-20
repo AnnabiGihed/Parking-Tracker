@@ -43,6 +43,8 @@ public sealed class RoutesTests : UiTestContext
 		module.SetupVoid("init", _ => true).SetVoidResult();
 		module.SetupVoid("observeSheet", _ => true).SetVoidResult();
 		module.SetupVoid("setPin", _ => true).SetVoidResult();
+		module.SetupVoid("setCandidate", _ => true).SetVoidResult();
+		module.SetupVoid("invalidateSize").SetVoidResult();
 		module.SetupVoid("dispose").SetVoidResult();
 	}
 	#endregion

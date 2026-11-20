@@ -9,10 +9,10 @@ namespace ParkingTracker.Shared.Features.MapLayers.Components;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : The map: an element that the Leaflet script fills, a <see cref="MapScript"/> to draw on it, and the four
+/// Purpose     : The map: an element that the Leaflet script fills, a <see cref="MapScript"/> to draw on it, and the
 ///              <c>[JSInvokable]</c> callbacks of docs/architecture.md section 3.3 (<c>OnMapClick</c>, <c>OnPinMoved</c>,
-///              <c>OnViewChanged</c>, <c>OnPopupAction</c>), which it turns into component callbacks. It disposes the script
-///              module and the .NET reference when it goes away.
+///              <c>OnCandidateMoved</c>, <c>OnViewChanged</c>, <c>OnPopupAction</c>), which it turns into component
+///              callbacks. It disposes the script module and the .NET reference when it goes away.
 /// </summary>
 public sealed partial class MapView : ComponentBase, IAsyncDisposable
 {
@@ -59,6 +59,12 @@ public sealed partial class MapView : ComponentBase, IAsyncDisposable
 	/// </summary>
 	[Parameter]
 	public EventCallback<GeoPoint> OnPinMoved { get; set; }
+
+	/// <summary>
+	/// Gets or sets the callback raised when the user dropped the marker of the place being chosen for Home or Work.
+	/// </summary>
+	[Parameter]
+	public EventCallback<GeoPoint> OnCandidateMoved { get; set; }
 
 	/// <summary>
 	/// Gets or sets the callback raised when the map moved or zoomed.
@@ -112,6 +118,15 @@ public sealed partial class MapView : ComponentBase, IAsyncDisposable
 	/// <returns>A task that completes when the callback ran.</returns>
 	[JSInvokable("OnPinMoved")]
 	public Task OnPinMovedAsync(double latitude, double longitude) => OnPinMoved.InvokeAsync(new GeoPoint(latitude, longitude));
+
+	/// <summary>
+	/// Receives the end of a drag of the marker of the place being chosen from the script.
+	/// </summary>
+	/// <param name="latitude">The latitude of the marker.</param>
+	/// <param name="longitude">The longitude of the marker.</param>
+	/// <returns>A task that completes when the callback ran.</returns>
+	[JSInvokable("OnCandidateMoved")]
+	public Task OnCandidateMovedAsync(double latitude, double longitude) => OnCandidateMoved.InvokeAsync(new GeoPoint(latitude, longitude));
 
 	/// <summary>
 	/// Receives a move of the map from the script.

@@ -15,7 +15,7 @@ namespace ParkingTracker.Shared.Tests.Features.Menu.Components;
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
 /// Purpose     : Component tests for the side menu (ADR-0030): the menu button of the search bar opens it as a Radzen side dialog, it
-///              lists Home, Work and the parking card with what is saved under each, a tap closes it and opens the screen of the
+///              lists Home, Work and the parking card with what is saved under each, a tap closes it and starts the picker or opens the screen of the
 ///              entry, and the back button of the phone closes it.
 /// </summary>
 public sealed class AppMenuTests : UiTestContext
@@ -96,38 +96,38 @@ public sealed class AppMenuTests : UiTestContext
 
 	#region Tap Tests
 	/// <summary>
-	/// Verifies that a tap on Home closes the menu and opens the place dialog for Home.
+	/// Verifies that a tap on Home closes the menu and starts the map picker for Home.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
-	public async Task Home_Tap_ShouldCloseTheMenuAndOpenThePlaceDialogForHome()
+	public async Task Home_Tap_ShouldCloseTheMenuAndStartThePickerForHome()
 	{
 		var host = await OpenMenuAsync();
 
 		// Radzen puts the Click callback on the list item, not on the link inside it; a browser bubbles a tap on the link up to the item.
 		await host.Find("#menuHome").ClickAsync();
 
-		var places = Resolve<PlacesViewModel>();
-		await host.WaitForAssertionAsync(() => places.IsOpen.Should().BeTrue());
-		places.EditingKind.Should().Be(PlaceKind.Home);
+		var picker = Resolve<PlacePickerViewModel>();
+		await host.WaitForAssertionAsync(() => picker.IsActive.Should().BeTrue());
+		picker.Kind.Should().Be(PlaceKind.Home);
 		await host.WaitForAssertionAsync(() => host.FindAll("#appMenu").Should().BeEmpty());
 		Resolve<IBackNavigation>().CanGoBack.Should().BeFalse();
 	}
 
 	/// <summary>
-	/// Verifies that a tap on Work opens the place dialog for Work.
+	/// Verifies that a tap on Work starts the map picker for Work.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
-	public async Task Work_Tap_ShouldOpenThePlaceDialogForWork()
+	public async Task Work_Tap_ShouldStartThePickerForWork()
 	{
 		var host = await OpenMenuAsync();
 
 		await host.Find("#menuWork").ClickAsync();
 
-		var places = Resolve<PlacesViewModel>();
-		await host.WaitForAssertionAsync(() => places.IsOpen.Should().BeTrue());
-		places.EditingKind.Should().Be(PlaceKind.Work);
+		var picker = Resolve<PlacePickerViewModel>();
+		await host.WaitForAssertionAsync(() => picker.IsActive.Should().BeTrue());
+		picker.Kind.Should().Be(PlaceKind.Work);
 	}
 
 	/// <summary>

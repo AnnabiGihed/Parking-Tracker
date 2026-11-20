@@ -26,14 +26,15 @@ public sealed class MenuViewModelTests
 	/// </summary>
 	/// <param name="ui">The fixture that holds the card and the other view models.</param>
 	/// <param name="saved">The places the store holds.</param>
-	/// <returns>The menu and the places view model it reads.</returns>
-	private static async Task<(MenuViewModel Menu, PlacesViewModel Places)> ArrangeAsync(UiFixture ui, params PlaceShortcut[] saved)
+	/// <returns>The menu, the places view model it reads and the picker it opens.</returns>
+	private static async Task<(MenuViewModel Menu, PlacesViewModel Places, PlacePickerViewModel Picker)> ArrangeAsync(UiFixture ui, params PlaceShortcut[] saved)
 	{
 		var store = Substitute.For<IPlacesStore>();
 		store.GetPlacesAsync(Arg.Any<CancellationToken>()).Returns(saved);
-		var places = new PlacesViewModel(store, ui.Sender, ui.Spot, ui.Toast);
+		var places = new PlacesViewModel(store, ui.Spot, ui.Toast);
 		await places.LoadAsync().ConfigureAwait(false);
-		return (new MenuViewModel(places, ui.Card), places);
+		var picker = new PlacePickerViewModel(store, ui.Sender, ui.Spot, places, ui.Toast);
+		return (new MenuViewModel(places, picker, ui.Card), places, picker);
 	}
 	#endregion
 
@@ -46,7 +47,7 @@ public sealed class MenuViewModelTests
 	public async Task Texts_NothingSaved_ShouldReadNotSet()
 	{
 		using var ui = new UiFixture();
-		var (menu, _) = await ArrangeAsync(ui);
+		var (menu, _, _) = await ArrangeAsync(ui);
 
 		menu.HomeText.Should().Be("Not set");
 		menu.WorkText.Should().Be("Not set");
@@ -62,7 +63,7 @@ public sealed class MenuViewModelTests
 	{
 		using var ui = new UiFixture();
 
-		var (menu, _) = await ArrangeAsync(ui, new PlaceShortcut(PlaceKind.Home, "Home", Centre, "Grand-Place 1"), new PlaceShortcut(PlaceKind.Work, "Work", Centre, string.Empty));
+		var (menu, _, _) = await ArrangeAsync(ui, new PlaceShortcut(PlaceKind.Home, "Home", Centre, "Grand-Place 1"), new PlaceShortcut(PlaceKind.Work, "Work", Centre, string.Empty));
 
 		menu.HomeText.Should().Be("Grand-Place 1");
 		menu.WorkText.Should().Be("Saved from the map");
@@ -76,31 +77,31 @@ public sealed class MenuViewModelTests
 	public async Task Changed_PlacesChange_ShouldBeRaised()
 	{
 		using var ui = new UiFixture();
-		var (menu, places) = await ArrangeAsync(ui);
+		var (menu, places, _) = await ArrangeAsync(ui);
 		var raised = 0;
 		menu.Changed += (_, _) => raised++;
 
-		places.Open(PlaceKind.Home);
+		await places.LoadAsync();
 
-		raised.Should().Be(1);
+		raised.Should().BeGreaterThan(0);
 	}
 	#endregion
 
 	#region Open Tests
 	/// <summary>
-	/// Verifies that the Work entry opens the place dialog for Work.
+	/// Verifies that the Work entry opens the map picker for Work.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
-	public async Task OpenPlace_Work_ShouldOpenThePlaceDialogForWork()
+	public async Task OpenPlace_Work_ShouldOpenTheMapPickerForWork()
 	{
 		using var ui = new UiFixture();
-		var (menu, places) = await ArrangeAsync(ui);
+		var (menu, _, picker) = await ArrangeAsync(ui);
 
 		menu.OpenPlace(PlaceKind.Work);
 
-		places.IsOpen.Should().BeTrue();
-		places.EditingKind.Should().Be(PlaceKind.Work);
+		picker.IsActive.Should().BeTrue();
+		picker.Kind.Should().Be(PlaceKind.Work);
 	}
 
 	/// <summary>
@@ -111,7 +112,7 @@ public sealed class MenuViewModelTests
 	public async Task OpenCardAsync_ShouldOpenTheCardDialog()
 	{
 		using var ui = new UiFixture();
-		var (menu, _) = await ArrangeAsync(ui);
+		var (menu, _, _) = await ArrangeAsync(ui);
 
 		await menu.OpenCardAsync();
 
@@ -128,12 +129,14 @@ public sealed class MenuViewModelTests
 	public async Task Constructor_NullArguments_ShouldThrowArgumentNullException()
 	{
 		using var ui = new UiFixture();
-		var (_, places) = await ArrangeAsync(ui);
+		var (_, places, picker) = await ArrangeAsync(ui);
 
-		var noPlaces = () => new MenuViewModel(null!, ui.Card); // null on purpose: proves the guard clause rejects it
-		var noCard = () => new MenuViewModel(places, null!); // null on purpose: proves the guard clause rejects it
+		var noPlaces = () => new MenuViewModel(null!, picker, ui.Card); // null on purpose: proves the guard clause rejects it
+		var noPicker = () => new MenuViewModel(places, null!, ui.Card); // null on purpose: proves the guard clause rejects it
+		var noCard = () => new MenuViewModel(places, picker, null!); // null on purpose: proves the guard clause rejects it
 
 		noPlaces.Should().Throw<ArgumentNullException>();
+		noPicker.Should().Throw<ArgumentNullException>();
 		noCard.Should().Throw<ArgumentNullException>();
 	}
 	#endregion

@@ -1,0 +1,20 @@
+@namespace ParkingTracker.Shared.Features.Places.Components
+@inherits ViewModelComponent<PlacePickerViewModel>
+<div id="pickerHeader" class="picker-header">
+    <div class="picker-head-row">
+        <RadzenButton id="pickerBack" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Base" Variant="Variant.Text" class="picker-back" title="Back" aria-label="Back" Click="OnBack"><Icon Name="back" /></RadzenButton>
+        <h1 id="pickerTitle" class="picker-title">@ViewModel.Title</h1>
+        <RadzenButton id="pickerHere" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Base" Variant="Variant.Text" class="picker-here" Click="OnUseMyPosition"><Icon Name="locate" /><span>Use my position</span></RadzenButton>
+    </div>
+    <div class="searchbar-wrap">
+        <form id="pickerForm" class="searchbar" role="search" @onsubmit="OnSubmitAsync" @onsubmit:preventDefault>
+            <RadzenTextBox id="pickerSearch" type="search" Placeholder="Search a street or address" autocomplete="off" enterkeyhint="search"
+                           @bind-Value="ViewModel.SearchText" Immediate="true" />
+            <RadzenButton id="pickerSearchBtn" ButtonType="ButtonType.Submit" ButtonStyle="ButtonStyle.Base" Variant="Variant.Text" class="picker-search-btn" title="Search" aria-label="Search" Disabled="ViewModel.IsBusy"><Icon Name="search" /></RadzenButton>
+        </form>
+        @if (ViewModel.State == PlacePickerState.Results)
+        {
+            <AddressResults Matches="ViewModel.Matches" OnPick="OnPick" OnClose="OnCloseResults" />
+        }
+    </div>
+</div>
