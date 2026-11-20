@@ -94,7 +94,7 @@
             <div class="grid2">
                 <RadzenStack Gap="0.3rem" class="field">
                     <RadzenLabel Text="Plate" Component="cardPlate" />
-                    <RadzenTextBox Name="cardPlate" id="cardPlate" Placeholder="1ABC234" Style="width:100%" @bind-Value="ViewModel.Plate" />
+                    <RadzenTextBox Name="cardPlate" id="cardPlate" Placeholder="1ABC234" Style="width:100%" class="plate-input" autocapitalize="characters" Immediate="true" Value="@ViewModel.Plate" ValueChanged="OnPlateChanged" />
                 </RadzenStack>
                 <RadzenStack Gap="0.3rem" class="field">
                     <RadzenLabel Text="Card number" Component="cardNumber" />

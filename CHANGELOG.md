@@ -30,6 +30,8 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
 - The status sheet is built with Radzen components: the answer card, the chips, the nearest free spot with its Waze and
   Google Maps buttons, the location banner and the search box. Texts and behaviour stay the same; buttons and spacing
   may look slightly different. This completes the move of the screens to Radzen.
+- "Valid until" on the card form defaults to one year after "Valid from" unless you or a scan chose another date.
+- The plate is written in capitals as you type.
 
 ### Security
 
@@ -61,6 +63,8 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
 - The Home and Work chips under the search bar use the colours of the app, light or dark, like the car chip, instead of
   a light grey fill whose text could not be read in the dark theme. The other light buttons (car dialog, place dialog,
   "pay" button) follow the dark theme too.
+- The Home and Work buttons are readable in light and dark mode; a place that is not set reads "Set home" or "Set work".
+- The search bar no longer slides under the status bar on phones with an older system web view.
 
 ## [1.0.21] - 2026-11-17
 

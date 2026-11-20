@@ -2,9 +2,12 @@ using Bunit;
 using NSubstitute;
 using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
 using ParkingTracker.Domain.Features.SavedPlaces.ValueObjects;
+using ParkingTracker.Domain.Features.SpotDecisions.ValueObjects;
 using ParkingTracker.Shared.Features.Places.Components;
 using ParkingTracker.Shared.Tests.Features.Shared.TestDoubles;
+using ParkingTracker.ViewModels.Features.MapLayers;
 using ParkingTracker.ViewModels.Features.Places;
+using ParkingTracker.ViewModels.Features.SpotCheck;
 
 namespace ParkingTracker.Shared.Tests.Features.Places.Components;
 
@@ -33,8 +36,8 @@ public sealed class PlaceComponentsTests : UiTestContext
 	{
 		var chips = Render<PlaceChips>();
 
-		chips.Find("#placeHome").TextContent.Should().Contain("Home");
-		chips.Find("#placeWork").TextContent.Should().Contain("Work");
+		chips.Find("#placeHome").TextContent.Should().Contain("Set home");
+		chips.Find("#placeWork").TextContent.Should().Contain("Set work");
 		chips.FindAll("#placeHomeEdit").Should().BeEmpty();
 
 		await chips.Find("#placeWork").ClickAsync();
@@ -42,6 +45,38 @@ public sealed class PlaceComponentsTests : UiTestContext
 		var model = Resolve<PlacesViewModel>();
 		model.IsOpen.Should().BeTrue();
 		model.EditingKind.Should().Be(PlaceKind.Work);
+	}
+
+	/// <summary>
+	/// Verifies that the chips are Radzen chips with the ids the end-to-end tests use.
+	/// </summary>
+	[Fact]
+	public void PlaceChips_NothingSaved_ShouldRenderRadzenChipsWithTheirIds()
+	{
+		var chips = Render<PlaceChips>();
+
+		chips.Find("#placeHome").ClassList.Should().Contain("rz-chip");
+		chips.Find("#placeWork").ClassList.Should().Contain("rz-chip");
+	}
+
+	/// <summary>
+	/// Verifies that a saved place reads "Home" and that a tap on it shows the place instead of opening the dialog.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task PlaceChips_HomeSaved_ShouldShowThePlaceOnTap()
+	{
+		Places.GetPlacesAsync(Arg.Any<CancellationToken>()).Returns([SavedHome]);
+		var chips = Render<PlaceChips>();
+		await chips.WaitForAssertionAsync(() => chips.Find("#placeHome").TextContent.Should().NotContain("Set"));
+		AnswerChecks(SpotDecision.Create(Verdict.Pay, "x"));
+		MapViewRequest? view = null;
+		Resolve<SpotCheckViewModel>().ViewRequested += (_, e) => view = e.Value;
+
+		await chips.Find("#placeHome").ClickAsync();
+
+		view.Should().NotBeNull();
+		Resolve<PlacesViewModel>().IsOpen.Should().BeFalse();
 	}
 
 	/// <summary>

@@ -102,13 +102,13 @@ public sealed partial class StylesheetTests : UiTestContext
 	public void PlaceChips_Style_ShouldUseTheColoursOfTheApp()
 	{
 		var chips = Render<PlaceChips>();
-		chips.FindAll(".place-chips .rz-button.place-go").Should().HaveCount(2);
+		chips.FindAll(".place-chips .rz-chip.place-go").Should().HaveCount(2);
 		var css = ReadStylesheet("style.css");
 
-		var chip = RuleOf(css, ".place-chips .rz-button.place-go");
+		var chip = RuleOf(css, ".place-chips .rz-chip.place-go, .place-chips .rz-chip.place-go:not(.rz-state-disabled):hover, .place-chips .rz-chip.place-go:not(.rz-state-disabled):active");
 		var group = RuleOf(css, ".place-chips");
 
-		chip.Should().Contain("background: var(--surface);").And.Contain("color: var(--fg);").And.Contain("box-shadow: var(--shadow);");
+		chip.Should().Contain("background-color: var(--surface);").And.Contain("color: var(--fg);").And.Contain("box-shadow: var(--shadow);");
 		group.Should().Contain("pointer-events: auto;");
 	}
 	#endregion

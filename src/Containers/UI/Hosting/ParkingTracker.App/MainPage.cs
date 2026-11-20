@@ -17,12 +17,23 @@ namespace ParkingTracker.App;
 /// </summary>
 public sealed class MainPage : ContentPage
 {
+	#region Constants
+	/// <summary>
+	/// The colour behind the status bar: the app's dark ink, so the light status icons read in the light and the dark scheme. It matches <c>--fg</c> in <c>Shared/wwwroot/css/style.css</c>.
+	/// </summary>
+	private const string StatusBarBackground = "#0F172A";
+	#endregion
+
 	#region Constructors
 	/// <summary>
 	/// Initializes a new instance of the <see cref="MainPage"/> class.
 	/// </summary>
 	public MainPage()
 	{
+		// The app is drawn edge to edge, and a web view older than Chromium 136 reports no safe-area inset to the page, so the search
+		// bar slid under the status bar; keeping the top edge out of the system bar works on every web view version.
+		SafeAreaEdges = new SafeAreaEdges(SafeAreaRegions.None, SafeAreaRegions.Container, SafeAreaRegions.None, SafeAreaRegions.None);
+		BackgroundColor = Color.FromArgb(StatusBarBackground);
 		var webView = new BlazorWebView { HostPage = "wwwroot/index.html" };
 		webView.RootComponents.Add(new RootComponent { Selector = "#app", ComponentType = typeof(Routes) });
 		webView.RootComponents.Add(new RootComponent { Selector = "#platform-relay", ComponentType = typeof(PlatformRelay) });
