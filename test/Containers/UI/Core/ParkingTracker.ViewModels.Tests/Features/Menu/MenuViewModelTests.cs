@@ -1,10 +1,12 @@
 using NSubstitute;
 using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
+using ParkingTracker.Application.Features.Vehicles.Abstractions;
 using ParkingTracker.Domain.Features.SavedPlaces.Aggregates;
 using ParkingTracker.Domain.Features.SavedPlaces.ValueObjects;
 using ParkingTracker.Domain.Features.Shared.ValueObjects;
 using ParkingTracker.ViewModels.Features.Menu;
 using ParkingTracker.ViewModels.Features.Places;
+using ParkingTracker.ViewModels.Features.Vehicles;
 using ParkingTracker.ViewModels.Tests.Features.Shared.TestDoubles;
 
 namespace ParkingTracker.ViewModels.Tests.Features.Menu;
@@ -36,7 +38,8 @@ public sealed class MenuViewModelTests
 		await places.LoadAsync().ConfigureAwait(false);
 		var picker = new PlacePickerViewModel(store, ui.Sender, ui.Spot, places, ui.Toast);
 		var favourites = new FavouritesViewModel(places, picker);
-		return (new MenuViewModel(places, picker, favourites, ui.Card), places, picker, favourites);
+		var vehicle = new VehicleViewModel(Substitute.For<IVehicleStore>(), ui.Toast, ui.Clock);
+		return (new MenuViewModel(places, picker, favourites, vehicle, ui.Card), places, picker, favourites);
 	}
 	#endregion
 
@@ -54,6 +57,7 @@ public sealed class MenuViewModelTests
 		menu.HomeText.Should().Be("Not set");
 		menu.WorkText.Should().Be("Not set");
 		menu.CardText.Should().Be("Not set");
+		menu.VehicleText.Should().Be("Not set");
 	}
 
 	/// <summary>
@@ -151,14 +155,17 @@ public sealed class MenuViewModelTests
 		using var ui = new UiFixture();
 		var (_, places, picker, favourites) = await ArrangeAsync(ui);
 
-		var noPlaces = () => new MenuViewModel(null!, picker, favourites, ui.Card); // null on purpose: proves the guard clause rejects it
-		var noPicker = () => new MenuViewModel(places, null!, favourites, ui.Card); // null on purpose: proves the guard clause rejects it
-		var noFavourites = () => new MenuViewModel(places, picker, null!, ui.Card); // null on purpose: proves the guard clause rejects it
-		var noCard = () => new MenuViewModel(places, picker, favourites, null!); // null on purpose: proves the guard clause rejects it
+		var vehicle = new VehicleViewModel(Substitute.For<IVehicleStore>(), ui.Toast, ui.Clock);
+		var noPlaces = () => new MenuViewModel(null!, picker, favourites, vehicle, ui.Card); // null on purpose: proves the guard clause rejects it
+		var noPicker = () => new MenuViewModel(places, null!, favourites, vehicle, ui.Card); // null on purpose: proves the guard clause rejects it
+		var noFavourites = () => new MenuViewModel(places, picker, null!, vehicle, ui.Card); // null on purpose: proves the guard clause rejects it
+		var noVehicle = () => new MenuViewModel(places, picker, favourites, null!, ui.Card); // null on purpose: proves the guard clause rejects it
+		var noCard = () => new MenuViewModel(places, picker, favourites, vehicle, null!); // null on purpose: proves the guard clause rejects it
 
 		noPlaces.Should().Throw<ArgumentNullException>();
 		noPicker.Should().Throw<ArgumentNullException>();
 		noFavourites.Should().Throw<ArgumentNullException>();
+		noVehicle.Should().Throw<ArgumentNullException>();
 		noCard.Should().Throw<ArgumentNullException>();
 	}
 	#endregion

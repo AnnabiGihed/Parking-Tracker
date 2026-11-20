@@ -8,6 +8,7 @@ using ParkingTracker.ViewModels.Features.MapLayers;
 using ParkingTracker.ViewModels.Features.Places;
 using ParkingTracker.ViewModels.Features.Shared;
 using ParkingTracker.ViewModels.Features.SpotCheck;
+using ParkingTracker.ViewModels.Features.Vehicles;
 using ParkingTracker.ViewModels.Features.Welcome;
 
 namespace ParkingTracker.Shared.Features.SpotCheck.Pages;
@@ -70,6 +71,12 @@ public sealed partial class Home : ComponentBase, IDisposable
 	/// </summary>
 	[Inject]
 	public PlacePickerViewModel Picker { get; set; } = null!;
+
+	/// <summary>
+	/// Gets or sets the saved vehicle, read at start so that the side menu shows it.
+	/// </summary>
+	[Inject]
+	public VehicleViewModel Vehicle { get; set; } = null!;
 	#endregion
 
 	#region Fields
@@ -140,6 +147,7 @@ public sealed partial class Home : ComponentBase, IDisposable
 	{
 		await Card.RefreshLineAsync();
 		await Car.LoadAsync();
+		await Vehicle.LoadAsync();
 		await Layers.LoadSwitchesAsync();
 	}
 

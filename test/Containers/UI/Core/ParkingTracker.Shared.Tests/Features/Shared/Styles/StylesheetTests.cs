@@ -127,6 +127,28 @@ public sealed partial class StylesheetTests : UiTestContext
 	}
 	#endregion
 
+	#region Form Field Tests
+	/// <summary>
+	/// Verifies that the look of every input comes from the input variables of Radzen, set from the colours of the app (so that light and
+	/// dark follow), and that no rule of the app styles the inputs of a <c>.field</c> by itself, which patched the internals of the
+	/// drop-down, the numeric box and the date picker and misaligned them.
+	/// </summary>
+	[Fact]
+	public void FormFields_Look_ShouldComeFromTheRadzenInputVariables()
+	{
+		var theme = RuleOf(ReadStylesheet("radzen-theme.css"), ":root");
+		var css = ReadStylesheet("style.css");
+
+		theme.Should().MatchRegex(@"--rz-input-size-md:\s*46px;").And.MatchRegex(@"--rz-input-border-radius:\s*12px;")
+			.And.MatchRegex(@"--rz-input-padding-block-md:\s*11px;").And.MatchRegex(@"--rz-input-padding-inline-md:\s*12px;")
+			.And.MatchRegex(@"--rz-input-background-color:\s*var\(--surface-2\);").And.MatchRegex(@"--rz-input-border:\s*1px solid var\(--line\);")
+			.And.MatchRegex(@"--rz-input-focus-border:\s*1px solid var\(--brand\);").And.MatchRegex(@"--rz-input-value-color:\s*var\(--fg\);")
+			.And.MatchRegex(@"--rz-input-placeholder-color:\s*var\(--muted\);");
+		Regex.IsMatch(css, @"\.field\s*(?:>\s*)?(?:input|select)|\.field\s+\.rz-(?:textbox|dropdown|numeric|datepicker)", RegexOptions.ExplicitCapture, MatchTimeout)
+			.Should().BeFalse("the inputs of a field are styled by the Radzen variables only");
+	}
+	#endregion
+
 	#region Theme Tests
 	/// <summary>
 	/// Verifies that the fill of the Radzen "Light" buttons comes from a colour of the app, which changes with the dark scheme,

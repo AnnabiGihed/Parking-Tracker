@@ -13,11 +13,13 @@ using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Queries.DecideSpot;
 using ParkingTracker.Application.Features.SpotDecisions.Queries.FindFreeSpots;
+using ParkingTracker.Application.Features.Vehicles.Abstractions;
 using ParkingTracker.Domain.Features.Cars.ValueObjects;
 using ParkingTracker.Domain.Features.MapLayers.ValueObjects;
 using ParkingTracker.Domain.Features.Sectors.ValueObjects;
 using ParkingTracker.Domain.Features.Shared.ValueObjects;
 using ParkingTracker.Domain.Features.SpotDecisions.ValueObjects;
+using ParkingTracker.Domain.Features.Vehicles.ValueObjects;
 using ParkingTracker.Domain.Features.Zones.ValueObjects;
 using ParkingTracker.ViewModels.Features.Shared.Settings;
 using ParkingTracker.ViewModels.Features.Shared.Settings.Database;
@@ -67,6 +69,9 @@ public abstract class UiTestContext : BunitContext
 		Places.GetPlacesAsync(Arg.Any<CancellationToken>()).Returns([]);
 		Services.AddSingleton(Settings);
 		Services.AddSingleton(Places);
+		Vehicles.GetAsync(Arg.Any<CancellationToken>()).Returns((VehicleDetails?)null);
+		Vehicles.SaveAsync(Arg.Any<VehicleDetails>(), Arg.Any<CancellationToken>()).Returns(Result.Success());
+		Services.AddSingleton(Vehicles);
 		Services.AddSingleton(Launcher);
 		Services.AddSingleton(ReferenceData);
 		Services.AddSingleton(Network);
@@ -123,6 +128,11 @@ public abstract class UiTestContext : BunitContext
 	/// Gets the saved places store substitute, which holds no place.
 	/// </summary>
 	protected IPlacesStore Places { get; } = Substitute.For<IPlacesStore>();
+
+	/// <summary>
+	/// Gets the vehicle store substitute, which holds no vehicle and accepts every save.
+	/// </summary>
+	protected IVehicleStore Vehicles { get; } = Substitute.For<IVehicleStore>();
 
 	/// <summary>
 	/// Gets the link launcher substitute.

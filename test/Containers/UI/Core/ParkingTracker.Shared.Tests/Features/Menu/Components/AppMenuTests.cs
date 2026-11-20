@@ -3,11 +3,13 @@ using NSubstitute;
 using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
 using ParkingTracker.Domain.Features.SavedPlaces.Aggregates;
 using ParkingTracker.Domain.Features.SavedPlaces.ValueObjects;
+using ParkingTracker.Domain.Features.Vehicles.ValueObjects;
 using ParkingTracker.Shared.Features.SpotCheck.Components;
 using ParkingTracker.Shared.Tests.Features.Shared.TestDoubles;
 using ParkingTracker.ViewModels.Features.Card;
 using ParkingTracker.ViewModels.Features.Places;
 using ParkingTracker.ViewModels.Features.Shared;
+using ParkingTracker.ViewModels.Features.Vehicles;
 using Radzen.Blazor;
 
 namespace ParkingTracker.Shared.Tests.Features.Menu.Components;
@@ -65,18 +67,18 @@ public sealed class AppMenuTests : UiTestContext
 	}
 
 	/// <summary>
-	/// Verifies that the menu lists Home, Work, the favourite places and the parking card, with "Not set" or "None yet" while nothing is saved.
+	/// Verifies that the menu lists Home, Work, the favourite places, My vehicle and the parking card, with "Not set" or "None yet" while nothing is saved.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
-	public async Task Menu_NothingSaved_ShouldListTheFourItems()
+	public async Task Menu_NothingSaved_ShouldListTheFiveItems()
 	{
 		var host = await OpenMenuAsync();
 
 		host.Find("#appMenu .app-menu-name").TextContent.Should().Be("Parking Tracker");
-		host.FindAll("#appMenu .app-menu-item").Should().HaveCount(4);
-		host.FindAll("#appMenu .app-menu-title").Select(title => title.TextContent).Should().Equal("Home", "Work", "Favourite places", "Parking card");
-		host.FindAll("#appMenu .app-menu-sub").Select(text => text.TextContent).Should().Equal("Not set", "Not set", "None yet", "Not set");
+		host.FindAll("#appMenu .app-menu-item").Should().HaveCount(5);
+		host.FindAll("#appMenu .app-menu-title").Select(title => title.TextContent).Should().Equal("Home", "Work", "Favourite places", "My vehicle", "Parking card");
+		host.FindAll("#appMenu .app-menu-sub").Select(text => text.TextContent).Should().Equal("Not set", "Not set", "None yet", "Not set", "Not set");
 	}
 
 	/// <summary>
@@ -91,7 +93,7 @@ public sealed class AppMenuTests : UiTestContext
 
 		var host = await OpenMenuAsync();
 
-		host.FindAll("#appMenu .app-menu-sub").Select(text => text.TextContent).Should().Equal("Rue de la Loi 1", "Not set", "None yet", "Not set");
+		host.FindAll("#appMenu .app-menu-sub").Select(text => text.TextContent).Should().Equal("Rue de la Loi 1", "Not set", "None yet", "Not set", "Not set");
 	}
 	#endregion
 
@@ -161,6 +163,26 @@ public sealed class AppMenuTests : UiTestContext
 		await host.Find("#menuCard").ClickAsync();
 
 		await host.WaitForAssertionAsync(() => Resolve<CardViewModel>().IsOpen.Should().BeTrue());
+		await host.WaitForAssertionAsync(() => host.FindAll("#appMenu").Should().BeEmpty());
+	}
+	#endregion
+
+	#region Vehicle Tests
+	/// <summary>
+	/// Verifies that a saved vehicle shows "Make Model · Year" under My vehicle, and that a tap closes the menu and opens the vehicle dialog.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Vehicle_Saved_ShouldShowTheSummaryAndOpenTheDialogOnATap()
+	{
+		Vehicles.GetAsync(Arg.Any<CancellationToken>()).Returns(new VehicleDetails("tesla", "Model 3", 2021, FuelType.Electric, EuroNorm.Unknown));
+		await Resolve<VehicleViewModel>().LoadAsync();
+		var host = await OpenMenuAsync();
+		host.Find("#menuVehicle .app-menu-sub").TextContent.Should().Be("Tesla Model 3 · 2021");
+
+		await host.Find("#menuVehicle").ClickAsync();
+
+		await host.WaitForAssertionAsync(() => Resolve<VehicleViewModel>().IsOpen.Should().BeTrue());
 		await host.WaitForAssertionAsync(() => host.FindAll("#appMenu").Should().BeEmpty());
 	}
 	#endregion

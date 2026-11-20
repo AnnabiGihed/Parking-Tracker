@@ -263,6 +263,60 @@ public sealed class VehicleRepositoryTests
 	}
 	#endregion
 
+	#region Clear Plate Tests
+	/// <summary>
+	/// Verifies that clearing the plate sets only the plate to null and keeps every other column, so that the profile reads back without a plate.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task ClearPlate_VehicleWithPlate_ShouldClearOnlyThePlate()
+	{
+		await using var db = await DeviceTestDatabase.CreateAsync();
+		var vehicle = TestData.ElectricVehicle();
+		await db.ApplyAsync(scope => db.Vehicles.AddAsync(scope, vehicle));
+
+		(await db.ApplyRemovalAsync(db.Vehicles.ClearPlate)).IsSuccess.Should().BeTrue();
+		var loaded = await db.Vehicles.GetAsync();
+
+		(await db.ScalarAsync<int>("SELECT COUNT(*) FROM vehicles WHERE plate IS NULL")).Should().Be(1);
+		loaded.IsSuccess.Should().BeTrue();
+		loaded.Value.Id.Should().Be(vehicle.Id);
+		loaded.Value.Plate.Should().BeNull();
+		loaded.Value.ToDetails().Should().BeEquivalentTo(vehicle.ToDetails() with { Plate = null });
+	}
+
+	/// <summary>
+	/// Verifies that clearing the plate of a profile without one, or when none is stored, changes nothing.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task ClearPlate_NoPlateOrNoProfile_ShouldChangeNothing()
+	{
+		await using var db = await DeviceTestDatabase.CreateAsync();
+		(await db.ApplyRemovalAsync(db.Vehicles.ClearPlate)).IsSuccess.Should().BeTrue();
+		var vehicle = TestData.PetrolVehicle();
+		await db.ApplyAsync(scope => db.Vehicles.AddAsync(scope, vehicle));
+
+		(await db.ApplyRemovalAsync(db.Vehicles.ClearPlate)).IsSuccess.Should().BeTrue();
+
+		(await db.Vehicles.GetAsync()).Value.ToDetails().Should().BeEquivalentTo(vehicle.ToDetails());
+	}
+
+	/// <summary>
+	/// Verifies that a missing scope is rejected.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task ClearPlate_NullScope_ShouldThrow()
+	{
+		await using var db = DeviceTestDatabase.CreateEmpty();
+
+		var noScope = () => db.Vehicles.ClearPlate(null!); // null on purpose: proves the guard clause rejects it
+
+		noScope.Should().Throw<ArgumentNullException>();
+	}
+	#endregion
+
 	#region Argument Tests
 	/// <summary>
 	/// Verifies that the constructor and the methods reject missing arguments.

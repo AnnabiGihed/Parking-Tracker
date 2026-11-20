@@ -385,17 +385,16 @@ product. C contradicts R8.
 
 **Side menu, dialog bridge, layers and back button.** The app keeps one route (`/`), because the Leaflet map is a
 singleton that a second route would destroy. The menu button `#menuBtn` in the search bar opens `AppMenu`, a
-`RadzenPanelMenu` in a Radzen side dialog (left, mask, 300 px) with Home, Work and the parking card; `MenuViewModel`
-supplies the secondary texts ("Not set" or the saved address or card line). A tap closes the menu and then opens the
-existing dialog, so a Radzen dialog is never open over one of the app's own; Home and Work start the map picker
-instead (below). `DialogBridge` joins an
-`IDialogViewModel` to `DialogService` (`OpenAsync`/`Close`, and `OnClose` back to the view model's `Close`), so view
-models stay free of Radzen; the four existing dialogs (`DialogShell`) move to it later. Layers: the search bar is 1000,
-the layers popover 1100, the app's dialog backdrop 1500, the Radzen mask 1500 and dialog 1501
-(`radzen-theme.css`), Radzen's popups 2000, the toast 2100, the map 0. The back button closes the newest open screen:
-`IBackNavigation` is a singleton stack that the menu, the bridge and each `DialogShell` with `OnBack` register in;
-`MainPage.OnBackButtonPressed` dispatches `TryGoBack` into Blazor through `BlazorWebView.TryDispatchAsync` and leaves
-the app only when nothing is open.
+`RadzenPanelMenu` in a Radzen side dialog (left, mask, 300 px) with Home, Work, the favourite places, My vehicle and the
+parking card; `MenuViewModel` supplies the secondary texts ("Not set" or the saved address, vehicle or card line). A tap
+closes the menu and then opens the existing dialog, so a Radzen dialog is never open over one of the app's own; Home and
+Work start the map picker instead (below). `DialogBridge` joins an `IDialogViewModel` to `DialogService`
+(`OpenAsync`/`Close`, and `OnClose` back to the view model's `Close`), so view models stay free of Radzen; the four
+existing dialogs (`DialogShell`) move to it later. Layers: the search bar is 1000, the layers popover 1100, the app's
+dialog backdrop 1500, the Radzen mask 1500 and dialog 1501 (`radzen-theme.css`), Radzen's popups 2000, the toast 2100,
+the map 0. The back button closes the newest open screen: `IBackNavigation` is a singleton stack that the menu, the
+bridge and each `DialogShell` with `OnBack` register in; `MainPage.OnBackButtonPressed` dispatches `TryGoBack` into
+Blazor through `BlazorWebView.TryDispatchAsync` and leaves the app only when nothing is open.
 
 **Map picker for Home and Work.** Setting a place is a map mode, not a dialog (`PlacePickerViewModel`: Idle, Searching,
 Results, Confirming, Saving). The chips of a place that is not set and the menu entries start it; `Home` gives its root
@@ -407,6 +406,12 @@ the pin moves a separate draggable marker (`map.js` `setCandidate`, reported bac
 saved (a saved place opens with its pin). Nothing is written before Save; Save is disabled outside the Brussels box and
 the domain still refuses such a place. The back button closes the list first and then cancels the picker. The old place
 dialog is gone.
+
+**My vehicle.** `VehicleDialog` is a `RadzenTemplateForm` in a bottom sheet opened through `DialogBridge`;
+`VehicleViewModel` holds the fields and saves through `IVehicleStore` (`DeviceVehicleStore`, which passes the current
+year from `TimeProvider` to the domain). The plugs, battery and range show only for an electric vehicle or a plug-in
+hybrid and are cleared when the fuel changes; the first rule the domain refuses is shown next to the form
+([0031](adr/0031-keep-one-vehicle-profile-on-the-phone.md)).
 
 ADR: [0020](adr/0020-use-radzen-for-the-phone-screens-and-keep-leaflet-for-the-map.md),
 [0030](adr/0030-keep-one-map-page-with-a-side-menu-and-dialogs-through-dialogservice.md).

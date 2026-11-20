@@ -10,6 +10,8 @@ using ParkingTracker.Domain.Features.Cars.ValueObjects;
 using ParkingTracker.Domain.Features.Sectors.ValueObjects;
 using ParkingTracker.Domain.Features.Shared.ValueObjects;
 using ParkingTracker.Domain.Features.SpotDecisions.ValueObjects;
+using ParkingTracker.Domain.Features.Vehicles.Aggregates;
+using ParkingTracker.Domain.Features.Vehicles.ValueObjects;
 using ParkingTracker.Persistence.Device.Features.Shared.Database;
 using ParkingTracker.Testing.Device;
 using ParkingTracker.ViewModels.Tests.Features.Shared.TestDoubles;
@@ -84,7 +86,7 @@ public sealed class DeviceSettingsStoreTests
 	private static DeviceSettingsStore NewStore(DeviceTestDatabase db, InMemoryKeyValueStorage plain, InMemoryKeyValueStorage? secure = null, IStartupGate? gate = null)
 	{
 		var inner = new SettingsStore(secure ?? new InMemoryKeyValueStorage(), plain);
-		return new DeviceSettingsStore(inner, db.Cards, db.Sessions, db.Places, db.UnitOfWork, db.Initializer, gate ?? new FakeStartupGate(), db.ReferenceData, NullLogger<DeviceSettingsStore>.Instance, new DeviceDataResetNotice());
+		return new DeviceSettingsStore(inner, db.Cards, db.Sessions, db.Places, db.Vehicles, db.UnitOfWork, db.Initializer, gate ?? new FakeStartupGate(), db.ReferenceData, NullLogger<DeviceSettingsStore>.Instance, new DeviceDataResetNotice());
 	}
 	#endregion
 
@@ -462,7 +464,7 @@ public sealed class DeviceSettingsStoreTests
 		await using var db = await DeviceTestDatabase.CreateAsync();
 		var notice = new DeviceDataResetNotice();
 		var plain = new InMemoryKeyValueStorage();
-		using var store = new DeviceSettingsStore(new SettingsStore(new InMemoryKeyValueStorage(), plain), db.Cards, db.Sessions, db.Places, db.UnitOfWork, db.Initializer, new FakeStartupGate(), db.ReferenceData, NullLogger<DeviceSettingsStore>.Instance, notice);
+		using var store = new DeviceSettingsStore(new SettingsStore(new InMemoryKeyValueStorage(), plain), db.Cards, db.Sessions, db.Places, db.Vehicles, db.UnitOfWork, db.Initializer, new FakeStartupGate(), db.ReferenceData, NullLogger<DeviceSettingsStore>.Instance, notice);
 		await store.SaveCardAsync(CityCard);
 		(await store.GetCardAsync()).Should().NotBeNull();
 		await db.ExecuteAsync("DELETE FROM resident_cards");
@@ -518,6 +520,32 @@ public sealed class DeviceSettingsStoreTests
 		(await db.ScalarAsync<int>("SELECT COUNT(*) FROM resident_cards")).Should().Be(1);
 		(await db.ScalarAsync<int>("SELECT COUNT(*) FROM parking_sessions")).Should().Be(0);
 		(await launch.GetCarAsync()).Should().BeNull();
+	}
+
+	/// <summary>
+	/// Verifies that entering the card again after a lost key clears only the unreadable plate of the vehicle and keeps the row and its
+	/// other values, and that a vehicle without a plate is kept as it is.
+	/// </summary>
+	/// <param name="plate">The plate of the vehicle, or <see langword="null"/> for none.</param>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Theory]
+	[InlineData("1ABC234")]
+	[InlineData(null)]
+	public async Task Card_KeyLost_SaveShouldKeepTheVehicleWithoutItsPlate(string? plate)
+	{
+		await using var db = await DeviceTestDatabase.CreateAsync();
+		var (store, plain) = Arrange(db);
+		await store.SaveCardAsync(CityCard);
+		var vehicle = Vehicle.Create(new VehicleDetails("renault", "Clio", 2019, FuelType.Petrol, EuroNorm.Euro6, null, plate), 2026).Value;
+		(await db.ApplyAsync(scope => db.Vehicles.AddAsync(scope, vehicle))).IsSuccess.Should().BeTrue();
+		var launch = NewStore(db, plain);
+		db.MemoryKeys.Lose();
+
+		await launch.SaveCardAsync(CityCard with { Plate = "2NEW345" });
+
+		(await db.ScalarAsync<int>("SELECT COUNT(*) FROM vehicles")).Should().Be(1);
+		(await db.Vehicles.GetAsync()).Value.ToDetails().Should().BeEquivalentTo(vehicle.ToDetails() with { Plate = null });
+		(await launch.GetCardAsync())!.Plate.Should().Be("2NEW345");
 	}
 
 	/// <summary>
@@ -677,7 +705,7 @@ public sealed class DeviceSettingsStoreTests
 		await using var db = await DeviceTestDatabase.CreateAsync();
 		var inner = Substitute.For<ISettingsStore>();
 		inner.ClearCardAsync().Returns(Task.FromException(new IOException("storage gone")));
-		var store = new DeviceSettingsStore(inner, db.Cards, db.Sessions, db.Places, db.UnitOfWork, db.Initializer, new FakeStartupGate { MoveFinished = false }, db.ReferenceData, NullLogger<DeviceSettingsStore>.Instance, new DeviceDataResetNotice());
+		var store = new DeviceSettingsStore(inner, db.Cards, db.Sessions, db.Places, db.Vehicles, db.UnitOfWork, db.Initializer, new FakeStartupGate { MoveFinished = false }, db.ReferenceData, NullLogger<DeviceSettingsStore>.Instance, new DeviceDataResetNotice());
 
 		await store.SaveCardAsync(CityCard);
 
@@ -819,12 +847,12 @@ public sealed class DeviceSettingsStoreTests
 		await using var db = DeviceTestDatabase.CreateEmpty();
 		var (store, _) = Arrange(db);
 
-		var noInner = () => new DeviceSettingsStore(null!, db.Cards, db.Sessions, db.Places, db.UnitOfWork, db.Initializer, new FakeStartupGate(), db.ReferenceData, NullLogger<DeviceSettingsStore>.Instance, new DeviceDataResetNotice()); // null on purpose: proves the guard clause rejects it
+		var noInner = () => new DeviceSettingsStore(null!, db.Cards, db.Sessions, db.Places, db.Vehicles, db.UnitOfWork, db.Initializer, new FakeStartupGate(), db.ReferenceData, NullLogger<DeviceSettingsStore>.Instance, new DeviceDataResetNotice()); // null on purpose: proves the guard clause rejects it
 		var noCard = () => store.SaveCardAsync(null!); // null on purpose: proves the guard clause rejects it
 		var noCar = () => store.SaveCarAsync(null!); // null on purpose: proves the guard clause rejects it
 		var noTimer = () => store.SaveTimerAsync(null!); // null on purpose: proves the guard clause rejects it
 
-		var noGate = () => new DeviceSettingsStore(new SettingsStore(new InMemoryKeyValueStorage(), new InMemoryKeyValueStorage()), db.Cards, db.Sessions, db.Places, db.UnitOfWork, db.Initializer, null!, db.ReferenceData, NullLogger<DeviceSettingsStore>.Instance, new DeviceDataResetNotice()); // null on purpose: proves the guard clause rejects it
+		var noGate = () => new DeviceSettingsStore(new SettingsStore(new InMemoryKeyValueStorage(), new InMemoryKeyValueStorage()), db.Cards, db.Sessions, db.Places, db.Vehicles, db.UnitOfWork, db.Initializer, null!, db.ReferenceData, NullLogger<DeviceSettingsStore>.Instance, new DeviceDataResetNotice()); // null on purpose: proves the guard clause rejects it
 
 		noInner.Should().Throw<ArgumentNullException>();
 		noGate.Should().Throw<ArgumentNullException>();

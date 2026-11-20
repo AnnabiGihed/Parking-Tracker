@@ -15,6 +15,7 @@ using ParkingTracker.Application.Features.ResidentCards.Abstractions;
 using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
 using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
+using ParkingTracker.Application.Features.Vehicles.Abstractions;
 using ParkingTracker.Infrastructure.Features.Shared.Legacy;
 using ParkingTracker.Persistence.Device;
 using ParkingTracker.Persistence.Device.Features.Shared.Encryption;
@@ -91,6 +92,7 @@ public sealed class AppServiceInstaller : IServiceInstaller
 			provider.GetRequiredService<IResidentCardRepository>(),
 			provider.GetRequiredService<IParkingSessionRepository>(),
 			provider.GetRequiredService<ISavedPlacesRepository>(),
+			provider.GetRequiredService<IVehicleRepository>(),
 			provider.GetRequiredService<IDeviceUnitOfWork>(),
 			provider.GetRequiredService<IDeviceDatabaseInitializer>(),
 			provider.GetRequiredService<IStartupGate>(),
@@ -102,11 +104,25 @@ public sealed class AppServiceInstaller : IServiceInstaller
 		services.AddSingleton<IPlacesStore>(provider => new DevicePlacesStore(
 			provider.GetRequiredService<ISavedPlacesRepository>(),
 			provider.GetRequiredService<IResidentCardRepository>(),
+			provider.GetRequiredService<IVehicleRepository>(),
 			provider.GetRequiredService<IParkingSessionRepository>(),
 			provider.GetRequiredService<IDeviceUnitOfWork>(),
 			provider.GetRequiredService<IDeviceDatabaseInitializer>(),
 			provider.GetRequiredService<IStartupGate>(),
 			provider.GetRequiredService<ILogger<DevicePlacesStore>>(),
+			provider.GetRequiredService<DeviceDataResetNotice>()));
+
+		// The vehicle profile of the My vehicle dialog, in the same database.
+		services.AddSingleton<IVehicleStore>(provider => new DeviceVehicleStore(
+			provider.GetRequiredService<IVehicleRepository>(),
+			provider.GetRequiredService<ISavedPlacesRepository>(),
+			provider.GetRequiredService<IResidentCardRepository>(),
+			provider.GetRequiredService<IParkingSessionRepository>(),
+			provider.GetRequiredService<IDeviceUnitOfWork>(),
+			provider.GetRequiredService<IDeviceDatabaseInitializer>(),
+			provider.GetRequiredService<IStartupGate>(),
+			provider.GetRequiredService<TimeProvider>(),
+			provider.GetRequiredService<ILogger<DeviceVehicleStore>>(),
 			provider.GetRequiredService<DeviceDataResetNotice>()));
 	}
 
