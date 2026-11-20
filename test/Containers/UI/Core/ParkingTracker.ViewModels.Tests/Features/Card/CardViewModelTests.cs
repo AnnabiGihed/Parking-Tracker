@@ -61,6 +61,87 @@ public sealed class CardViewModelTests
 	}
 	#endregion
 
+	#region Valid-To Suggestion Tests
+	/// <summary>
+	/// Verifies that setting the first day while the last day is empty proposes the same day one year later.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task ValidFrom_ValidToEmpty_ShouldSuggestOneYearLater()
+	{
+		using var ui = new UiFixture();
+		await ui.Card.OpenAsync();
+
+		ui.Card.ValidFrom = "2026-03-15";
+
+		ui.Card.ValidTo.Should().Be("2027-03-15");
+	}
+
+	/// <summary>
+	/// Verifies that a last day the user chose is kept when the first day is set or changed.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task ValidFrom_ValidToChosenByUser_ShouldKeepIt()
+	{
+		using var ui = new UiFixture();
+		await ui.Card.OpenAsync();
+		ui.Card.ValidTo = "2026-12-31";
+
+		ui.Card.ValidFrom = "2026-03-15";
+		ui.Card.ValidFrom = "2026-04-01";
+
+		ui.Card.ValidTo.Should().Be("2026-12-31");
+	}
+
+	/// <summary>
+	/// Verifies that a changed first day proposes again while the last day is still the last proposal.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task ValidFrom_ValidToStillTheSuggestion_ShouldSuggestAgain()
+	{
+		using var ui = new UiFixture();
+		await ui.Card.OpenAsync();
+		ui.Card.ValidFrom = "2026-03-15";
+
+		ui.Card.ValidFrom = "2026-04-01";
+
+		ui.Card.ValidTo.Should().Be("2027-04-01");
+	}
+
+	/// <summary>
+	/// Verifies that a first day that is not a date proposes nothing.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task ValidFrom_Cleared_ShouldLeaveValidToAlone()
+	{
+		using var ui = new UiFixture();
+		await ui.Card.OpenAsync();
+
+		ui.Card.ValidFrom = string.Empty;
+
+		ui.Card.ValidTo.Should().BeEmpty();
+	}
+
+	/// <summary>
+	/// Verifies that a saved card keeps its last day when its first day is changed after opening.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task ValidFrom_SavedCardOpened_ShouldKeepTheSavedValidTo()
+	{
+		using var ui = new UiFixture();
+		ui.Settings.GetCardAsync().Returns(new ParkingCard("bruxelles", "louise", new CardPeriod(new DateOnly(2026, 1, 1), new DateOnly(2026, 6, 30)), ["IXL_LOUISE"], [], [], "B000-000-001", "1ABC234"));
+		await ui.Card.OpenAsync();
+
+		ui.Card.ValidFrom = "2026-02-01";
+
+		ui.Card.ValidTo.Should().Be("2026-06-30");
+	}
+	#endregion
+
 	#region Save Tests
 	/// <summary>
 	/// Verifies that saving writes the card through the settings store with the plate in capitals without spaces or dashes, and that

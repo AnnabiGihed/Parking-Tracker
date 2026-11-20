@@ -2,14 +2,14 @@
 @inherits ViewModelComponent<PlacesViewModel>
 <div class="place-chips" role="group" aria-label="Saved places">
     <span class="place-chip">
-        <RadzenButton id="placeHome" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" class="place-go" Click="OnGoHomeAsync"><Icon Name="home" />Home</RadzenButton>
+        <RadzenChip id="placeHome" ChipStyle="BadgeStyle.Base" Size="ChipSize.Medium" class="place-go" Click="OnGoHomeAsync"><span class="place-label"><Icon Name="home" /><span>@(ViewModel.Home is null ? "Set home" : "Home")</span></span></RadzenChip>
         @if (ViewModel.Home is not null)
         {
             <RadzenButton id="placeHomeEdit" ButtonStyle="ButtonStyle.Base" Variant="Variant.Text" Size="ButtonSize.Small" class="place-edit" aria-label="Edit home" Click="OnEditHome"><Icon Name="edit" /></RadzenButton>
         }
     </span>
     <span class="place-chip">
-        <RadzenButton id="placeWork" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" class="place-go" Click="OnGoWorkAsync"><Icon Name="work" />Work</RadzenButton>
+        <RadzenChip id="placeWork" ChipStyle="BadgeStyle.Base" Size="ChipSize.Medium" class="place-go" Click="OnGoWorkAsync"><span class="place-label"><Icon Name="work" /><span>@(ViewModel.Work is null ? "Set work" : "Work")</span></span></RadzenChip>
         @if (ViewModel.Work is not null)
         {
             <RadzenButton id="placeWorkEdit" ButtonStyle="ButtonStyle.Base" Variant="Variant.Text" Size="ButtonSize.Small" class="place-edit" aria-label="Edit work" Click="OnEditWork"><Icon Name="edit" /></RadzenButton>

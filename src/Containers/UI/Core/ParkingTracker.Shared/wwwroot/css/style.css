@@ -70,11 +70,15 @@ button, input, select { font: inherit; color: inherit; }
   padding: 7px 14px 7px 10px; display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 13.5px; cursor: pointer; }
 .chip-float .ic { width: 18px; height: 18px; color: var(--brand); }
 .chip-float.late { color: var(--pay); }
-/* the Home and Work shortcuts sit in .top, which lets taps through to the map, so they take taps back; the Radzen "Light"
-   fill alone has no shadow and is lost on the map, so they get the surface and shadow of the car chip */
+/* the Home and Work shortcuts sit in .top, which lets taps through to the map, so they take taps back; they use the surface,
+   text and shadow of the search bar so they read on the map in the light and the dark scheme */
 .place-chips { pointer-events: auto; display: flex; gap: 8px; }
-.place-chips .rz-button.place-go { background: var(--surface); color: var(--fg); box-shadow: var(--shadow); border-radius: 999px; font-weight: 600; }
-.place-chips .rz-button.place-go .ic { width: 18px; height: 18px; color: var(--brand); }
+.place-chip { display: inline-flex; align-items: center; gap: 2px; }
+.place-chips .rz-chip.place-go, .place-chips .rz-chip.place-go:not(.rz-state-disabled):hover, .place-chips .rz-chip.place-go:not(.rz-state-disabled):active {
+  background-color: var(--surface); color: var(--fg); box-shadow: var(--shadow); border-radius: 999px; font-weight: 600; cursor: pointer; }
+.place-chips .rz-chip.place-go .place-label { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; white-space: nowrap; }
+.place-chips .rz-chip.place-go .ic { display: inline-block; flex: none; width: 18px; height: 18px; color: var(--brand); }
+.place-chips .rz-button.place-edit { background: var(--surface); color: var(--muted); box-shadow: var(--shadow); border-radius: 50%; }
 
 /* ---------- right controls ---------- */
 .controls { position: fixed; right: 12px; bottom: calc(var(--sheet-h) + 14px); z-index: 900; display: flex; flex-direction: column; gap: 10px; }
@@ -196,6 +200,7 @@ button, input, select { font: inherit; color: inherit; }
 .field label { font-size: 12.5px; font-weight: 600; color: var(--muted); }
 .field input, .field select { padding: 11px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); font-size: 16px; width: 100%; }
 .field input:focus, .field select:focus { outline: 2px solid var(--brand); outline-offset: -1px; }
+.plate-input { text-transform: uppercase; }
 .field.end { justify-content: flex-end; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .scan { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1.5px dashed var(--brand); border-radius: 14px; cursor: pointer; color: var(--fg); }

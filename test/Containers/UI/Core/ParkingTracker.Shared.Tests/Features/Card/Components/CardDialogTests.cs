@@ -60,6 +60,22 @@ public sealed class CardDialogTests : UiTestContext
 	}
 
 	/// <summary>
+	/// Verifies that the plate is written in capitals as it is typed and that the field asks the phone keyboard for capitals.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task PlateInput_TypedLowerCase_ShouldBeUpperCased()
+	{
+		var cut = Render<CardDialog>();
+		await cut.InvokeAsync(() => Resolve<CardViewModel>().OpenAsync());
+
+		await cut.Find("#cardPlate").InputAsync("1abc234");
+
+		Resolve<CardViewModel>().Plate.Should().Be("1ABC234");
+		cut.Find("#cardPlate").GetAttribute("autocapitalize").Should().Be("characters");
+	}
+
+	/// <summary>
 	/// Verifies that a form without dates is not saved and stays open with the reason.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>

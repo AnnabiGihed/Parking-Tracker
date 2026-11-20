@@ -87,6 +87,12 @@ public sealed partial class CardDialog : ViewModelComponent<CardViewModel>
 	private void OnValidToChanged(DateTime? date) => ViewModel.ValidTo = FormatDate(date);
 
 	/// <summary>
+	/// Handles each keystroke in the plate field and keeps the plate in capitals.
+	/// </summary>
+	/// <param name="typed">The text in the field.</param>
+	private void OnPlateChanged(string? typed) => ViewModel.Plate = PlateInput.Normalise(typed);
+
+	/// <summary>
 	/// Handles "Scan my card".
 	/// </summary>
 	/// <returns>A task that completes when the form was filled or the failure was shown.</returns>

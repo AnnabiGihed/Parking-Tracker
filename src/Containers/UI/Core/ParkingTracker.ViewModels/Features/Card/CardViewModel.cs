@@ -46,6 +46,16 @@ public sealed class CardViewModel : ViewModelBase
 
 	#region Fields
 	/// <summary>
+	/// The first day of validity as the value of a date input.
+	/// </summary>
+	private string validFrom = string.Empty;
+
+	/// <summary>
+	/// The last day the form proposed itself, or empty when it proposed none; the last day is only replaced while it still equals it.
+	/// </summary>
+	private string lastSuggestedValidTo = string.Empty;
+
+	/// <summary>
 	/// Sends queries to the Application.
 	/// </summary>
 	private readonly ISender sender;
@@ -138,9 +148,22 @@ public sealed class CardViewModel : ViewModelBase
 	public string Plate { get; set; } = string.Empty;
 
 	/// <summary>
-	/// Gets or sets the first day of validity as the value of a date input (<c>yyyy-MM-dd</c>), or empty.
+	/// Gets or sets the first day of validity as the value of a date input (<c>yyyy-MM-dd</c>), or empty. A new date proposes a last
+	/// day one year later when <see cref="ValidTo"/> is empty or still the last proposal; a date chosen or scanned by the user is kept.
 	/// </summary>
-	public string ValidFrom { get; set; } = string.Empty;
+	public string ValidFrom
+	{
+		get
+		{
+			return validFrom;
+		}
+
+		set
+		{
+			validFrom = value;
+			SuggestValidTo();
+		}
+	}
 
 	/// <summary>
 	/// Gets or sets the last day of validity as the value of a date input (<c>yyyy-MM-dd</c>), or empty.
@@ -247,6 +270,7 @@ public sealed class CardViewModel : ViewModelBase
 		Plate = saved?.Plate ?? string.Empty;
 		ValidFrom = saved?.Period.ValidFrom?.ToString(DateInputFormat, CultureInfo.InvariantCulture) ?? string.Empty;
 		ValidTo = saved?.Period.ValidTo?.ToString(DateInputFormat, CultureInfo.InvariantCulture) ?? string.Empty;
+		lastSuggestedValidTo = string.Empty;
 		MunicipalityId = saved?.Municipality ?? DefaultMunicipalityId;
 		Select(SelectedMunicipality?.Kind == MunicipalityKind.Streets ? saved?.Sector ?? DefaultSectorId : null, saved?.Tolerances, saved?.Mailles, saved?.Lims);
 		FormError = unreadable ? SavedDataUnreadableException.CardMessage : string.Empty;
@@ -444,6 +468,21 @@ public sealed class CardViewModel : ViewModelBase
 	#endregion
 
 	#region Private Helpers
+	/// <summary>
+	/// Proposes the last day of validity for the current first day when the user has not chosen one.
+	/// </summary>
+	private void SuggestValidTo()
+	{
+		var replaceable = string.IsNullOrEmpty(ValidTo) || string.Equals(ValidTo, lastSuggestedValidTo, StringComparison.Ordinal);
+		if (!replaceable || !TryReadDate(validFrom, out var from))
+		{
+			return;
+		}
+
+		lastSuggestedValidTo = CardValidity.SuggestValidTo(from).ToString(DateInputFormat, CultureInfo.InvariantCulture);
+		ValidTo = lastSuggestedValidTo;
+	}
+
 	/// <summary>
 	/// Reads the saved card and tells whether it exists but cannot be read, which is not the same as "no card".
 	/// </summary>
