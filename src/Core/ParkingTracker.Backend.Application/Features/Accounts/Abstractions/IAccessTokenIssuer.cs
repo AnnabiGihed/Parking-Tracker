@@ -11,11 +11,13 @@ public interface IAccessTokenIssuer
 {
 	#region Methods
 	/// <summary>
-	/// Issues an access token whose subject is the account identifier.
+	/// Issues an access token whose subject is the account identifier and whose session claim is the family of the device session, so
+	/// that a sign-out can tell which device the caller holds.
 	/// </summary>
 	/// <param name="accountId">The account the token is for.</param>
+	/// <param name="familyId">The family of the device session the token belongs to.</param>
 	/// <param name="now">The current moment, the start of the token's lifetime.</param>
 	/// <returns>The signed token and its expiry.</returns>
-	IssuedAccessToken Issue(UserAccountId accountId, DateTimeOffset now);
+	IssuedAccessToken Issue(UserAccountId accountId, Guid familyId, DateTimeOffset now);
 	#endregion
 }

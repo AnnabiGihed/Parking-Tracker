@@ -47,6 +47,14 @@ internal sealed class UserAccountRepository : BaseAsyncCommandRepository<UserAcc
 		ArgumentNullException.ThrowIfNull(tokenHash);
 		return Accounts().FirstOrDefaultAsync(account => account.Sessions.Any(session => session.TokenHash == tokenHash), cancellationToken);
 	}
+
+	/// <inheritdoc />
+	public Task<UserAccount?> ReloadByRefreshTokenHashAsync(RefreshTokenHash tokenHash, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(tokenHash);
+		DbContext.ChangeTracker.Clear();
+		return FindByRefreshTokenHashAsync(tokenHash, cancellationToken);
+	}
 	#endregion
 
 	#region Private Helpers

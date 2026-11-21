@@ -24,4 +24,9 @@
     <ProjectReference Include="..\ParkingTracker.Testing.PostgreSql\ParkingTracker.Testing.PostgreSql.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The SQL that pt-erasure-reapply runs after a restore; the tests run the very same file. -->
+    <None Include="..\..\..\deploy\sql\erasure-reapply.sql" Link="erasure-reapply.sql" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

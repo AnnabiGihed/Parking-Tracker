@@ -37,6 +37,7 @@ public static class PersistenceServiceCollectionExtensions
 		_ = services.AddScoped<IUserAccountRepository>(provider => new UserAccountRepository(provider.GetRequiredService<ParkingDataDbContext>()));
 		_ = services.AddScoped<IUnitOfWork>(provider => new ParkingDataUnitOfWork(provider.GetRequiredService<ParkingDataDbContext>(), provider.GetRequiredService<ILogger<ParkingDataUnitOfWork>>()));
 		_ = services.AddScoped<ISignInChallengeStore>(provider => new SignInChallengeStore(provider.GetRequiredService<ParkingDataDbContext>()));
+		_ = services.AddScoped<IErasureLog>(provider => new ErasureLog(provider.GetRequiredService<ParkingDataDbContext>()));
 		return services;
 	}
 	#endregion

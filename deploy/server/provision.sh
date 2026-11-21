@@ -9,7 +9,8 @@
 #   1. checks the server: Docker, Python 3, the shared `caddy` container, its Caddyfile and the `web` network;
 #   2. creates the `parking-deploy` account (not in the docker group) with the deploy key restricted to pt-deploy, and
 #      reports whether sshd's AllowUsers or AllowGroups admit it;
-#   3. installs pt-deploy, pt-deploy-root, pt-backup and pt_compose_check.py, and the single sudoers line;
+#   3. installs pt-deploy, pt-deploy-root, pt-backup, pt-erasure-reapply and pt_compose_check.py, and the single
+#      sudoers line;
 #   4. creates /opt/apps/parking-tracker and the secret files: database passwords generated here (they never leave
 #      the server), the proxy key, the token signing keys and the subject hash key (each generated once, never rotated by a
 #      rerun) and the GHCR read token, typed at a prompt;
@@ -95,6 +96,7 @@ install_programs() {
 	install -m 755 -o root -g root "$SCRIPT_DIR/pt-deploy" /usr/local/bin/pt-deploy
 	install -m 700 -o root -g root "$SCRIPT_DIR/pt-deploy-root" /usr/local/sbin/pt-deploy-root
 	install -m 700 -o root -g root "$SCRIPT_DIR/pt-backup" /usr/local/sbin/pt-backup
+	install -m 700 -o root -g root "$SCRIPT_DIR/pt-erasure-reapply" /usr/local/sbin/pt-erasure-reapply
 	install -m 644 -o root -g root "$SCRIPT_DIR/pt_compose_check.py" /usr/local/sbin/pt_compose_check.py
 	local candidate
 	candidate=$(mktemp)
@@ -102,7 +104,7 @@ install_programs() {
 	visudo -cf "$candidate" >/dev/null || { rm -f "$candidate"; fail "visudo rejected the sudoers line"; }
 	install -m 440 -o root -g root "$candidate" "$SUDOERS_FILE"
 	rm -f "$candidate"
-	echo "Installed pt-deploy, pt-deploy-root, pt-backup, pt_compose_check.py and $SUDOERS_FILE"
+	echo "Installed pt-deploy, pt-deploy-root, pt-backup, pt-erasure-reapply, pt_compose_check.py and $SUDOERS_FILE"
 }
 
 write_secret() {

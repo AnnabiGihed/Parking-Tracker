@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+# Keeps account erasures across a backup restore (architecture 6.1, ADR-0015): exports the erasure log of the live database
+# before a restore, and applies an exported log to the restored database before the API starts.
+#
+# Usage:
+#   pt-erasure-reapply export <file>            writes erasure_log of the running database as CSV (subject hash, day), mode 600.
+#   pt-erasure-reapply apply <file>             DRY RUN: in one transaction, loads the file, counts the accounts whose subject
+#                                               hash is in it, and rolls everything back. Changes nothing.
+#   pt-erasure-reapply apply <file> --commit    the same transaction, committed: deletes those accounts (their sessions go with
+#                                               them), merges the file into erasure_log, and purges log rows older than 6 months.
+# Every line of the file must be "<64 lowercase hexadecimal characters>,<yyyy-mm-dd>"; any other line refuses the whole file
+# before the database is touched, and the day must be a real date. The file is copied once to a private temporary file; that
+# copy is validated and sent, so the file cannot change in between. The SQL is sql/erasure-reapply.sql of the current release.
+# Exit code 0 on success, 1 on a failure (a failed transaction is rolled back), 2 on a wrong command line.
+#
+# provision.sh installs this file to /usr/local/sbin; run it as root on the server.
+set -euo pipefail
+
+readonly APP_DIR=/opt/apps/parking-tracker
+readonly PROJECT=parking-tracker
+readonly DATABASE=parkingdata
+SQL_FILE=$APP_DIR/current/sql/erasure-reapply.sql
+
+# The private copy of the input file. It is a script-level variable, not a local one, because the EXIT trap that removes it
+# runs after apply_log has returned, when its locals are gone (set -u would stop the trap).
+private_copy=""
+
+log() { echo "pt-erasure-reapply: $*" >&2; }
+fail() { log "$*"; exit 1; }
+
+remove_private_copy() {
+	if [[ -n $private_copy ]]; then
+		rm -f "$private_copy"
+	fi
+}
+
+# Succeeds when the text is one line of an erasure log export: a keyed subject hash and the day of the erasure, a real date
+# (month 13 and the 30th of February are refused).
+valid_log_line() {
+	local day=${1#*,}
+	[[ $1 =~ ^[0-9a-f]{64},[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] && [[ $(date -u -d "$day" +%F 2>/dev/null) == "$day" ]]
+}
+
+# Succeeds when the file exists and every line is a valid log line; an empty file is valid (nothing was erased).
+valid_log_file() {
+	local file=$1 line
+	[[ -f $file ]] || return 1
+	while IFS= read -r line || [[ -n $line ]]; do
+		valid_log_line "$line" || return 1
+	done <"$file"
+}
+
+postgres_container() {
+	docker ps -q --filter "label=com.docker.compose.project=$PROJECT" --filter "label=com.docker.compose.service=postgres"
+}
+
+# Writes the whole transaction to the standard output: the staging table, the rows of the file, the SQL file, and the end
+# of the transaction (ROLLBACK for a dry run, COMMIT otherwise).
+build_script() {
+	local file=$1 end=$2 sql=$3
+	echo '\set ON_ERROR_STOP on'
+	echo 'BEGIN;'
+	echo 'CREATE TEMP TABLE erasure_import (subject_hash text PRIMARY KEY, erased_on date NOT NULL) ON COMMIT DROP;'
+	echo 'COPY erasure_import FROM STDIN WITH (FORMAT csv);'
+	cat "$file"
+	echo '\.'
+	cat "$sql"
+	echo "$end;"
+}
+
+export_log() {
+	local file=${1:-} container
+	[[ -n $file ]] || { echo "usage: pt-erasure-reapply export <file>" >&2; exit 2; }
+	container=$(postgres_container)
+	[[ -n $container ]] || fail "the postgres container is not running"
+	(umask 077 && docker exec "$container" psql -U postgres -d "$DATABASE" -v ON_ERROR_STOP=1 \
+		-c 'COPY (SELECT "SubjectHash", "ErasedOn" FROM erasure_log ORDER BY "SubjectHash") TO STDOUT WITH (FORMAT csv)' >"$file.partial")
+	valid_log_file "$file.partial" || { rm -f "$file.partial"; fail "the export is not a valid erasure log"; }
+	mv "$file.partial" "$file"
+	chmod 600 "$file"
+	log "exported $(grep -c '' "$file" || true) erasure log rows to $file"
+}
+
+apply_log() {
+	local file=${1:-} commit=${2:-} container end
+	[[ -n $file && ( -z $commit || $commit == --commit ) ]] || { echo "usage: pt-erasure-reapply apply <file> [--commit]" >&2; exit 2; }
+	[[ -f $file ]] || fail "$file is missing; nothing was changed"
+	private_copy=$(umask 077 && mktemp)
+	trap remove_private_copy EXIT
+	cp -- "$file" "$private_copy" || fail "$file could not be read; nothing was changed"
+	valid_log_file "$private_copy" || fail "$file has a line that is not '<64 hex characters>,<real yyyy-mm-dd>'; nothing was changed"
+	[[ -f $SQL_FILE ]] || fail "$SQL_FILE is missing; a release must be deployed first"
+	container=$(postgres_container)
+	[[ -n $container ]] || fail "the postgres container is not running"
+	end=ROLLBACK
+	[[ $commit == --commit ]] && end=COMMIT
+	build_script "$private_copy" "$end" "$SQL_FILE" | docker exec -i "$container" psql -U postgres -d "$DATABASE" -q -P footer=off ||
+		fail "the transaction failed and was rolled back; nothing was changed"
+	if [[ $end == ROLLBACK ]]; then
+		log "dry run: the counts above are what --commit would change; nothing was changed"
+	else
+		log "applied $file"
+	fi
+}
+
+main() {
+	case "${1:-}" in
+		export) export_log "${2:-}" ;;
+		apply) apply_log "${2:-}" "${3:-}" ;;
+		*) echo "usage: pt-erasure-reapply export <file> | apply <file> [--commit]" >&2; exit 2 ;;
+	esac
+}
+
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+	main "$@"
+fi

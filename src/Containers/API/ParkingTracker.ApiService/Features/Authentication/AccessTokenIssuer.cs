@@ -12,7 +12,8 @@ namespace ParkingTracker.ApiService.Features.Authentication;
 /// Date        : 11-2026
 /// Purpose     : Issues the access tokens of the API (ADR-0014): a JWT signed with ES256 under the current key, whose header carries
 ///              the key id, with the configured issuer, the audience <see cref="TokenOptions.Audience"/>, the account identifier
-///              as <c>sub</c> and a lifetime of 15 minutes.
+///              as <c>sub</c>, the family of the device session as <c>sid</c> (so a sign-out knows which device the caller holds) and a lifetime
+///              of 15 minutes.
 /// </summary>
 public sealed class AccessTokenIssuer : IAccessTokenIssuer
 {
@@ -21,6 +22,11 @@ public sealed class AccessTokenIssuer : IAccessTokenIssuer
 	/// The minutes an access token lives.
 	/// </summary>
 	public const int LifetimeMinutes = 15;
+
+	/// <summary>
+	/// The name of the claim that carries the family of the device session the token was issued for.
+	/// </summary>
+	public const string SessionClaim = "sid";
 	#endregion
 
 	#region Fields
@@ -58,7 +64,7 @@ public sealed class AccessTokenIssuer : IAccessTokenIssuer
 
 	#region IAccessTokenIssuer Implementation
 	/// <inheritdoc />
-	public IssuedAccessToken Issue(UserAccountId accountId, DateTimeOffset now)
+	public IssuedAccessToken Issue(UserAccountId accountId, Guid familyId, DateTimeOffset now)
 	{
 		ArgumentNullException.ThrowIfNull(accountId);
 		var issuedAt = DateTimeOffset.FromUnixTimeSeconds(now.ToUnixTimeSeconds());
@@ -70,7 +76,11 @@ public sealed class AccessTokenIssuer : IAccessTokenIssuer
 			IssuedAt = issuedAt.UtcDateTime,
 			NotBefore = issuedAt.UtcDateTime,
 			Expires = expiresAt.UtcDateTime,
-			Claims = new Dictionary<string, object>(StringComparer.Ordinal) { [JwtRegisteredClaimNames.Sub] = accountId.Value.ToString("D", CultureInfo.InvariantCulture) },
+			Claims = new Dictionary<string, object>(StringComparer.Ordinal)
+			{
+				[JwtRegisteredClaimNames.Sub] = accountId.Value.ToString("D", CultureInfo.InvariantCulture),
+				[SessionClaim] = familyId.ToString("D", CultureInfo.InvariantCulture),
+			},
 			SigningCredentials = new SigningCredentials(keys.Current, SecurityAlgorithms.EcdsaSha256),
 		};
 		return new IssuedAccessToken(handler.CreateToken(descriptor), expiresAt);

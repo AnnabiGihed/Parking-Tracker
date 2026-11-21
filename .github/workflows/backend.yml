@@ -55,7 +55,7 @@ jobs:
       - name: ShellCheck
         run: >
           shellcheck -x -P deploy/server deploy/server/pt-deploy deploy/server/pt-deploy-root
-          deploy/server/pt-backup deploy/server/provision.sh deploy/tests/test_pt_deploy.sh tools/ci/backend-smoke.sh
+          deploy/server/pt-backup deploy/server/pt-erasure-reapply deploy/server/provision.sh deploy/tests/test_pt_deploy.sh tools/ci/backend-smoke.sh
 
       - name: Command-parsing tests
         run: bash deploy/tests/test_pt_deploy.sh

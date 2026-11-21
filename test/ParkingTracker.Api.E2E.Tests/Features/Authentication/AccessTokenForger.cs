@@ -32,6 +32,7 @@ public static class AccessTokenForger
 	/// <param name="audience">The audience; the one of the API when omitted.</param>
 	/// <param name="expires">The expiry; 15 minutes from now when omitted.</param>
 	/// <param name="keyId">The key id of the header; the thumbprint of <paramref name="key"/> when omitted.</param>
+	/// <param name="familyId">The family of the device session for the sid claim; no sid claim when omitted.</param>
 	/// <returns>The signed token.</returns>
 	public static string Create(
 		ECDsa key,
@@ -39,10 +40,17 @@ public static class AccessTokenForger
 		string issuer = ApiFactory.TokenIssuer,
 		string audience = Audience,
 		DateTimeOffset? expires = null,
-		string? keyId = null)
+		string? keyId = null,
+		Guid? familyId = null)
 	{
 		ArgumentNullException.ThrowIfNull(key);
 		var expiry = expires ?? DateTimeOffset.UtcNow.AddMinutes(15);
+		var claims = new Dictionary<string, object>(StringComparer.Ordinal) { ["sub"] = subject };
+		if (familyId is { } family)
+		{
+			claims["sid"] = family.ToString("D");
+		}
+
 		var descriptor = new SecurityTokenDescriptor
 		{
 			Issuer = issuer,
@@ -50,7 +58,7 @@ public static class AccessTokenForger
 			IssuedAt = expiry.AddMinutes(-15).UtcDateTime,
 			NotBefore = expiry.AddMinutes(-15).UtcDateTime,
 			Expires = expiry.UtcDateTime,
-			Claims = new Dictionary<string, object>(StringComparer.Ordinal) { ["sub"] = subject },
+			Claims = claims,
 			SigningCredentials = new SigningCredentials(new ECDsaSecurityKey(key) { KeyId = keyId ?? Thumbprint(key) }, SecurityAlgorithms.EcdsaSha256),
 		};
 		return new JsonWebTokenHandler().CreateToken(descriptor);

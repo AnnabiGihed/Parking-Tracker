@@ -83,6 +83,26 @@ public sealed class CreateAndGetMeHandlerTests
 	}
 
 	/// <summary>
+	/// Verifies that a revoked family and a rotated token are not counted as devices signed in.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task GetMe_RevokedAndRotatedSessions_ShouldNotBeCounted()
+	{
+		var account = UserAccount.Create(SubjectHash.Create(new string('b', 64)).Value, clock.GetUtcNow());
+		var revoked = account.StartSession(RefreshTokenHash.Create(new string('1', 64)).Value, clock.GetUtcNow());
+		_ = account.StartSession(RefreshTokenHash.Create(new string('2', 64)).Value, clock.GetUtcNow());
+		_ = account.Rotate(RefreshTokenHash.Create(new string('2', 64)).Value, RefreshTokenHash.Create(new string('3', 64)).Value, clock.GetUtcNow());
+		_ = account.EndFamily(revoked.FamilyId);
+		var accounts = Substitute.For<IUserAccountRepository>();
+		_ = accounts.FindByIdAsync(account.Id, Arg.Any<CancellationToken>()).Returns(account);
+
+		var result = await new GetMeQueryHandler(accounts, clock).Handle(new GetMeQuery(account.Id.Value), CancellationToken.None);
+
+		result.Value.ActiveSessionCount.Should().Be(1, "only the live token of the family that was not signed out counts");
+	}
+
+	/// <summary>
 	/// Verifies that an account that does not exist, and the empty identifier, are authentication failures, so the old access token
 	/// of an erased account stops working.
 	/// </summary>

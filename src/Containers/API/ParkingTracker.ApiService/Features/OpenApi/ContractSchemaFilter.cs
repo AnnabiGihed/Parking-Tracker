@@ -25,6 +25,7 @@ public sealed class ContractSchemaFilter : ISchemaFilter
 	{
 		[typeof(SignInChallengeResponse)] = new JsonObject { ["nonce"] = "q7Zx0mR2oVwq3k8c4yT1bN5hJd9sLpEa6uFgXzCvWiM", ["expiresAt"] = "2026-11-20T10:05:00+00:00" },
 		[typeof(CreateSessionRequest)] = new JsonObject { ["idToken"] = "eyJhbGciOiJSUzI1NiIsImtpZCI6Ij....<Google ID token>" },
+		[typeof(RefreshSessionRequest)] = new JsonObject { ["refreshToken"] = "mB3xT9vQ1zKd7sWc5nYhLr2PuJe8GfAo4iXqVtZ0kNE" },
 		[typeof(SessionResponse)] = new JsonObject
 		{
 			["accessToken"] = "eyJhbGciOiJFUzI1NiIsImtpZCI6Ij....<API access token>",

@@ -64,7 +64,7 @@ public sealed class AuthenticationAdapterUnitTests
 	#region Access Token Issuer Tests
 	/// <summary>
 	/// Verifies the token the issuer writes: ES256, the thumbprint of the key as key id, issuer, audience, the account identifier
-	/// as subject and a lifetime of 15 minutes from the moment given.
+	/// as subject, the family of the session as sid and a lifetime of 15 minutes from the moment given.
 	/// </summary>
 	[Fact]
 	public void AccessTokenIssuer_Issue_ShouldWriteAnEs256TokenForTheAccount()
@@ -73,10 +73,11 @@ public sealed class AuthenticationAdapterUnitTests
 		using var ring = new SigningKeyRing(new SigningKeyOptions { Current = pem });
 		var issuer = new AccessTokenIssuer(ring, Options.Create(new TokenOptions { Issuer = "https://api.test.example" }));
 		var accountId = UserAccountId.New();
+		var familyId = Guid.NewGuid();
 		var now = new DateTimeOffset(2026, 11, 20, 10, 0, 0, TimeSpan.Zero);
 		using var key = AccessTokenForger.ReadKey(pem);
 
-		var issued = issuer.Issue(accountId, now);
+		var issued = issuer.Issue(accountId, familyId, now);
 
 		var token = new JsonWebTokenHandler().ReadJsonWebToken(issued.Token);
 		token.Alg.Should().Be("ES256");
@@ -84,6 +85,7 @@ public sealed class AuthenticationAdapterUnitTests
 		token.Issuer.Should().Be("https://api.test.example");
 		token.Audiences.Should().ContainSingle().Which.Should().Be("parkingtracker-api");
 		token.Subject.Should().Be(accountId.Value.ToString("D"));
+		token.GetClaim(AccessTokenIssuer.SessionClaim).Value.Should().Be(familyId.ToString("D"), "the sign-out reads the family of the device from it");
 		new DateTimeOffset(token.ValidFrom).Should().Be(now);
 		issued.ExpiresAt.Should().Be(now.AddMinutes(15));
 		new DateTimeOffset(token.ValidTo).Should().Be(issued.ExpiresAt);
@@ -155,8 +157,8 @@ public sealed class AuthenticationAdapterUnitTests
 		using var both = new SigningKeyRing(new SigningKeyOptions { Current = currentPem, Previous = previousPem });
 		using var onlyPrevious = new SigningKeyRing(new SigningKeyOptions { Previous = previousPem });
 
-		var signedByBoth = new JsonWebTokenHandler().ReadJsonWebToken(new AccessTokenIssuer(both, options).Issue(UserAccountId.New(), DateTimeOffset.UtcNow).Token);
-		var signedByOnlyPrevious = new JsonWebTokenHandler().ReadJsonWebToken(new AccessTokenIssuer(onlyPrevious, options).Issue(UserAccountId.New(), DateTimeOffset.UtcNow).Token);
+		var signedByBoth = new JsonWebTokenHandler().ReadJsonWebToken(new AccessTokenIssuer(both, options).Issue(UserAccountId.New(), Guid.NewGuid(), DateTimeOffset.UtcNow).Token);
+		var signedByOnlyPrevious = new JsonWebTokenHandler().ReadJsonWebToken(new AccessTokenIssuer(onlyPrevious, options).Issue(UserAccountId.New(), Guid.NewGuid(), DateTimeOffset.UtcNow).Token);
 		var oldToken = AccessTokenForger.Create(previousKey, "someone");
 		var validation = await new JsonWebTokenHandler().ValidateTokenAsync(oldToken, new Microsoft.IdentityModel.Tokens.TokenValidationParameters
 		{

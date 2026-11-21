@@ -1007,10 +1007,10 @@ Errors are ProblemDetails from `ApiController`. Data responses carry `ETag` (has
 | --- | --- | --- |
 | `POST /sessions/challenges` | anonymous, rate-limited per IP (one bucket of 10 per minute shared with `POST /sessions`) | a one-time nonce, valid 5 minutes |
 | `POST /sessions` | anonymous, rate-limited per IP | body: Google ID token; answer: access token, refresh token, expiry; `401` when the token is invalid |
-| `POST /sessions/refresh` | holder of a refresh token | rotated refresh token and new access token; `401` and family revoked on reuse |
-| `DELETE /sessions/current` | signed-in user | sign-out: revokes the session family (`204`) |
+| `POST /sessions/refresh` | anonymous (holder of a refresh token), rate-limited per IP, a policy of its own: 30 per minute | body: refresh token; answer as `POST /sessions`; one generic `401` for an unknown, revoked, expired or reused token, and a reuse revokes the family |
+| `DELETE /sessions/current` | signed-in user | sign-out: revokes the session family named in the `sid` claim of the access token (`204`, also when it is gone); access tokens already issued work until they expire |
 | `GET /me` | signed-in user | account ID, created on, last seen on, active session count |
-| `DELETE /me` | signed-in user | erasure (`204`), see 6.1 |
+| `DELETE /me` | signed-in user | erasure (`204`, also when the account is gone), see 6.1; the old access token then fails on `GET /me` with `401` |
 | `GET /client-config` | signed-in user | data source mode, minimum supported app version, freshness limits |
 | `GET /zones?bbox=` | signed-in user | street surfaces and `freshness`; `503` `parking-data-stale` |
 | `GET /reserved-spaces?bbox=` | signed-in user | spaces and `freshness` |
@@ -1355,8 +1355,11 @@ sessions (hard delete) and writes the subject hash to `ERASURE_LOG`, in one tran
 database, the key and the tokens. The Google account itself is not touched; the privacy notice tells the user how to
 remove the app's access in their Google account settings. Backups keep an erased account at most 6 months (7.5);
 after a restore, the restore step of the runbook first exports `ERASURE_LOG` from the live database and applies it to
-the restored one, before the API starts. After a total loss nothing newer exists to re-apply. The erasure log is purged
-after 6 months.
+the restored one, before the API starts, with `pt-erasure-reapply` (a dry-run count first, then one transaction that
+deletes the listed accounts created on or before the erasure day, merges the log and purges rows older than 6 months).
+Erasing is not a ban: the same Google account can sign in again and gets a new account, which a later re-apply keeps
+unless it was created on the day of the erasure. After a total loss nothing newer exists to re-apply. The erasure log is
+purged after 6 months.
 
 Inactive accounts (no sign-in or refresh for 24 months) are deleted by the cleanup job in the same way.
 

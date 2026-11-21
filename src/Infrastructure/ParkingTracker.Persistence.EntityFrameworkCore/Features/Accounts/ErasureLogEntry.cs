@@ -15,8 +15,8 @@ public sealed class ErasureLogEntry
 	public required string SubjectHash { get; init; }
 
 	/// <summary>
-	/// Gets the day the account was erased.
+	/// Gets or sets the day the account was erased; it moves to the latest day when the same subject is erased again.
 	/// </summary>
-	public required DateOnly ErasedOn { get; init; }
+	public required DateOnly ErasedOn { get; set; }
 	#endregion
 }

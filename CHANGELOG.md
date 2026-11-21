@@ -16,6 +16,12 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
   `POST /api/v1/sessions` (a Google ID token for an access token and a refresh token) and `GET /api/v1/me`. The server
   keeps only keyed hashes of the Google subject and of the refresh token. The provisioning script creates three new
   secrets and `--rotate-signing-key` rotates the signing key.
+- The API's refresh, sign-out and account deletion endpoints, not used by the app yet: `POST /api/v1/sessions/refresh`
+  (a single-use refresh token for new tokens; reusing a rotated token revokes the device's whole family),
+  `DELETE /api/v1/sessions/current` (signs out this device; access tokens already issued work until they expire, 15
+  minutes at most) and `DELETE /api/v1/me` (deletes the account and its sessions and records its hash in the erasure
+  log). Access tokens now carry the device session in a `sid` claim. The new server tool `pt-erasure-reapply` applies
+  the erasure log again after a backup restore.
 - The privacy notice is published at <https://parking.pivotsoftwares.com/privacy>.
 - Home and Work shortcut chips under the search bar: tap one to see that place on the map and check it, or set it
   from an address or your position. The places stay on the phone, encrypted.

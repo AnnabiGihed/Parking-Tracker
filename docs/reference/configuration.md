@@ -35,10 +35,15 @@ unusable value, and name the key in the message without ever printing the value.
   API holds is refused (reason `token.signature`) until the metadata refresh interval passes; the refusal asks for a
   refresh, and the app asks for a new nonce and signs in again. The nonce of a refused token is kept, because the
   signature is checked before the nonce is consumed.
-- **Body size.** `POST /api/v1/sessions` accepts a body of 16 KB at most and answers 413 above it.
+- **Body size.** `POST /api/v1/sessions` accepts a body of 16 KB at most and `POST /api/v1/sessions/refresh` one of 1 KB,
+  and both answer 413 above it.
+- **Sign-out and erasure do not recall access tokens.** `DELETE /api/v1/sessions/current` revokes the device's refresh
+  tokens at once, but an access token already issued stays valid until it expires (15 minutes at most). After
+  `DELETE /api/v1/me` an old access token names an account that no longer exists, so `GET /api/v1/me` answers 401;
+  a second `DELETE /api/v1/me` with such a token answers 204.
 
 ## Fixed values
 
 The audience of the access tokens is `parkingtracker-api`, their life is 15 minutes, a nonce lives 5 minutes, and the
-rate limits are 10 session requests per minute per client address and 120 requests per minute per account with a burst of
-30. They are constants of the code, not settings.
+rate limits are 10 session requests (challenge and sign-in) and, separately, 30 refresh requests per minute per client
+address, and 120 requests per minute per account with a burst of 30. They are constants of the code, not settings.

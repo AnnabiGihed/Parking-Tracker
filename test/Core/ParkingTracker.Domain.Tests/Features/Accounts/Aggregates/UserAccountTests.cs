@@ -299,6 +299,29 @@ public sealed class UserAccountTests
 		account.EndFamilyOf(Token('9')).ResultExceptionType.Should().Be(ResultExceptionType.NotFound);
 		account.EndFamilyOf(DeviceSessionId.New()).Error.Should().Be(AccountErrors.SessionNotFound);
 	}
+
+	/// <summary>
+	/// Verifies that signing out by family revokes the whole family, rotated tokens included, and leaves another family alone, and
+	/// that it is not found for a family the account does not have.
+	/// </summary>
+	[Fact]
+	public void EndFamily_FamilyId_ShouldRevokeOnlyThatFamily()
+	{
+		var account = UserAccount.Create(Subject(), Start);
+		var first = account.StartSession(Token('1'), Start);
+		var next = account.Rotate(Token('1'), Token('2'), Start).Value;
+		var other = account.StartSession(Token('7'), Start);
+
+		var result = account.EndFamily(first.FamilyId);
+		var unknown = account.EndFamily(Guid.NewGuid());
+
+		result.IsSuccess.Should().BeTrue();
+		first.Revoked.Should().BeTrue();
+		next.Revoked.Should().BeTrue();
+		other.Revoked.Should().BeFalse();
+		unknown.Error.Should().Be(AccountErrors.SessionNotFound);
+		account.ActiveSessionCount(Start).Should().Be(1, "a revoked family and a rotated token are not signed-in devices");
+	}
 	#endregion
 
 	#region Active Session Count Tests

@@ -95,7 +95,7 @@ public sealed class ExchangeGoogleIdTokenCommandHandlerTests
 		_ = challenges.ConsumeAsync(Nonce, Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(true);
 		_ = hasher.Hash(Subject).Returns(SubjectHashText);
 		_ = unitOfWork.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(Result.Success()));
-		_ = issuer.Issue(Arg.Any<UserAccountId>(), Arg.Any<DateTimeOffset>()).Returns(call => new IssuedAccessToken("the-access-token", call.Arg<DateTimeOffset>().AddMinutes(15)));
+		_ = issuer.Issue(Arg.Any<UserAccountId>(), Arg.Any<Guid>(), Arg.Any<DateTimeOffset>()).Returns(call => new IssuedAccessToken("the-access-token", call.Arg<DateTimeOffset>().AddMinutes(15)));
 	}
 	#endregion
 
@@ -138,7 +138,7 @@ public sealed class ExchangeGoogleIdTokenCommandHandlerTests
 		result.IsSuccess.Should().BeTrue();
 		existing.Sessions.Should().ContainSingle();
 		await accounts.DidNotReceive().AddAsync(Arg.Any<UserAccount>(), Arg.Any<CancellationToken>());
-		issuer.Received(1).Issue(existing.Id, Arg.Any<DateTimeOffset>());
+		issuer.Received(1).Issue(existing.Id, existing.Sessions.Single().FamilyId, Arg.Any<DateTimeOffset>());
 	}
 
 	/// <summary>
@@ -161,7 +161,7 @@ public sealed class ExchangeGoogleIdTokenCommandHandlerTests
 		winner.Sessions.Should().ContainSingle();
 		await accounts.Received(1).DeleteAsync(Arg.Any<UserAccount>(), Arg.Any<CancellationToken>());
 		await unitOfWork.Received(2).SaveChangesAsync(Arg.Any<CancellationToken>());
-		issuer.Received(1).Issue(winner.Id, Arg.Any<DateTimeOffset>());
+		issuer.Received(1).Issue(winner.Id, winner.Sessions.Single().FamilyId, Arg.Any<DateTimeOffset>());
 	}
 
 	/// <summary>
@@ -236,7 +236,7 @@ public sealed class ExchangeGoogleIdTokenCommandHandlerTests
 		AssertGenericFailure(result, SignInFailureReason.NonceRejected);
 		await accounts.DidNotReceiveWithAnyArgs().FindBySubjectHashAsync(default!, default);
 		await unitOfWork.DidNotReceiveWithAnyArgs().SaveChangesAsync(default);
-		issuer.DidNotReceiveWithAnyArgs().Issue(default!, default);
+		issuer.DidNotReceiveWithAnyArgs().Issue(default!, Guid.Empty, default);
 	}
 
 	/// <summary>
@@ -253,7 +253,7 @@ public sealed class ExchangeGoogleIdTokenCommandHandlerTests
 		AssertGenericFailure(result, SignInFailureReason.SaveFailed);
 		await accounts.Received(1).DeleteAsync(Arg.Any<UserAccount>(), Arg.Any<CancellationToken>());
 		await challenges.Received(1).ConsumeAsync(Nonce, Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
-		issuer.DidNotReceiveWithAnyArgs().Issue(default!, default);
+		issuer.DidNotReceiveWithAnyArgs().Issue(default!, Guid.Empty, default);
 	}
 
 	/// <summary>
