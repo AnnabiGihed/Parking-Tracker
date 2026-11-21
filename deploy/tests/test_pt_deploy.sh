@@ -320,6 +320,8 @@ erasure_file_check "$hash64,2026-00-10\n" refuse
 erasure_apply_with_stub_docker() {
 	local ending=$1 option=$2 psql_status=${3:-0} work file status=0 script
 	work=$(mktemp -d)
+	# The stub's own variables must stay literal in the file it writes, so they are single-quoted on purpose.
+	# shellcheck disable=SC2016
 	printf '#!/usr/bin/env bash
 case $1 in ps) echo stubcontainer ;; exec) cat >"$CAPTURE"; exit "${STUB_PSQL_STATUS:-0}" ;; esac
 ' >"$work/docker"
@@ -347,6 +349,8 @@ check "pt-erasure-reapply fails when psql fails" refuse erasure_apply_with_stub_
 erasure_invalid_file_never_reaches_docker() {
 	local work file status=0
 	work=$(mktemp -d)
+	# The stub's own variables must stay literal in the file it writes, so they are single-quoted on purpose.
+	# shellcheck disable=SC2016
 	printf '#!/usr/bin/env bash
 touch "$CAPTURE"
 ' >"$work/docker"
