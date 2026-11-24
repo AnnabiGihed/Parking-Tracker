@@ -47,3 +47,24 @@ unusable value, and name the key in the message without ever printing the value.
 The audience of the access tokens is `parkingtracker-api`, their life is 15 minutes, a nonce lives 5 minutes, and the
 rate limits are 10 session requests (challenge and sign-in) and, separately, 30 refresh requests per minute per client
 address, and 120 requests per minute per account with a burst of 30. They are constants of the code, not settings.
+
+## Mobile sign-in build settings
+
+Stage S5 adds an optional account sheet to the phone's side menu. These MSBuild properties are compiled into the
+Android host; they are separate from the API settings above and contain no secrets.
+
+| Property | Default | Meaning |
+| --- | --- | --- |
+| `GoogleWebClientId` | Development Web client ID in Debug; empty in Release | The Google Web client ID for Credential Manager; empty hides the account entry |
+| `ApiBaseUrl` | `https://api.parking.pivotsoftwares.com/` | The account API base address, ending with a slash |
+
+Override either property with `-p:GoogleWebClientId=...` or `-p:ApiBaseUrl=...` on the Android build command. The API's
+`Authentication:Google:Audiences` must accept that Web client ID. Production sign-in remains deferred to stage S9;
+the map continues to work without signing in.
+
+The sheet offers Google sign-in, account details, sign-out and account deletion with confirmation. Access and refresh
+tokens are saved in encrypted storage, with the refresh token written first. Requests refresh an expiring access token
+or retry once after a 401.
+A refused refresh clears the session; network and server failures keep it. Sign-out clears the phone's session even
+when the API cannot be reached. Account deletion clears it only after the API confirms success; it does not erase
+parking cards or other data kept locally on the phone.

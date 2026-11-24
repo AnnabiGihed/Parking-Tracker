@@ -1,9 +1,11 @@
 using NSubstitute;
+using ParkingTracker.Application.Features.Accounts.Abstractions;
 using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
 using ParkingTracker.Application.Features.Vehicles.Abstractions;
 using ParkingTracker.Domain.Features.SavedPlaces.Aggregates;
 using ParkingTracker.Domain.Features.SavedPlaces.ValueObjects;
 using ParkingTracker.Domain.Features.Shared.ValueObjects;
+using ParkingTracker.ViewModels.Features.Account;
 using ParkingTracker.ViewModels.Features.Menu;
 using ParkingTracker.ViewModels.Features.Places;
 using ParkingTracker.ViewModels.Features.Vehicles;
@@ -19,6 +21,19 @@ namespace ParkingTracker.ViewModels.Tests.Features.Menu;
 public sealed class MenuViewModelTests
 {
 	#region Test Infrastructure
+	/// <summary>
+	/// Builds the account sheet over substitutes; Google sign-in is available when asked.
+	/// </summary>
+	/// <param name="ui">The fixture that holds the toast.</param>
+	/// <param name="signInAvailable">Whether the build can sign in with Google.</param>
+	/// <returns>The account view model.</returns>
+	private static AccountViewModel Account(UiFixture ui, bool signInAvailable = false)
+	{
+		var google = Substitute.For<IGoogleSignIn>();
+		google.IsAvailable.Returns(signInAvailable);
+		return new AccountViewModel(Substitute.For<ISessionClient>(), google, ui.Toast);
+	}
+
 	/// <summary>
 	/// A point in the centre of Brussels.
 	/// </summary>
@@ -39,7 +54,7 @@ public sealed class MenuViewModelTests
 		var picker = new PlacePickerViewModel(store, ui.Sender, ui.Spot, places, ui.Toast);
 		var favourites = new FavouritesViewModel(places, picker);
 		var vehicle = new VehicleViewModel(Substitute.For<IVehicleStore>(), ui.Toast, ui.Clock);
-		return (new MenuViewModel(places, picker, favourites, vehicle, ui.Card), places, picker, favourites);
+		return (new MenuViewModel(places, picker, favourites, vehicle, ui.Card, Account(ui)), places, picker, favourites);
 	}
 	#endregion
 
@@ -144,6 +159,28 @@ public sealed class MenuViewModelTests
 	}
 	#endregion
 
+	#region Account Tests
+	/// <summary>
+	/// Verifies that the account entry is offered only when the build can sign in with Google, and that it opens the account sheet.
+	/// </summary>
+	/// <param name="available">Whether the build can sign in with Google.</param>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Theory]
+	[InlineData(true)]
+	[InlineData(false)]
+	public async Task IsAccountVisible_ShouldFollowTheAvailabilityOfGoogleSignIn(bool available)
+	{
+		using var ui = new UiFixture();
+		var (_, places, picker, favourites) = await ArrangeAsync(ui);
+		var account = Account(ui, available);
+		var menu = new MenuViewModel(places, picker, favourites, new VehicleViewModel(Substitute.For<IVehicleStore>(), ui.Toast, ui.Clock), ui.Card, account);
+
+		menu.IsAccountVisible.Should().Be(available);
+		await menu.OpenAccountAsync();
+		account.IsOpen.Should().BeTrue();
+	}
+	#endregion
+
 	#region Constructor Tests
 	/// <summary>
 	/// Verifies that a missing dependency is refused.
@@ -156,17 +193,20 @@ public sealed class MenuViewModelTests
 		var (_, places, picker, favourites) = await ArrangeAsync(ui);
 
 		var vehicle = new VehicleViewModel(Substitute.For<IVehicleStore>(), ui.Toast, ui.Clock);
-		var noPlaces = () => new MenuViewModel(null!, picker, favourites, vehicle, ui.Card); // null on purpose: proves the guard clause rejects it
-		var noPicker = () => new MenuViewModel(places, null!, favourites, vehicle, ui.Card); // null on purpose: proves the guard clause rejects it
-		var noFavourites = () => new MenuViewModel(places, picker, null!, vehicle, ui.Card); // null on purpose: proves the guard clause rejects it
-		var noVehicle = () => new MenuViewModel(places, picker, favourites, null!, ui.Card); // null on purpose: proves the guard clause rejects it
-		var noCard = () => new MenuViewModel(places, picker, favourites, vehicle, null!); // null on purpose: proves the guard clause rejects it
+		var noPlaces = () => new MenuViewModel(null!, picker, favourites, vehicle, ui.Card, Account(ui)); // null on purpose: proves the guard clause rejects it
+		var noPicker = () => new MenuViewModel(places, null!, favourites, vehicle, ui.Card, Account(ui)); // null on purpose: proves the guard clause rejects it
+		var noFavourites = () => new MenuViewModel(places, picker, null!, vehicle, ui.Card, Account(ui)); // null on purpose: proves the guard clause rejects it
+		var noVehicle = () => new MenuViewModel(places, picker, favourites, null!, ui.Card, Account(ui)); // null on purpose: proves the guard clause rejects it
+		var noCard = () => new MenuViewModel(places, picker, favourites, vehicle, null!, Account(ui)); // null on purpose: proves the guard clause rejects it
+
+		var noAccount = () => new MenuViewModel(places, picker, favourites, vehicle, ui.Card, null!); // null on purpose: proves the guard clause rejects it
 
 		noPlaces.Should().Throw<ArgumentNullException>();
 		noPicker.Should().Throw<ArgumentNullException>();
 		noFavourites.Should().Throw<ArgumentNullException>();
 		noVehicle.Should().Throw<ArgumentNullException>();
 		noCard.Should().Throw<ArgumentNullException>();
+		noAccount.Should().Throw<ArgumentNullException>();
 	}
 	#endregion
 }

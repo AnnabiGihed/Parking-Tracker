@@ -4,10 +4,12 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Maui.Devices;
 using Microsoft.Maui.Storage;
+using ParkingTracker.App.Features.Accounts;
 using ParkingTracker.App.Features.Cards;
 using ParkingTracker.App.Features.ParkingDetection;
 using ParkingTracker.App.Features.Shared;
 using ParkingTracker.App.Features.SpotDecisions;
+using ParkingTracker.Application.Features.Accounts.Abstractions;
 using ParkingTracker.Application.Features.Cards.Abstractions;
 using ParkingTracker.Application.Features.ParkingDetection.Abstractions;
 using ParkingTracker.Application.Features.ParkingSessions.Abstractions;
@@ -16,9 +18,11 @@ using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
 using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
 using ParkingTracker.Application.Features.Vehicles.Abstractions;
+using ParkingTracker.Infrastructure.Features.Accounts;
 using ParkingTracker.Infrastructure.Features.Shared.Legacy;
 using ParkingTracker.Persistence.Device;
 using ParkingTracker.Persistence.Device.Features.Shared.Encryption;
+using ParkingTracker.ViewModels.Features.Account;
 using ParkingTracker.ViewModels.Features.Shared.Settings;
 using ParkingTracker.ViewModels.Features.Shared.Settings.Database;
 using ParkingTracker.ViewModels.Features.Shared.Settings.Legacy;
@@ -34,7 +38,7 @@ namespace ParkingTracker.App;
 /// Date        : 11-2026
 /// Purpose     : Registers what only the phone can provide: the implementations of the device ports of the Application layer
 ///              (position, permissions, links, card photo text, connection, saved settings, notifications, alarms, the background service of the
-///              parking alerts, whether the app is on screen) and the helpers that join phone events to the view models. They are
+///              parking alerts, whether the app is on screen, Google sign-in and the stored session tokens) and the helpers that join phone events to the view models. They are
 ///              registered by hand, not by convention, because each one is tied to the platform.
 /// </summary>
 public sealed class AppServiceInstaller : IServiceInstaller
@@ -58,6 +62,7 @@ public sealed class AppServiceInstaller : IServiceInstaller
 		AddStorage(services);
 		AddStartupGate(services);
 		AddDeviceServices(services);
+		AddAccountServices(services);
 
 #if TEST_HOOKS
 		// Scoped like the view models it reads, so that the hooks see the same card line the screen shows.
@@ -187,6 +192,24 @@ public sealed class AppServiceInstaller : IServiceInstaller
 		services.AddSingleton<AppResumeNotifier>();
 		services.TryAddSingleton<IVibration>(Vibration.Default);
 		services.AddSingleton<CoverageVibrator>();
+	}
+
+	/// <summary>
+	/// Registers what the sign-in needs from the phone: the address of the API of this build, the encrypted store of the session tokens
+	/// and Google sign-in through Credential Manager (ADR-0014, ADR-0015). The session client itself is registered by the Infrastructure layer.
+	/// </summary>
+	/// <param name="services">The service collection.</param>
+	private static void AddAccountServices(IServiceCollection services)
+	{
+		// Replaces the production address the Infrastructure layer registers by default.
+		services.AddSingleton(new SessionApiSettings(new Uri(SignInConfiguration.ApiBaseUrl)));
+
+		// The tokens live in the Android keystore storage, never in the device database.
+		services.AddSingleton<ISessionTokenStore>(provider => new SecureSessionTokenStore(
+			new SecureValueStorage(provider.GetRequiredService<ILogger<SecureValueStorage>>())));
+		services.AddSingleton<IGoogleSignIn>(provider => new AndroidGoogleSignIn(
+			SignInConfiguration.GoogleWebClientId,
+			provider.GetRequiredService<ILogger<AndroidGoogleSignIn>>()));
 	}
 
 	/// <summary>

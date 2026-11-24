@@ -1,6 +1,7 @@
 using Bunit;
 using NSubstitute;
 using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
+using ParkingTracker.ViewModels.Features.Account;
 using ParkingTracker.Domain.Features.SavedPlaces.Aggregates;
 using ParkingTracker.Domain.Features.SavedPlaces.ValueObjects;
 using ParkingTracker.Domain.Features.Vehicles.ValueObjects;
@@ -94,6 +95,37 @@ public sealed class AppMenuTests : UiTestContext
 		var host = await OpenMenuAsync();
 
 		host.FindAll("#appMenu .app-menu-sub").Select(text => text.TextContent).Should().Equal("Rue de la Loi 1", "Not set", "None yet", "Not set", "Not set");
+	}
+	#endregion
+
+	#region Account Entry Tests
+	/// <summary>
+	/// Verifies that a build without Google sign-in (a release build) shows no account entry.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Menu_GoogleSignInNotAvailable_ShouldShowNoAccountEntry()
+	{
+		var host = await OpenMenuAsync();
+
+		host.FindAll("#menuAccount").Should().BeEmpty();
+	}
+
+	/// <summary>
+	/// Verifies that a build with Google sign-in (a debug build) shows the account entry last, and that a tap closes the menu and opens the account sheet.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Menu_GoogleSignInAvailable_ShouldShowTheAccountEntryAndOpenTheSheet()
+	{
+		Google.IsAvailable.Returns(true);
+		var host = await OpenMenuAsync();
+
+		host.FindAll("#appMenu .app-menu-title").Select(title => title.TextContent).Should().EndWith("Account (debug)");
+		await host.Find("#menuAccount").ClickAsync();
+
+		await host.WaitForAssertionAsync(() => Resolve<AccountViewModel>().IsOpen.Should().BeTrue());
+		await host.WaitForAssertionAsync(() => host.FindAll("#appMenu").Should().BeEmpty());
 	}
 	#endregion
 

@@ -1,9 +1,12 @@
 using System.Net.Http.Headers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using ParkingTracker.Application.Features.Accounts.Abstractions;
 using ParkingTracker.Application.Features.AddressSearch.Abstractions;
 using ParkingTracker.Application.Features.Sectors.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
+using ParkingTracker.Infrastructure.Features.Accounts;
 using ParkingTracker.Infrastructure.Features.AddressSearch;
 using ParkingTracker.Infrastructure.Features.PaidHours;
 using ParkingTracker.Infrastructure.Features.Sectors;
@@ -51,10 +54,43 @@ public sealed class InfrastructureServiceInstaller : BaseServiceInstaller, IServ
 
 		// Nominatim answers in the language of the request: French, as the first version of the app asked.
 		AddSourceClient<IAddressSearch, NominatimClient>(services, client => client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("fr"));
+
+		AddAccountClients(services);
 	}
 	#endregion
 
 	#region Private Helpers
+	/// <summary>
+	/// Registers the client of the account API: one HTTP client without a bearer (challenge, exchange and refresh) and the session client
+	/// whose HTTP client adds the bearer and refreshes it. The refresher is one instance, so that concurrent callers share a refresh.
+	/// </summary>
+	/// <param name="services">The service collection.</param>
+	private static void AddAccountClients(IServiceCollection services)
+	{
+		// The host replaces the address for its build; the clock and the token store come from the host as well.
+		services.TryAddSingleton(SessionApiSettings.Default);
+		services.TryAddSingleton(TimeProvider.System);
+		services.AddSingleton(provider => new AccessTokenRefresher(
+			provider.GetRequiredService<IHttpClientFactory>(),
+			provider.GetRequiredService<ISessionTokenStore>(),
+			provider.GetRequiredService<TimeProvider>()));
+		services.AddTransient<AuthenticatedHandler>();
+		services.AddHttpClient(SessionApiClient.ClientName, ConfigureAccountClient);
+		services.AddHttpClient<ISessionClient, SessionClient>(ConfigureAccountClient).AddHttpMessageHandler<AuthenticatedHandler>();
+	}
+
+	/// <summary>
+	/// Sets the address, the limit of time and the user agent of an account API client.
+	/// </summary>
+	/// <param name="provider">The service provider, which holds the address.</param>
+	/// <param name="client">The HTTP client to set up.</param>
+	private static void ConfigureAccountClient(IServiceProvider provider, HttpClient client)
+	{
+		client.BaseAddress = provider.GetRequiredService<SessionApiSettings>().BaseAddress;
+		client.Timeout = TimeSpan.FromSeconds(20);
+		client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("ParkingTracker", "1.0"));
+	}
+
 	/// <summary>
 	/// Registers a source client as a typed HTTP client behind its port.
 	/// </summary>
