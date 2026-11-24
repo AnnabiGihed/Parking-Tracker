@@ -59,15 +59,32 @@ public sealed partial class SecureValueStorage : IKeyValueStorage
 	}
 
 	/// <inheritdoc />
-	public Task WriteAsync(string key, string value)
+	/// <exception cref="IOException">Thrown when secure storage cannot save the value.</exception>
+	public async Task WriteAsync(string key, string value)
 	{
-		return SecureStorage.Default.SetAsync(key, value);
+		try
+		{
+			await SecureStorage.Default.SetAsync(key, value).ConfigureAwait(false);
+		}
+		catch (Exception exception) when (exception is CryptographicException or InvalidOperationException or Java.Security.GeneralSecurityException)
+		{
+			throw new IOException("The value could not be saved in secure storage.", exception);
+		}
 	}
 
 	/// <inheritdoc />
+	/// <exception cref="IOException">Thrown when secure storage cannot remove the value.</exception>
 	public Task DeleteAsync(string key)
 	{
-		SecureStorage.Default.Remove(key);
+		try
+		{
+			SecureStorage.Default.Remove(key);
+		}
+		catch (Exception exception) when (exception is CryptographicException or InvalidOperationException or Java.Security.GeneralSecurityException)
+		{
+			throw new IOException("The value could not be removed from secure storage.", exception);
+		}
+
 		return Task.CompletedTask;
 	}
 	#endregion

@@ -12,11 +12,14 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
 
 ### Added
 
-- The API's sign-in endpoints, not used by the app yet: `POST /api/v1/sessions/challenges` (a one-time nonce),
+- The S5 account sheet in builds with a Google Web client ID: sign in with Google, view the account, sign out,
+  or confirm account deletion. Session tokens stay in encrypted storage and refresh automatically. Default Release
+  builds keep this entry hidden until production sign-in is configured.
+- The API's sign-in endpoints, used by the S5 account sheet: `POST /api/v1/sessions/challenges` (a one-time nonce),
   `POST /api/v1/sessions` (a Google ID token for an access token and a refresh token) and `GET /api/v1/me`. The server
   keeps only keyed hashes of the Google subject and of the refresh token. The provisioning script creates three new
   secrets and `--rotate-signing-key` rotates the signing key.
-- The API's refresh, sign-out and account deletion endpoints, not used by the app yet: `POST /api/v1/sessions/refresh`
+- The API's refresh, sign-out and account deletion endpoints, used by the S5 account sheet: `POST /api/v1/sessions/refresh`
   (a single-use refresh token for new tokens; reusing a rotated token revokes the device's whole family),
   `DELETE /api/v1/sessions/current` (signs out this device; access tokens already issued work until they expire, 15
   minutes at most) and `DELETE /api/v1/me` (deletes the account and its sessions and records its hash in the erasure

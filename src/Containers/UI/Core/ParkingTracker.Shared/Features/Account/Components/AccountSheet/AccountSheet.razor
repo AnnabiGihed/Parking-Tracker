@@ -1,0 +1,47 @@
+@namespace ParkingTracker.Shared.Features.Account.Components
+@inherits ViewModelComponent<AccountViewModel>
+@using ParkingTracker.Shared.Features.Shared.Dialogs
+<DialogBridge ViewModel="ViewModel" Title="Account (debug)">
+    <div id="accountSheet" class="account-sheet">
+        @if (!string.IsNullOrEmpty(ViewModel.Error))
+        {
+            <RadzenAlert id="accountError" AlertStyle="AlertStyle.Warning" Variant="Variant.Flat" Shade="Shade.Lighter" AllowClose="false" ShowIcon="false" role="alert">@ViewModel.Error</RadzenAlert>
+        }
+        @if (!ViewModel.IsSignedIn)
+        {
+            <p class="account-note">Developer build: sign in with Google against the API.</p>
+            <RadzenButton id="accountSignIn" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Primary" Text="Sign in with Google" Disabled="ViewModel.IsBusy" Click="OnSignInAsync" />
+        }
+        else
+        {
+            @if (ViewModel.Account is not null)
+            {
+                <dl class="account-details">
+                    <dt>Account</dt>
+                    <dd id="accountId">@ViewModel.AccountIdText</dd>
+                    <dt>Created on</dt>
+                    <dd id="accountCreated">@ViewModel.CreatedText</dd>
+                    <dt>Last seen on</dt>
+                    <dd id="accountLastSeen">@ViewModel.LastSeenText</dd>
+                    <dt>Active sessions</dt>
+                    <dd id="accountSessions">@ViewModel.ActiveSessionsText</dd>
+                </dl>
+            }
+            @if (ViewModel.IsConfirmingDelete)
+            {
+                <p class="account-note">This deletes your account on the server and signs this phone out. Data on this phone stays.</p>
+                <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" class="account-actions">
+                    <RadzenButton id="accountDeleteCancel" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Base" Variant="Variant.Outlined" Text="Keep account" Disabled="ViewModel.IsBusy" Click="OnCancelDelete" />
+                    <RadzenButton id="accountDeleteConfirm" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Danger" Text="Delete for good" Disabled="ViewModel.IsBusy" Click="OnConfirmDeleteAsync" Style="flex:1" />
+                </RadzenStack>
+            }
+            else
+            {
+                <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" class="account-actions">
+                    <RadzenButton id="accountSignOut" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Primary" Variant="Variant.Outlined" Text="Sign out" Disabled="ViewModel.IsBusy" Click="OnSignOutAsync" />
+                    <RadzenButton id="accountDelete" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Outlined" Text="Delete account" Disabled="ViewModel.IsBusy" Click="OnDelete" />
+                </RadzenStack>
+            }
+        }
+    </div>
+</DialogBridge>

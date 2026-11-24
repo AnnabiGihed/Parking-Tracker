@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
+using ParkingTracker.Application.Features.Accounts.Abstractions;
 using ParkingTracker.Application.Features.ParkingDetection.Abstractions;
 using ParkingTracker.Application.Features.ParkingDetection.Services;
 using ParkingTracker.Application.Features.ParkingSessions.Abstractions;
@@ -80,6 +81,9 @@ public abstract class UiTestContext : BunitContext
 		Notifier.RequestPermissionAsync(Arg.Any<CancellationToken>()).Returns(true);
 		Alarms.ScheduleAsync(Arg.Any<IReadOnlyList<TimerReminder>>(), Arg.Any<CancellationToken>()).Returns(AlarmPrecision.Exact);
 		Settings.GetAlertsEnabledAsync().Returns(true);
+		Google.IsAvailable.Returns(false);
+		Services.AddSingleton(Google);
+		Services.AddSingleton(Session);
 		Services.AddSingleton(Alarms);
 		Services.AddSingleton(Notifier);
 		Services.AddSingleton(AlertCoordinator);
@@ -135,6 +139,16 @@ public abstract class UiTestContext : BunitContext
 	/// Gets the vehicle store substitute, which holds no vehicle and accepts every save.
 	/// </summary>
 	protected IVehicleStore Vehicles { get; } = Substitute.For<IVehicleStore>();
+
+	/// <summary>
+	/// Gets the Google sign-in substitute, which is not available (as in a release build) unless a test says otherwise.
+	/// </summary>
+	protected IGoogleSignIn Google { get; } = Substitute.For<IGoogleSignIn>();
+
+	/// <summary>
+	/// Gets the session client substitute.
+	/// </summary>
+	protected ISessionClient Session { get; } = Substitute.For<ISessionClient>();
 
 	/// <summary>
 	/// Gets the link launcher substitute.

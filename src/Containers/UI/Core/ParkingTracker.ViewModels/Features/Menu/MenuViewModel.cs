@@ -1,5 +1,6 @@
 using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
 using ParkingTracker.Domain.Features.SavedPlaces.ValueObjects;
+using ParkingTracker.ViewModels.Features.Account;
 using ParkingTracker.ViewModels.Features.Card;
 using ParkingTracker.ViewModels.Features.Places;
 using ParkingTracker.ViewModels.Features.Shared;
@@ -58,6 +59,11 @@ public sealed class MenuViewModel : ViewModelBase
 	/// The saved card and the dialog that edits it.
 	/// </summary>
 	private readonly CardViewModel card;
+
+	/// <summary>
+	/// The debug-only account sheet that its entry opens.
+	/// </summary>
+	private readonly AccountViewModel account;
 	#endregion
 
 	#region Constructors
@@ -69,19 +75,22 @@ public sealed class MenuViewModel : ViewModelBase
 	/// <param name="favourites">The list of favourite places that its entry opens.</param>
 	/// <param name="vehicle">The saved vehicle and the dialog that edits it.</param>
 	/// <param name="card">The saved card and the dialog that edits it.</param>
+	/// <param name="account">The debug-only account sheet that its entry opens.</param>
 	/// <exception cref="ArgumentNullException">Thrown when an argument is <see langword="null"/>.</exception>
-	public MenuViewModel(PlacesViewModel places, PlacePickerViewModel picker, FavouritesViewModel favourites, VehicleViewModel vehicle, CardViewModel card)
+	public MenuViewModel(PlacesViewModel places, PlacePickerViewModel picker, FavouritesViewModel favourites, VehicleViewModel vehicle, CardViewModel card, AccountViewModel account)
 	{
 		ArgumentNullException.ThrowIfNull(places);
 		ArgumentNullException.ThrowIfNull(picker);
 		ArgumentNullException.ThrowIfNull(favourites);
 		ArgumentNullException.ThrowIfNull(vehicle);
 		ArgumentNullException.ThrowIfNull(card);
+		ArgumentNullException.ThrowIfNull(account);
 		this.places = places;
 		this.picker = picker;
 		this.favourites = favourites;
 		this.vehicle = vehicle;
 		this.card = card;
+		this.account = account;
 
 		// All are scoped like this view model and live as long as it does, so there is nothing to unsubscribe.
 		places.Changed += OnSourceChanged;
@@ -115,6 +124,11 @@ public sealed class MenuViewModel : ViewModelBase
 	/// Gets the text under the parking card: the card summary line, or <see cref="NotSetText"/> when there is no card.
 	/// </summary>
 	public string CardText => card.Line.Dot == CardDot.None ? NotSetText : card.Line.Pill;
+
+	/// <summary>
+	/// Gets a value indicating whether the menu offers the account entry: only a build that can sign in with Google, which is a debug build for now (stage S5).
+	/// </summary>
+	public bool IsAccountVisible => account.IsAvailable;
 	#endregion
 
 	#region Public Methods
@@ -139,6 +153,12 @@ public sealed class MenuViewModel : ViewModelBase
 	/// </summary>
 	/// <returns>A task that completes when the dialog opened.</returns>
 	public Task OpenCardAsync() => card.OpenAsync();
+
+	/// <summary>
+	/// Opens the account sheet.
+	/// </summary>
+	/// <returns>A task that completes when the sheet is open and the account was read.</returns>
+	public Task OpenAccountAsync() => account.OpenAsync();
 	#endregion
 
 	#region Private Helpers

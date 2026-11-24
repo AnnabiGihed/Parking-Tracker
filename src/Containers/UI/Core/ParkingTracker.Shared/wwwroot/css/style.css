@@ -330,3 +330,10 @@ button.scan { width: 100%; margin-bottom: 8px; background: transparent; text-ali
 .favourite-add.rz-button { align-self: stretch; }
 
 .vehicle-actions { align-items: stretch; }
+
+.account-sheet { display: flex; flex-direction: column; gap: 12px; }
+.account-note { margin: 0; font-size: 14px; color: var(--muted); }
+.account-details { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; }
+.account-details dt { color: var(--muted); }
+.account-details dd { margin: 0; font-weight: 600; color: var(--fg); overflow-wrap: anywhere; }
+.account-actions { align-items: stretch; }

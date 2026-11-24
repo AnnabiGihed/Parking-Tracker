@@ -35,6 +35,35 @@
     <Compile Remove="Features\Shared\TestHooks\**" />
   </ItemGroup>
 
+  <!--
+    Sign-in settings of the build, written into a generated constant (SignInConfiguration.g.cs) so that nothing is read at run time.
+    GoogleWebClientId is the Web client ID of the Google project (not a secret): a Debug build uses the development project, a Release
+    build has none until the production project exists (stage S9), which leaves Google sign-in and its menu entry out of release builds.
+    Override on the command line with -p:GoogleWebClientId=... ; ApiBaseUrl is the address of the API.
+  -->
+  <PropertyGroup>
+    <GoogleWebClientId Condition="'$(GoogleWebClientId)' == '' And '$(Configuration)' == 'Debug'">1055999651780-ttrl5injs8ooc3dp84u67umpfcqgut49.apps.googleusercontent.com</GoogleWebClientId>
+    <ApiBaseUrl Condition="'$(ApiBaseUrl)' == ''">https://api.parking.pivotsoftwares.com/</ApiBaseUrl>
+  </PropertyGroup>
+  <Target Name="GenerateSignInConfiguration" BeforeTargets="BeforeCompile;CoreCompile">
+    <PropertyGroup>
+      <SignInConfigurationFile>$(IntermediateOutputPath)SignInConfiguration.g.cs</SignInConfigurationFile>
+    </PropertyGroup>
+    <ItemGroup>
+      <SignInConfigurationLine Include="namespace ParkingTracker.App%3B" />
+      <SignInConfigurationLine Include="internal static class SignInConfiguration" />
+      <SignInConfigurationLine Include="{" />
+      <SignInConfigurationLine Include="    internal const string GoogleWebClientId = &quot;$(GoogleWebClientId)&quot;%3B" />
+      <SignInConfigurationLine Include="    internal const string ApiBaseUrl = &quot;$(ApiBaseUrl)&quot;%3B" />
+      <SignInConfigurationLine Include="}" />
+    </ItemGroup>
+    <WriteLinesToFile File="$(SignInConfigurationFile)" Lines="@(SignInConfigurationLine)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <Compile Include="$(SignInConfigurationFile)" />
+      <FileWrites Include="$(SignInConfigurationFile)" />
+    </ItemGroup>
+  </Target>
+
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\Core\ParkingTracker.Application\ParkingTracker.Application.csproj" />
     <ProjectReference Include="..\..\..\..\Infrastructure\ParkingTracker.Infrastructure\ParkingTracker.Infrastructure.csproj" />
@@ -50,6 +79,10 @@
     <PackageReference Include="Xamarin.GooglePlayServices.Location" />
     <!-- Card photo text recognition on the device (ADR-0003). -->
     <PackageReference Include="Xamarin.Google.MLKit.TextRecognition" />
+    <!-- Google sign-in through Credential Manager (ADR-0014). -->
+    <PackageReference Include="Xamarin.AndroidX.Credentials" />
+    <PackageReference Include="Xamarin.AndroidX.Credentials.PlayServicesAuth" />
+    <PackageReference Include="Xamarin.GoogleAndroid.Libraries.Identity.GoogleId" />
     <!-- Aligned with the AndroidX versions Play services Location brings, see Directory.Packages.props. -->
     <PackageReference Include="Xamarin.AndroidX.Collection.Ktx" />
     <PackageReference Include="Xamarin.AndroidX.Fragment.Ktx" />

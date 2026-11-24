@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using ParkingTracker.ViewModels.Features.Account;
 using ParkingTracker.ViewModels.Features.Car;
 using ParkingTracker.ViewModels.Features.Card;
 using ParkingTracker.ViewModels.Features.MapLayers;
@@ -46,6 +47,7 @@ public sealed class UiServiceInstaller : IServiceInstaller
 		services.AddScoped<PlacePickerViewModel>();
 		services.AddScoped<FavouritesViewModel>();
 		services.AddScoped<VehicleViewModel>();
+		services.AddScoped<AccountViewModel>();
 		services.AddScoped<MenuViewModel>();
 		services.AddScoped<ParkedOnScreenResponder>();
 		services.AddScoped<MapLayersViewModel>();

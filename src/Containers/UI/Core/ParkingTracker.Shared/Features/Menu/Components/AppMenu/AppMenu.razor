@@ -31,5 +31,13 @@
                 <span class="app-menu-item"><Icon Name="card" /><span class="app-menu-text"><span class="app-menu-title">Parking card</span><span class="app-menu-sub">@ViewModel.CardText</span></span></span>
             </Template>
         </RadzenPanelMenuItem>
+        @if (ViewModel.IsAccountVisible)
+        {
+            <RadzenPanelMenuItem id="menuAccount" Click="OnAccountAsync">
+                <Template>
+                    <span class="app-menu-item"><Icon Name="person" /><span class="app-menu-text"><span class="app-menu-title">Account (debug)</span><span class="app-menu-sub">Developer builds only</span></span></span>
+                </Template>
+            </RadzenPanelMenuItem>
+        }
     </RadzenPanelMenu>
 </div>

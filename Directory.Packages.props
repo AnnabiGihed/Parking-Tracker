@@ -89,6 +89,10 @@
     <PackageVersion Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="10.0.130" />
     <PackageVersion Include="Xamarin.GooglePlayServices.Location" Version="121.4.0.1" />
     <PackageVersion Include="Xamarin.Google.MLKit.TextRecognition" Version="116.0.1.9" />
+    <!-- Google sign-in through Credential Manager (ADR-0014); proven by the S5 spike. -->
+    <PackageVersion Include="Xamarin.AndroidX.Credentials" Version="1.6.0.1" />
+    <PackageVersion Include="Xamarin.AndroidX.Credentials.PlayServicesAuth" Version="1.6.0.2" />
+    <PackageVersion Include="Xamarin.GoogleAndroid.Libraries.Identity.GoogleId" Version="1.1.0.13" />
     <!-- Play services Location lifts the base AndroidX libraries; these AndroidX packages MAUI brings must follow them (NU1608). -->
     <PackageVersion Include="Xamarin.AndroidX.Collection.Ktx" Version="1.6.0.1" />
     <PackageVersion Include="Xamarin.AndroidX.Fragment.Ktx" Version="1.9.0" />
