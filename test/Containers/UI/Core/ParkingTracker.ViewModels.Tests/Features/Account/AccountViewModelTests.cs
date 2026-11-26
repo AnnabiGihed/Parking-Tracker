@@ -10,7 +10,7 @@ namespace ParkingTracker.ViewModels.Tests.Features.Account;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : Unit tests for <see cref="AccountViewModel"/>: the signed-out and signed-in states of the debug sheet, the plain words of each
+/// Purpose     : Unit tests for <see cref="AccountViewModel"/>: the signed-out and signed-in states of the account sheet, the plain words of each
 ///              sign-in failure, a session the API ended, the confirm step before the account is deleted, and the busy guard.
 /// </summary>
 public sealed class AccountViewModelTests : IDisposable
@@ -371,7 +371,7 @@ public sealed class AccountViewModelTests : IDisposable
 
 	#region Availability Tests
 	/// <summary>
-	/// Verifies that the availability follows Google sign-in, so that a release build without a Web client ID offers nothing.
+	/// Verifies that the availability follows Google sign-in, so that a build without a Web client ID offers nothing.
 	/// </summary>
 	[Fact]
 	public void IsAvailable_ShouldFollowGoogleSignIn()

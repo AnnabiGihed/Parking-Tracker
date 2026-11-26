@@ -18,7 +18,7 @@ namespace ParkingTracker.App.Features.Accounts;
 ///              client ID of the build, bound to the nonce of the server, and the callback API is wrapped in a task. The chooser is
 ///              shown on the current activity and lists every Google account (it is not limited to accounts that signed in before, and does
 ///              not choose one by itself). A cancel, a phone without a Google account and every other error are three distinct failures. The ID
-///              token is passed on and never logged. Without a Web client ID, as in a release build for now, sign-in is unavailable.
+///              token is passed on and never logged. Without a Web client ID (a build that overrides it empty), sign-in is unavailable.
 /// </summary>
 /// <remarks>This class depends on Android and Google Play services, so it cannot be unit-tested on a PC; the session client that uses it is tested over a substitute, and an emulator check covers the chooser.</remarks>
 public sealed partial class AndroidGoogleSignIn : IGoogleSignIn

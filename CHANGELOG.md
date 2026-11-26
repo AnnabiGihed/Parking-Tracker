@@ -37,6 +37,8 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
 
 ### Changed
 
+- Release builds now offer the Account entry and Google sign-in (until S9 through the development Google project, which
+  holds an Android client for the release key). The entry is called "Account".
 - The card, car and welcome screens open as the same bottom sheets as the other screens, with the Android back button
   closing them (the welcome screen still cannot be dismissed).
 - Form fields (text, drop-down, number and date) share one look in the app colours, in light and dark.
@@ -80,6 +82,8 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
 
 ### Fixed
 
+- The Home and Work shortcuts on the map no longer sit on a dark rectangle: their shadow is smaller and no longer cut off
+  by the edge of the scrolling row.
 - The parking alert no longer fires in slow traffic or at a red light. The phone now counts as parked only when it
   stays within 15 m of the place where it stopped for 2 minutes, or when it stood still and then went no faster than
   walking for 3 minutes; in that case the alert names the place where the car stopped, not where you walked to.

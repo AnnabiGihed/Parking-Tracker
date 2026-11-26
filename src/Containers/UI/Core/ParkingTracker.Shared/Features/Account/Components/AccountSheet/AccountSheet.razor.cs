@@ -6,7 +6,7 @@ namespace ParkingTracker.Shared.Features.Account.Components;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : The debug-only account sheet (stage S5), shown as a bottom sheet through the <c>DialogBridge</c>: "Sign in with Google" while
+/// Purpose     : The account sheet (stage S5), shown as a bottom sheet through the <c>DialogBridge</c>: "Sign in with Google" while
 ///              signed out, and the account from the API with Sign out and Delete account (after a confirm step) while signed in. It hands
 ///              every tap to the <see cref="AccountViewModel"/>, which holds the state and the words of the failures.
 /// </summary>

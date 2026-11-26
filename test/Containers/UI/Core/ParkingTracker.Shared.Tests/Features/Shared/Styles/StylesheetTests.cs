@@ -176,7 +176,8 @@ public sealed partial class StylesheetTests : UiTestContext
 
 	/// <summary>
 	/// Verifies that the Home and Work chips carry the classes the stylesheet styles, and that the rule gives them the surface
-	/// and text colours of the app with a shadow, like the car chip, and lets them be tapped inside the top bar.
+	/// and text colours of the app with a small shadow that the scrolling row has room for (a large one was cut off by the row
+	/// into a dark rectangle on the map), and lets them be tapped inside the top bar.
 	/// </summary>
 	[Fact]
 	public void PlaceChips_Style_ShouldUseTheColoursOfTheApp()
@@ -188,8 +189,8 @@ public sealed partial class StylesheetTests : UiTestContext
 		var chip = RuleOf(css, ".place-chips .rz-chip.place-go, .place-chips .rz-chip.place-go:not(.rz-state-disabled):hover, .place-chips .rz-chip.place-go:not(.rz-state-disabled):active");
 		var group = RuleOf(css, ".place-chips");
 
-		chip.Should().Contain("background-color: var(--surface);").And.Contain("color: var(--fg);").And.Contain("box-shadow: var(--shadow);");
-		group.Should().Contain("pointer-events: auto;");
+		chip.Should().Contain("background-color: var(--surface);").And.Contain("color: var(--fg);").And.Contain("box-shadow: 0 1px 4px rgba(0, 0, 0, .3);");
+		group.Should().Contain("pointer-events: auto;").And.Contain("padding: 6px 10px 10px;").And.Contain("margin: -6px -10px -4px;");
 	}
 	#endregion
 }

@@ -14,7 +14,7 @@ namespace ParkingTracker.Shared.Tests.Features.Account.Components;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : Component tests for the debug-only account sheet: it opens as a Radzen bottom sheet through the bridge, offers "Sign in with Google" while
+/// Purpose     : Component tests for the account sheet: it opens as a Radzen bottom sheet through the bridge, offers "Sign in with Google" while
 ///              signed out and shows each failure in words, shows the account with Sign out and Delete account while signed in, asks for a confirmation before
 ///              deleting, and closes with the back button of the phone.
 /// </summary>
@@ -58,7 +58,7 @@ public sealed class AccountSheetTests : UiTestContext
 	{
 		var host = await OpenAsync(signedIn: false);
 
-		host.Find(".rz-dialog-title").TextContent.Should().Be("Account (debug)");
+		host.Find(".rz-dialog-title").TextContent.Should().Be("Account");
 		host.FindAll(".rz-dialog.app-sheet").Should().HaveCount(1);
 		host.Find("#accountSignIn").TextContent.Should().Contain("Sign in with Google");
 		host.FindAll("#accountSignOut, #accountDelete, #accountId").Should().BeEmpty();

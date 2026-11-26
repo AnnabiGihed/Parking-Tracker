@@ -24,8 +24,8 @@ with its unit tests. Documentation: [docs/architecture.md](docs/architecture.md)
 
 ## Features
 
-- **Account (S5, development builds)**: sign in with Google from the side menu, view your account, sign out or
-  confirm account deletion. Default Release builds hide this entry. See the
+- **Account (S5)**: sign in with Google from the side menu, view your account, sign out or
+  confirm account deletion. See the
   [mobile sign-in settings](docs/reference/configuration.md#mobile-sign-in-build-settings) for build overrides.
 - **My card** (🪪): type your card details or **scan a photo** of the card (text recognition on the phone fills in the
   number, plate, sector and validity dates). The card stays on your phone, in encrypted storage. It warns you 30 days
