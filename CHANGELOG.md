@@ -82,6 +82,9 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
 
 ### Fixed
 
+- A signed-in request with a body, such as a JSON `PUT`, is sent again once after the server refuses an expired access
+  token, like requests without a body already were. Bodies over 64 KB, or streams that cannot be read twice, are sent
+  once and the refusal is returned as before.
 - The Home and Work shortcuts on the map no longer sit on a dark rectangle: their shadow is smaller and no longer cut off
   by the edge of the scrolling row.
 - The parking alert no longer fires in slow traffic or at a red light. The phone now counts as parked only when it
