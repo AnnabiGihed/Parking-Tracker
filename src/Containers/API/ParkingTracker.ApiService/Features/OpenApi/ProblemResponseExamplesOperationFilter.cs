@@ -8,7 +8,8 @@ namespace ParkingTracker.ApiService.Features.OpenApi;
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
 /// Purpose     : Gives each problem response of an operation the example that belongs to its status (docs-api-contracts R10): the
-///              refused sign-in on the 401 of <c>createSession</c>, a plain 401 on the others, the refusal of the limit on 429, the lost save on 409 and
+///              refused sign-in on the 401 of <c>createSession</c>, a plain 401 on the others, the refusal of the limit on 429, the lost save on 409,
+///              the missing profile on 404, the failed and the missing precondition on 412 and 428, the profile that cannot be read on 500 and
 ///              the body that is too large on 413.
 /// </summary>
 public sealed class ProblemResponseExamplesOperationFilter : IOperationFilter
@@ -38,9 +39,13 @@ public sealed class ProblemResponseExamplesOperationFilter : IOperationFilter
 	{
 		["400"] = new JsonObject { ["type"] = "https://tools.ietf.org/html/rfc9110#section-15.5.1", ["title"] = "One or more validation errors occurred.", ["status"] = 400, ["errors"] = new JsonObject { ["IdToken"] = new JsonArray("The IdToken field is required.") } },
 		["401"] = new JsonObject { ["title"] = "Unauthorized", ["status"] = 401 },
+		["404"] = new JsonObject { ["type"] = "Profile.NotFound", ["title"] = "Not Found", ["status"] = 404, ["detail"] = "The account has no profile yet." },
 		["409"] = new JsonObject { ["type"] = "Persistence.Concurrency", ["title"] = "Conflict", ["status"] = 409, ["detail"] = "The data changed while it was being saved." },
+		["412"] = new JsonObject { ["type"] = "Profile.PreconditionFailed", ["title"] = "Precondition Failed", ["status"] = 412, ["detail"] = "Read the profile again before writing." },
 		["413"] = new JsonObject { ["title"] = "Request body too large", ["status"] = 413 },
+		["428"] = new JsonObject { ["type"] = "Profile.PreconditionRequired", ["title"] = "Precondition Required", ["status"] = 428, ["detail"] = "Send If-Match with the revision, or If-None-Match: * to create." },
 		["429"] = new JsonObject { ["title"] = "Too many requests", ["status"] = 429 },
+		["500"] = new JsonObject { ["type"] = "Profile.Unreadable", ["title"] = "Internal Server Error", ["status"] = 500 },
 	};
 
 	/// <summary>

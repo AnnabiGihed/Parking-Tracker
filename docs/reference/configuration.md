@@ -48,7 +48,8 @@ unusable value, and name the key in the message without ever printing the value.
 
 The audience of the access tokens is `parkingtracker-api`, their life is 15 minutes, a nonce lives 5 minutes, and the
 rate limits are 10 session requests (challenge and sign-in) and, separately, 30 refresh requests per minute per client
-address, and 120 requests per minute per account with a burst of 30. They are constants of the code, not settings.
+address, 120 requests per minute per account with a burst of 30, and, apart from that, 30 requests per minute per
+account with a burst of 10 on the profile endpoints. They are constants of the code, not settings.
 
 ## Mobile sign-in build settings
 

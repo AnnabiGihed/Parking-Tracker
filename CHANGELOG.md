@@ -12,9 +12,15 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
 
 ### Added
 
+- The API's profile endpoints, which the app will use to sync the places, vehicle and residents' card: `GET
+  /api/v1/me/profile` (the decrypted document with the revision as a strong `ETag`, `304` for a matching
+  `If-None-Match`, `404` when there is none) and `PUT /api/v1/me/profile` (`If-Match` with the revision, or `If-None-Match:
+  *` to create; `428` without either, `412` for a stale revision or a lost race, `413` above 40 KB). The document is
+  validated (schema version 1, coordinates inside Brussels, field lengths) before it is encrypted. Limited per account
+  to 30 requests per minute with a burst of 10. The app does not use them yet.
 - The server can store one encrypted profile per account (table `account_profiles`, AES-256-GCM under a new secret
   profile key, deleted with the account and by the erasure re-apply). The provisioning script creates the secrets
-  `profile_key_current` and an empty `profile_key_previous`. Nothing uses the store yet: the endpoints and the app follow.
+  `profile_key_current` and an empty `profile_key_previous`. The app does not use the store yet.
 - The S5 account sheet in builds with a Google Web client ID: sign in with Google, view the account, sign out,
   or confirm account deletion. Session tokens stay in encrypted storage and refresh automatically. Default Release
   builds keep this entry hidden until production sign-in is configured.

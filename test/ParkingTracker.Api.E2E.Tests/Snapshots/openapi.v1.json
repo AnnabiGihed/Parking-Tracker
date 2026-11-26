@@ -122,6 +122,233 @@
         ]
       }
     },
+    "/api/v1/me/profile": {
+      "get": {
+        "tags": [
+          "Profile"
+        ],
+        "summary": "Get the own profile",
+        "description": "Returns the profile document of the account (places, vehicle and residents' card), decrypted. The ETag header is the revision in quotes, for example \"3\". An If-None-Match that names the current revision (or *) answers 304 without a body. 404 when the account has no profile yet. A stored profile that cannot be decrypted answers 500 without a cause. Limited per account: 30 requests per minute with a burst of 10.",
+        "operationId": "getProfile",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileDocument"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Not Modified"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                "example": {
+                  "title": "Unauthorized",
+                  "status": 401
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                "example": {
+                  "type": "Profile.NotFound",
+                  "title": "Not Found",
+                  "status": 404,
+                  "detail": "The account has no profile yet."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                "example": {
+                  "title": "Too many requests",
+                  "status": 429
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                "example": {
+                  "type": "Profile.Unreadable",
+                  "title": "Internal Server Error",
+                  "status": 500
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Profile"
+        ],
+        "summary": "Store the own profile",
+        "description": "Validates and stores the profile document, encrypted. The write must say what it is based on: If-Match with the revision in quotes (for example \"3\") to replace that revision, or If-None-Match: * to create the first profile; neither is 428, a malformed value or both together is 400, and a revision that is not the stored one, a create over an existing profile or a write that lost a race is 412 (read the profile again, merge, write again). The document has at most 32 KB of plain text and the body at most 40 KB (413 above), the schema version is 1, coordinates lie in the Brussels region, at most 50 favourite places. The answer carries the new revision in the body and in the ETag header. Limited per account: 30 requests per minute with a burst of 10.",
+        "operationId": "putProfile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileDocument"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileDocument"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileDocument"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileRevisionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                },
+                "example": {
+                  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+                  "title": "One or more validation errors occurred.",
+                  "status": 400,
+                  "errors": {
+                    "IdToken": [
+                      "The IdToken field is required."
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                "example": {
+                  "title": "Unauthorized",
+                  "status": 401
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                "example": {
+                  "type": "Profile.PreconditionFailed",
+                  "title": "Precondition Failed",
+                  "status": 412,
+                  "detail": "Read the profile again before writing."
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Content Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                "example": {
+                  "title": "Request body too large",
+                  "status": 413
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                "example": {
+                  "type": "Profile.PreconditionRequired",
+                  "title": "Precondition Required",
+                  "status": 428,
+                  "detail": "Send If-Match with the revision, or If-None-Match: * to create."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                },
+                "example": {
+                  "title": "Too many requests",
+                  "status": 429
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/sessions/current": {
       "delete": {
         "tags": [
@@ -517,6 +744,281 @@
           "detail": "What went wrong, without private data."
         }
       },
+      "ProfileCardSection": {
+        "required": [
+          "lims",
+          "mailles",
+          "municipality",
+          "tolerances",
+          "updatedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "municipality": {
+            "type": "string"
+          },
+          "sector": {
+            "type": "string",
+            "nullable": true
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "validTo": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "tolerances": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "mailles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "lims": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "number": {
+            "type": "string",
+            "nullable": true
+          },
+          "plate": {
+            "type": "string",
+            "nullable": true
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProfileDocument": {
+        "required": [
+          "favourites",
+          "schemaVersion"
+        ],
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "home": {
+            "$ref": "#/components/schemas/ProfilePlaceSection"
+          },
+          "work": {
+            "$ref": "#/components/schemas/ProfilePlaceSection"
+          },
+          "favourites": {
+            "$ref": "#/components/schemas/ProfileFavouritesSection"
+          },
+          "vehicle": {
+            "$ref": "#/components/schemas/ProfileVehicleSection"
+          },
+          "card": {
+            "$ref": "#/components/schemas/ProfileCardSection"
+          }
+        },
+        "additionalProperties": false,
+        "example": {
+          "schemaVersion": 1,
+          "home": {
+            "label": "Home",
+            "latitude": 50.8467,
+            "longitude": 4.3525,
+            "addressText": "Rue de la Loi 16, 1000 Bruxelles",
+            "updatedAt": "2026-11-20T10:00:00+00:00"
+          },
+          "work": null,
+          "favourites": {
+            "updatedAt": "2026-11-20T10:00:00+00:00",
+            "places": [
+              {
+                "label": "Gym",
+                "latitude": 50.8503,
+                "longitude": 4.3517,
+                "addressText": null
+              }
+            ]
+          },
+          "vehicle": {
+            "make": "renault",
+            "model": "Zoe",
+            "year": 2021,
+            "fuel": "Electric",
+            "euroNorm": "Unknown",
+            "connectors": [
+              "Type2",
+              "Ccs"
+            ],
+            "batteryKwh": 52,
+            "rangeKm": 300,
+            "plate": null,
+            "updatedAt": "2026-11-20T10:00:00+00:00"
+          },
+          "card": null
+        }
+      },
+      "ProfileFavouritePlace": {
+        "required": [
+          "latitude",
+          "longitude"
+        ],
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "nullable": true
+          },
+          "latitude": {
+            "type": "number",
+            "format": "double"
+          },
+          "longitude": {
+            "type": "number",
+            "format": "double"
+          },
+          "addressText": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProfileFavouritesSection": {
+        "required": [
+          "places",
+          "updatedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "places": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProfileFavouritePlace"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProfilePlaceSection": {
+        "required": [
+          "latitude",
+          "longitude",
+          "updatedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "nullable": true
+          },
+          "latitude": {
+            "type": "number",
+            "format": "double"
+          },
+          "longitude": {
+            "type": "number",
+            "format": "double"
+          },
+          "addressText": {
+            "type": "string",
+            "nullable": true
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProfileRevisionResponse": {
+        "required": [
+          "revision"
+        ],
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false,
+        "example": {
+          "revision": 3
+        }
+      },
+      "ProfileVehicleSection": {
+        "required": [
+          "connectors",
+          "euroNorm",
+          "fuel",
+          "make",
+          "updatedAt",
+          "year"
+        ],
+        "type": "object",
+        "properties": {
+          "make": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string",
+            "nullable": true
+          },
+          "year": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "fuel": {
+            "type": "string"
+          },
+          "euroNorm": {
+            "type": "string"
+          },
+          "connectors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "batteryKwh": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "rangeKm": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "plate": {
+            "type": "string",
+            "nullable": true
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
       "RefreshSessionRequest": {
         "required": [
           "refreshToken"
@@ -628,6 +1130,9 @@
   "tags": [
     {
       "name": "Account"
+    },
+    {
+      "name": "Profile"
     },
     {
       "name": "Sessions"

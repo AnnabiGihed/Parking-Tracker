@@ -6,10 +6,13 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ParkingTracker.Domain\ParkingTracker.Domain.csproj" />
+    <!-- The v1 transport records of the API; the profile document is validated and stored from them. -->
+    <ProjectReference Include="..\ParkingTracker.Contracts\ParkingTracker.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Pivot.Framework.Application" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
   </ItemGroup>
 
 </Project>
