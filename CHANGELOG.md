@@ -12,6 +12,9 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
 
 ### Added
 
+- The server can store one encrypted profile per account (table `account_profiles`, AES-256-GCM under a new secret
+  profile key, deleted with the account and by the erasure re-apply). The provisioning script creates the secrets
+  `profile_key_current` and an empty `profile_key_previous`. Nothing uses the store yet: the endpoints and the app follow.
 - The S5 account sheet in builds with a Google Web client ID: sign in with Google, view the account, sign out,
   or confirm account deletion. Session tokens stay in encrypted storage and refresh automatically. Default Release
   builds keep this entry hidden until production sign-in is configured.

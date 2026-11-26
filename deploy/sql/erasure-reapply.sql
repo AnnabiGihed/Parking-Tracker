@@ -5,7 +5,7 @@
 -- from the exported log, and ends the transaction with ROLLBACK (dry run) or COMMIT. The file holds plain SQL only, so a test can run
 -- it the same way. Each statement prints one row, so the dry run shows what a commit would change.
 
--- 1. The accounts that were erased after the dump: their sessions go with them (ON DELETE CASCADE). An account created after the
+-- 1. The accounts that were erased after the dump: their sessions and their encrypted profile go with them (ON DELETE CASCADE). An account created after the
 -- day of the erasure is a new sign-up of the same person and stays; one created on that day cannot be told apart from the old one.
 WITH erased AS (
 	DELETE FROM user_accounts account

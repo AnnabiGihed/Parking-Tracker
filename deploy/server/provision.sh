@@ -141,7 +141,8 @@ create_secret_once() {
 }
 
 # The secrets of the sign-in, each created only when missing, so a rerun never invalidates a token or an account:
-# the current signing key, the previous one (an empty file until the first rotation) and the subject hash key.
+# the current signing key, the previous one (an empty file until the first rotation), the subject hash key, and the profile
+# key with its previous key (an empty file; there is no rotation of the profile key yet).
 create_token_secrets() {
 	local app=$SECRETS_DIR/app
 	create_secret_once "$app/token_signing_key_current.pem" "the current token signing key" new_signing_key
@@ -150,6 +151,11 @@ create_token_secrets() {
 		echo "Created the empty token_signing_key_previous.pem"
 	fi
 	create_secret_once "$app/subject_hash_key" "the subject hash key (never rotated; keep a copy in the password manager)" openssl rand -base64 32
+	create_secret_once "$app/profile_key_current" "the profile key (encrypts the stored profiles; keep a copy in the password manager, because losing it makes every profile unreadable)" openssl rand -base64 32
+	if [[ ! -e $app/profile_key_previous ]]; then
+		write_secret "$app/profile_key_previous" "$DOTNET_APP_UID" ""
+		echo "Created the empty profile_key_previous"
+	fi
 }
 
 # Prints the folder of the release the "current" link points at, or nothing before the first deployment.

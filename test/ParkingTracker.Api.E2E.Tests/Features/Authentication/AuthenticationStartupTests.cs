@@ -8,7 +8,7 @@ namespace ParkingTracker.Api.E2E.Tests.Features.Authentication;
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
 /// Purpose     : Tests of the start-up checks of the sign-in settings (ADR-0014, ADR-0025): outside Development the API refuses to
-///              start without a usable signing key or subject hash key, with a key that is not a P-256 private key, with settings
+///              start without a usable signing key, subject hash key or profile key, with a key that is not a P-256 private key, with settings
 ///              that point at a test issuer instead of Google, without an audience or with an issuer that is not https, and the
 ///              messages name the configuration key and never carry a key. Development starts without any of them. The tests
 ///              need no database.
@@ -68,6 +68,53 @@ public sealed class AuthenticationStartupTests
 		var act = () => factory.CreateClient();
 
 		act.Should().Throw<OptionsValidationException>().Where(problem => problem.Message.Contains("Accounts:SubjectHashKey", StringComparison.Ordinal) && !problem.Message.Contains(key, StringComparison.Ordinal));
+	}
+
+	/// <summary>
+	/// Verifies that Production refuses to start without a current profile key.
+	/// </summary>
+	[Fact]
+	public void Start_ProductionWithoutProfileKey_ShouldFailNamingTheKey()
+	{
+		using var factory = new ApiFactory("Production", UnreachableConnection, secrets: ApiSecrets.Generate() with { ProfileKeyCurrent = string.Empty });
+
+		var act = () => factory.CreateClient();
+
+		act.Should().Throw<OptionsValidationException>().WithMessage("*Profiles:Keys:Current*");
+	}
+
+	/// <summary>
+	/// Verifies that a previous profile key that is the current key is refused, without showing the key.
+	/// </summary>
+	[Fact]
+	public void Start_ProductionWithThePreviousProfileKeyEqualToTheCurrent_ShouldFailWithoutShowingTheKey()
+	{
+		var secrets = ApiSecrets.Generate();
+		using var factory = new ApiFactory("Production", UnreachableConnection, secrets: secrets with { ProfileKeyPrevious = secrets.ProfileKeyCurrent });
+
+		var act = () => factory.CreateClient();
+
+		act.Should().Throw<OptionsValidationException>().Where(problem => problem.Message.Contains("Profiles:Keys:Previous", StringComparison.Ordinal) && !problem.Message.Contains(secrets.ProfileKeyCurrent, StringComparison.Ordinal));
+	}
+
+	/// <summary>
+	/// Verifies that a current or previous profile key that is not base64 of 32 bytes is refused, and that the message does not carry it.
+	/// </summary>
+	/// <param name="key">The key text.</param>
+	/// <param name="current">Whether the bad key is the current key (otherwise the previous one).</param>
+	[Theory]
+	[InlineData("not base64 at all !!", true)]
+	[InlineData("AAAAAAAAAAAAAAAAAAAAAA==", true)]
+	[InlineData("not base64 at all !!", false)]
+	[InlineData("AAAAAAAAAAAAAAAAAAAAAA==", false)]
+	public void Start_ProductionWithAWrongProfileKey_ShouldFailWithoutShowingTheKey(string key, bool current)
+	{
+		var secrets = ApiSecrets.Generate();
+		using var factory = new ApiFactory("Production", UnreachableConnection, secrets: current ? secrets with { ProfileKeyCurrent = key } : secrets with { ProfileKeyPrevious = key });
+
+		var act = () => factory.CreateClient();
+
+		act.Should().Throw<OptionsValidationException>().Where(problem => problem.Message.Contains("Profiles:Keys:", StringComparison.Ordinal) && !problem.Message.Contains(key, StringComparison.Ordinal));
 	}
 
 	/// <summary>

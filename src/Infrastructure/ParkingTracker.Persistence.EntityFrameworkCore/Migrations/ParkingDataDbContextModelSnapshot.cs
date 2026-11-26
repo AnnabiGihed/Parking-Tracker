@@ -23,6 +23,35 @@ namespace ParkingTracker.Persistence.EntityFrameworkCore.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "postgis");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("ParkingTracker.Domain.Features.Accounts.Aggregates.AccountProfile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("KeyId")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("text");
+
+                    b.Property<byte[]>("Payload")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("SchemaVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly>("UpdatedOn")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("account_profiles", (string)null);
+                });
+
             modelBuilder.Entity("ParkingTracker.Domain.Features.Accounts.Aggregates.DeviceSession", b =>
                 {
                     b.Property<Guid>("Id")
@@ -119,6 +148,15 @@ namespace ParkingTracker.Persistence.EntityFrameworkCore.Migrations
                     b.HasIndex("ExpiresAtUtc");
 
                     b.ToTable("sign_in_challenges", (string)null);
+                });
+
+            modelBuilder.Entity("ParkingTracker.Domain.Features.Accounts.Aggregates.AccountProfile", b =>
+                {
+                    b.HasOne("ParkingTracker.Domain.Features.Accounts.Aggregates.UserAccount", null)
+                        .WithOne()
+                        .HasForeignKey("ParkingTracker.Domain.Features.Accounts.Aggregates.AccountProfile", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("ParkingTracker.Domain.Features.Accounts.Aggregates.DeviceSession", b =>

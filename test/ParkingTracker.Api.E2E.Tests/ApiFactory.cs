@@ -124,6 +124,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 		_ = builder.UseSetting("Tokens:SigningKeys:Current", Secrets.CurrentKeyPem);
 		_ = builder.UseSetting("Tokens:SigningKeys:Previous", Secrets.PreviousKeyPem);
 		_ = builder.UseSetting("Accounts:SubjectHashKey", Secrets.SubjectHashKey);
+		_ = builder.UseSetting("Profiles:Keys:Current", Secrets.ProfileKeyCurrent);
+		_ = builder.UseSetting("Profiles:Keys:Previous", Secrets.ProfileKeyPrevious);
 		_ = builder.UseSetting("Authentication:Google:Audiences:0", TestGoogleIssuer.Audience);
 		foreach (var (key, value) in settings)
 		{

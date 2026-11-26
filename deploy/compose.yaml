@@ -94,6 +94,10 @@ services:
         target: Tokens__SigningKeys__Previous
       - source: subject_hash_key
         target: Accounts__SubjectHashKey
+      - source: profile_key_current
+        target: Profiles__Keys__Current
+      - source: profile_key_previous
+        target: Profiles__Keys__Previous
     tmpfs:
       - /tmp
     networks:
@@ -126,6 +130,10 @@ secrets:
     file: ${PT_SECRETS}/app/token_signing_key_previous.pem
   subject_hash_key:
     file: ${PT_SECRETS}/app/subject_hash_key
+  profile_key_current:
+    file: ${PT_SECRETS}/app/profile_key_current
+  profile_key_previous:
+    file: ${PT_SECRETS}/app/profile_key_previous
 
 volumes:
   pgdata:

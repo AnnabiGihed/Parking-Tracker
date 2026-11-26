@@ -4,7 +4,8 @@
 # Usage:
 #   backend-smoke.sh prepare <secrets dir>   throw-away passwords and connection strings, owned like on the server
 #                                            (999 for postgres, 1654 for the .NET images), the token signing keys and the
-#                                            subject hash key as provision.sh makes them, and the `web` network
+#                                            subject hash key and the profile keys as provision.sh makes them, and the
+#                                            `web` network
 #   backend-smoke.sh start                   PostgreSQL, deploy/sql/roles.sql, the migrator, then the API; needs
 #                                            PT_SECRETS, API_IMAGE and MIGRATOR_IMAGE in the environment
 #   backend-smoke.sh check <curl image>      from a container on `web`, as the shared Caddy reaches the API:
@@ -43,13 +44,16 @@ prepare() {
 	write_secret "$dir/app/api_connection" "$DOTNET_APP_UID" \
 		"Host=postgres;Port=5432;Database=parkingdata;Username=pt_api;Password=$api_password;Maximum Pool Size=10"
 	write_secret "$dir/app/proxy_key" "$DOTNET_APP_UID" "$(openssl rand -hex 32)"
-	local signing_key subject_key
+	local signing_key subject_key profile_key
 	signing_key=$(openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256) || error "openssl could not make a signing key"
 	subject_key=$(openssl rand -base64 32) || error "openssl could not make a subject hash key"
-	[[ -n $signing_key && -n $subject_key ]] || error "a generated secret is empty"
+	profile_key=$(openssl rand -base64 32) || error "openssl could not make a profile key"
+	[[ -n $signing_key && -n $subject_key && -n $profile_key ]] || error "a generated secret is empty"
 	write_secret "$dir/app/token_signing_key_current.pem" "$DOTNET_APP_UID" "$signing_key"
 	write_secret "$dir/app/token_signing_key_previous.pem" "$DOTNET_APP_UID" ""
 	write_secret "$dir/app/subject_hash_key" "$DOTNET_APP_UID" "$subject_key"
+	write_secret "$dir/app/profile_key_current" "$DOTNET_APP_UID" "$profile_key"
+	write_secret "$dir/app/profile_key_previous" "$DOTNET_APP_UID" ""
 	docker network inspect web >/dev/null 2>&1 || docker network create web >/dev/null
 }
 

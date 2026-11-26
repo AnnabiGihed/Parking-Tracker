@@ -39,5 +39,25 @@ public static class AccountErrors
 	/// A refresh token that was rotated already was presented again, so its whole family is revoked.
 	/// </summary>
 	public static readonly Error RefreshTokenReused = new("Account.RefreshToken.Reused", "The refresh token was used before; every session of its family is revoked.");
+
+	/// <summary>
+	/// The encrypted profile has no payload.
+	/// </summary>
+	public static readonly Error ProfilePayloadEmpty = new("Account.Profile.PayloadEmpty", "An encrypted profile has a payload.");
+
+	/// <summary>
+	/// The encrypted profile is larger than a profile of 32 KB of plain text can be.
+	/// </summary>
+	public static readonly Error ProfilePayloadTooLarge = new("Account.Profile.PayloadTooLarge", "The encrypted profile is larger than a profile of 32 KB can be.");
+
+	/// <summary>
+	/// The key identifier is not 8 lowercase hexadecimal characters.
+	/// </summary>
+	public static readonly Error ProfileKeyIdInvalid = new("Account.Profile.KeyIdInvalid", "A profile key identifier is 8 lowercase hexadecimal characters.");
+
+	/// <summary>
+	/// The schema version of the profile document is not a positive number.
+	/// </summary>
+	public static readonly Error ProfileSchemaVersionInvalid = new("Account.Profile.SchemaVersionInvalid", "The schema version of a profile is 1 or more.");
 	#endregion
 }
