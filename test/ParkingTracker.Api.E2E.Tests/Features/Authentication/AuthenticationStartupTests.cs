@@ -34,9 +34,7 @@ public sealed class AuthenticationStartupTests
 	[Fact]
 	public void Start_ProductionWithoutSigningKey_ShouldFailNamingTheKey()
 	{
-		using var factory = new ApiFactory("Production", UnreachableConnection, secrets: ApiSecrets.Generate() with { CurrentKeyPem = string.Empty });
-
-		var act = () => factory.CreateClient();
+		var act = () => FailedStart.Start(() => new ApiFactory("Production", UnreachableConnection, secrets: ApiSecrets.Generate() with { CurrentKeyPem = string.Empty }));
 
 		act.Should().Throw<OptionsValidationException>().WithMessage("*Tokens:SigningKeys:Current*");
 	}
@@ -47,9 +45,7 @@ public sealed class AuthenticationStartupTests
 	[Fact]
 	public void Start_ProductionWithoutSubjectHashKey_ShouldFailNamingTheKey()
 	{
-		using var factory = new ApiFactory("Production", UnreachableConnection, secrets: ApiSecrets.Generate() with { SubjectHashKey = string.Empty });
-
-		var act = () => factory.CreateClient();
+		var act = () => FailedStart.Start(() => new ApiFactory("Production", UnreachableConnection, secrets: ApiSecrets.Generate() with { SubjectHashKey = string.Empty }));
 
 		act.Should().Throw<OptionsValidationException>().WithMessage("*Accounts:SubjectHashKey*");
 	}
@@ -63,9 +59,7 @@ public sealed class AuthenticationStartupTests
 	[InlineData("AAAAAAAAAAAAAAAAAAAAAA==")]
 	public void Start_ProductionWithAWrongSubjectHashKey_ShouldFailWithoutShowingTheKey(string key)
 	{
-		using var factory = new ApiFactory("Production", UnreachableConnection, secrets: ApiSecrets.Generate() with { SubjectHashKey = key });
-
-		var act = () => factory.CreateClient();
+		var act = () => FailedStart.Start(() => new ApiFactory("Production", UnreachableConnection, secrets: ApiSecrets.Generate() with { SubjectHashKey = key }));
 
 		act.Should().Throw<OptionsValidationException>().Where(problem => problem.Message.Contains("Accounts:SubjectHashKey", StringComparison.Ordinal) && !problem.Message.Contains(key, StringComparison.Ordinal));
 	}
@@ -76,9 +70,7 @@ public sealed class AuthenticationStartupTests
 	[Fact]
 	public void Start_ProductionWithoutProfileKey_ShouldFailNamingTheKey()
 	{
-		using var factory = new ApiFactory("Production", UnreachableConnection, secrets: ApiSecrets.Generate() with { ProfileKeyCurrent = string.Empty });
-
-		var act = () => factory.CreateClient();
+		var act = () => FailedStart.Start(() => new ApiFactory("Production", UnreachableConnection, secrets: ApiSecrets.Generate() with { ProfileKeyCurrent = string.Empty }));
 
 		act.Should().Throw<OptionsValidationException>().WithMessage("*Profiles:Keys:Current*");
 	}
@@ -90,9 +82,7 @@ public sealed class AuthenticationStartupTests
 	public void Start_ProductionWithThePreviousProfileKeyEqualToTheCurrent_ShouldFailWithoutShowingTheKey()
 	{
 		var secrets = ApiSecrets.Generate();
-		using var factory = new ApiFactory("Production", UnreachableConnection, secrets: secrets with { ProfileKeyPrevious = secrets.ProfileKeyCurrent });
-
-		var act = () => factory.CreateClient();
+		var act = () => FailedStart.Start(() => new ApiFactory("Production", UnreachableConnection, secrets: secrets with { ProfileKeyPrevious = secrets.ProfileKeyCurrent }));
 
 		act.Should().Throw<OptionsValidationException>().Where(problem => problem.Message.Contains("Profiles:Keys:Previous", StringComparison.Ordinal) && !problem.Message.Contains(secrets.ProfileKeyCurrent, StringComparison.Ordinal));
 	}
@@ -110,9 +100,7 @@ public sealed class AuthenticationStartupTests
 	public void Start_ProductionWithAWrongProfileKey_ShouldFailWithoutShowingTheKey(string key, bool current)
 	{
 		var secrets = ApiSecrets.Generate();
-		using var factory = new ApiFactory("Production", UnreachableConnection, secrets: current ? secrets with { ProfileKeyCurrent = key } : secrets with { ProfileKeyPrevious = key });
-
-		var act = () => factory.CreateClient();
+		var act = () => FailedStart.Start(() => new ApiFactory("Production", UnreachableConnection, secrets: current ? secrets with { ProfileKeyCurrent = key } : secrets with { ProfileKeyPrevious = key }));
 
 		act.Should().Throw<OptionsValidationException>().Where(problem => problem.Message.Contains("Profiles:Keys:", StringComparison.Ordinal) && !problem.Message.Contains(key, StringComparison.Ordinal));
 	}
@@ -133,9 +121,7 @@ public sealed class AuthenticationStartupTests
 	{
 		var bad = NewUnusableKey(kind);
 		var secrets = current ? ApiSecrets.Generate() with { CurrentKeyPem = bad } : ApiSecrets.Generate() with { PreviousKeyPem = bad };
-		using var factory = new ApiFactory("Production", UnreachableConnection, secrets: secrets);
-
-		var act = () => factory.CreateClient();
+		var act = () => FailedStart.Start(() => new ApiFactory("Production", UnreachableConnection, secrets: secrets));
 
 		var which = current ? "Current" : "Previous";
 		var fragment = bad[..40];
@@ -151,9 +137,7 @@ public sealed class AuthenticationStartupTests
 	public void Start_ProductionWithATestIssuerAddress_ShouldFail()
 	{
 		var settings = new Dictionary<string, string?>(StringComparer.Ordinal) { ["Authentication:Google:MetadataAddress"] = TestIssuerMetadata };
-		using var factory = new ApiFactory("Production", UnreachableConnection, settings: settings);
-
-		var act = () => factory.CreateClient();
+		var act = () => FailedStart.Start(() => new ApiFactory("Production", UnreachableConnection, settings: settings));
 
 		act.Should().Throw<OptionsValidationException>().WithMessage("*Authentication:Google:MetadataAddress*");
 	}
@@ -165,9 +149,7 @@ public sealed class AuthenticationStartupTests
 	public void Start_ProductionWithAnExtraIssuer_ShouldFail()
 	{
 		var settings = new Dictionary<string, string?>(StringComparer.Ordinal) { ["Authentication:Google:ValidIssuers:0"] = "https://test-issuer.example" };
-		using var factory = new ApiFactory("Production", UnreachableConnection, settings: settings);
-
-		var act = () => factory.CreateClient();
+		var act = () => FailedStart.Start(() => new ApiFactory("Production", UnreachableConnection, settings: settings));
 
 		act.Should().Throw<OptionsValidationException>().WithMessage("*Authentication:Google:ValidIssuers*");
 	}
@@ -179,9 +161,7 @@ public sealed class AuthenticationStartupTests
 	public void Start_ProductionWithoutAnAudience_ShouldFail()
 	{
 		var settings = new Dictionary<string, string?>(StringComparer.Ordinal) { ["Authentication:Google:Audiences:0"] = string.Empty };
-		using var factory = new ApiFactory("Production", UnreachableConnection, settings: settings);
-
-		var act = () => factory.CreateClient();
+		var act = () => FailedStart.Start(() => new ApiFactory("Production", UnreachableConnection, settings: settings));
 
 		act.Should().Throw<OptionsValidationException>().WithMessage("*Authentication:Google:Audiences*");
 	}
@@ -197,9 +177,7 @@ public sealed class AuthenticationStartupTests
 	public void Start_ProductionWithANonHttpsTokenIssuer_ShouldFail(string issuer)
 	{
 		var settings = new Dictionary<string, string?>(StringComparer.Ordinal) { ["Tokens:Issuer"] = issuer };
-		using var factory = new ApiFactory("Production", UnreachableConnection, settings: settings);
-
-		var act = () => factory.CreateClient();
+		var act = () => FailedStart.Start(() => new ApiFactory("Production", UnreachableConnection, settings: settings));
 
 		act.Should().Throw<OptionsValidationException>().WithMessage("*Tokens:Issuer*");
 	}

@@ -93,9 +93,7 @@ public sealed class ApiHostTests
 	[Fact]
 	public void Start_WithoutConnectionString_ShouldFailWithAClearMessage()
 	{
-		using var factory = new ApiFactory("Production", string.Empty);
-
-		var act = () => factory.CreateClient();
+		var act = () => FailedStart.Start(() => new ApiFactory("Production", string.Empty));
 
 		act.Should().Throw<InvalidOperationException>().WithMessage($"*{ApiHostExtensions.ConnectionStringName}*");
 	}
