@@ -33,3 +33,4 @@
 | 29 | [Trust forwarded headers only with a proxy key from the shared Caddy](0029-trust-forwarded-headers-only-with-a-proxy-key-from-the-shared-caddy.md) | Accepted |
 | 30 | [Keep one map page with a side menu, map-mode pickers and dialogs through DialogService](0030-keep-one-map-page-with-a-side-menu-and-dialogs-through-dialogservice.md) | Accepted |
 | 31 | [Keep one vehicle profile on the phone](0031-keep-one-vehicle-profile-on-the-phone.md) | Proposed |
+| 32 | [Keep the driver's profile with the account, encrypted on the server](0032-keep-the-drivers-profile-with-the-account-encrypted-on-the-server.md) | Proposed |
