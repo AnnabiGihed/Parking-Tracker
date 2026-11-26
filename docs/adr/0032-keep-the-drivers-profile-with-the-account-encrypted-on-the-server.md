@@ -40,8 +40,9 @@ We keep the driver's profile with the account as one document per account, encry
   and plate. The parked car, the timer and the card photos stay on the phone or are not kept (ADR-0003, ADR-0015).
 - **Storage.** Table `account_profiles`: `account_id` (primary key, foreign key to the account, cascade delete),
   `revision` (concurrency token), `schema_version`, `key_id`, `payload` (`bytea`) and `updated_on` (day precision).
-  The payload is the JSON document encrypted with AES-256-GCM. The associated data is the account id and the revision,
-  so a payload cannot be moved to another account or replayed under another revision. The key is a file in the
+  The payload is the JSON document encrypted with AES-256-GCM. The associated data is the account id, the revision
+  and the schema version, so a payload cannot be moved to another account, replayed under another revision or
+  relabelled with another schema version. The key is a file in the
   server's secrets folder (`profile_key`, with a current and a previous key for rotation), mounted like the token
   signing keys. The owner keeps a copy in the password manager.
 - **Document.** `schemaVersion`, `home`, `work`, `favourites` (at most 50), `vehicle` and `card`. Each section carries
