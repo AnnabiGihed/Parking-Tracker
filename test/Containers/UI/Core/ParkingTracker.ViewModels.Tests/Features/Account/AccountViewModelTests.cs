@@ -1,4 +1,5 @@
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using ParkingTracker.Application.Features.Accounts.Abstractions;
 using ParkingTracker.Contracts.Features.Accounts;
 using ParkingTracker.ViewModels.Features.Account;
@@ -53,6 +54,128 @@ public sealed class AccountViewModelTests : IDisposable
 
 	/// <inheritdoc />
 	public void Dispose() => ui.Dispose();
+	#endregion
+
+	#region Refresh Tests
+	/// <summary>
+	/// Verifies that refreshing while signed in reads the account without opening the sheet.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task RefreshStateAsync_SignedIn_ShouldLoadTheAccountWithoutOpening()
+	{
+		var account = Create(signedIn: true);
+		var raised = 0;
+		account.Changed += (_, _) => raised++;
+
+		await account.RefreshStateAsync();
+
+		account.IsSignedIn.Should().BeTrue();
+		account.AccountIdText.Should().Be("0f3c2a1b");
+		account.IsOpen.Should().BeFalse();
+		raised.Should().BeGreaterThan(0);
+	}
+
+	/// <summary>
+	/// Verifies that refreshing while signed out does not call the API.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task RefreshStateAsync_SignedOut_ShouldNotCallTheApi()
+	{
+		var account = Create(signedIn: false);
+
+		await account.RefreshStateAsync();
+
+		account.IsSignedIn.Should().BeFalse();
+		await client.DidNotReceive().GetMeAsync(Arg.Any<CancellationToken>());
+	}
+
+	/// <summary>
+	/// Verifies that a network error while refreshing keeps the session and shows no error.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task RefreshStateAsync_NetworkError_ShouldKeepTheSessionAndShowNoError()
+	{
+		var account = Create(signedIn: true);
+		client.GetMeAsync(Arg.Any<CancellationToken>()).Returns(Result.Failure<MeResponse>(AccountErrors.Network()));
+
+		await account.RefreshStateAsync();
+
+		account.IsSignedIn.Should().BeTrue();
+		account.Account.Should().BeNull();
+		account.Error.Should().BeEmpty();
+	}
+
+	/// <summary>
+	/// Verifies that a session the API ended shows as signed out when refreshing, without a message.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task RefreshStateAsync_SessionEnded_ShouldShowSignedOut()
+	{
+		var account = Create(signedIn: true);
+		client.GetMeAsync(Arg.Any<CancellationToken>()).Returns(Result.Failure<MeResponse>(AccountErrors.NotSignedIn()));
+
+		await account.RefreshStateAsync();
+
+		account.IsSignedIn.Should().BeFalse();
+	}
+
+	/// <summary>
+	/// Verifies that refreshing does nothing when the build cannot sign in.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task RefreshStateAsync_NotAvailable_ShouldDoNothing()
+	{
+		var account = Create(signedIn: true);
+		google.IsAvailable.Returns(false);
+
+		await account.RefreshStateAsync();
+
+		account.IsSignedIn.Should().BeFalse();
+		await client.DidNotReceive().IsSignedInAsync(Arg.Any<CancellationToken>());
+	}
+
+	/// <summary>
+	/// Verifies that a secure storage that cannot be read does not throw, shows no error and still tells the menu to draw again.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task RefreshStateAsync_StorageUnreadable_ShouldNotThrowAndShowNoError()
+	{
+		var account = Create(signedIn: true);
+		client.IsSignedInAsync(Arg.Any<CancellationToken>()).ThrowsAsync(new IOException());
+		var raised = 0;
+		account.Changed += (_, _) => raised++;
+
+		var refresh = () => account.RefreshStateAsync();
+
+		await refresh.Should().NotThrowAsync();
+		account.Error.Should().BeEmpty();
+		raised.Should().BeGreaterThan(0);
+	}
+
+	/// <summary>
+	/// Verifies that opening to delete shows the confirmation while signed in, and only the sign-in while signed out.
+	/// </summary>
+	/// <param name="signedIn">Whether the phone holds a session.</param>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Theory]
+	[InlineData(true)]
+	[InlineData(false)]
+	public async Task OpenToDeleteAsync_ShouldAskForTheConfirmationOnlyWhileSignedIn(bool signedIn)
+	{
+		var account = Create(signedIn);
+
+		await account.OpenToDeleteAsync();
+
+		account.IsOpen.Should().BeTrue();
+		account.IsConfirmingDelete.Should().Be(signedIn);
+		await client.DidNotReceive().DeleteAccountAsync(Arg.Any<CancellationToken>());
+	}
 	#endregion
 
 	#region Open Tests

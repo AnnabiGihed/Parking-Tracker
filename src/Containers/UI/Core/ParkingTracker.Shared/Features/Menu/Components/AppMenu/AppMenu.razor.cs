@@ -11,7 +11,8 @@ namespace ParkingTracker.Shared.Features.Menu.Components;
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
 /// Purpose     : The content of the side menu (ADR-0030): the app header and a Radzen panel menu with Home, Work, the favourite places, My vehicle and the parking card,
-///              each with what is saved under it, and in a build that can sign in an Account entry for the S5 sign-in. A tap closes the menu and then opens the screen of the entry, so that a Radzen
+///              each with what is saved under it. In a build that can sign in the menu is one Account section: the account line at the top (sign in, or the account), a label that says
+///              where the entries are kept, and Sign out and Delete account at the bottom while signed in. A tap closes the menu and then opens the screen of the entry, so that a Radzen
 ///              dialog is never open over one of the app's own dialogs. While it is open, the back button of the phone closes it.
 /// </summary>
 public sealed partial class AppMenu : ViewModelComponent<MenuViewModel>
@@ -44,6 +45,9 @@ public sealed partial class AppMenu : ViewModelComponent<MenuViewModel>
 		base.OnInitialized();
 		backRegistration = BackNavigation.Register(() => DialogService.CloseSide());
 	}
+
+	/// <inheritdoc />
+	protected override Task OnInitializedAsync() => ViewModel.RefreshAccountAsync();
 	#endregion
 
 	#region Event Handlers
@@ -82,6 +86,18 @@ public sealed partial class AppMenu : ViewModelComponent<MenuViewModel>
 	/// </summary>
 	/// <returns>A task that completes when the account sheet opened and the account was read.</returns>
 	private Task OnAccountAsync() => CloseThenAsync(ViewModel.OpenAccountAsync);
+
+	/// <summary>
+	/// Handles a tap on Sign out; the menu stays open and shows the signed-out state.
+	/// </summary>
+	/// <returns>A task that completes when the phone is signed out.</returns>
+	private Task OnSignOutAsync() => ViewModel.SignOutAsync();
+
+	/// <summary>
+	/// Handles a tap on Delete account: the account sheet opens with the confirmation.
+	/// </summary>
+	/// <returns>A task that completes when the sheet is open.</returns>
+	private Task OnDeleteAccountAsync() => CloseThenAsync(ViewModel.OpenAccountToDeleteAsync);
 	#endregion
 
 	#region Protected Methods

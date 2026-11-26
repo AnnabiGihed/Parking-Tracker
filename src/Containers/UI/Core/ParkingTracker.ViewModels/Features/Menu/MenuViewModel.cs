@@ -13,7 +13,8 @@ namespace ParkingTracker.ViewModels.Features.Menu;
 /// Date        : 11-2026
 /// Purpose     : The side menu: the text under Home, Work, the favourite places, the vehicle and the parking card, taken from the places and the card line the screen
 ///              already holds, and what each entry opens (Home and Work start the map picker, favourite places open the list, My vehicle opens its dialog). The menu itself is closed by the
-///              component before an entry opens its screen, so that two screens are never open at once.
+///              component before an entry opens its screen, so that two screens are never open at once. In a build that can sign in, the menu is one Account section: the account line
+///              at the top, the section label that says where the entries are kept, and Sign out and Delete account at the bottom.
 /// </summary>
 public sealed class MenuViewModel : ViewModelBase
 {
@@ -32,6 +33,36 @@ public sealed class MenuViewModel : ViewModelBase
 	/// What the favourite places entry shows while none is saved.
 	/// </summary>
 	public const string NoFavouritesText = "None yet";
+
+	/// <summary>
+	/// The title of the account line while signed in.
+	/// </summary>
+	public const string AccountTitleText = "Account";
+
+	/// <summary>
+	/// The title of the account line while signed out.
+	/// </summary>
+	public const string SignInTitleText = "Sign in";
+
+	/// <summary>
+	/// The text of the account line while signed out.
+	/// </summary>
+	public const string SignInSubText = "Keep your data with your Google account";
+
+	/// <summary>
+	/// The text of the account line while signed in and the account id is not known yet.
+	/// </summary>
+	public const string SignedInText = "Signed in";
+
+	/// <summary>
+	/// The label above the entries while signed in.
+	/// </summary>
+	public const string SavedWithAccountText = "Saved with your account";
+
+	/// <summary>
+	/// The label above the entries while signed out or when the build cannot sign in.
+	/// </summary>
+	public const string OnThisPhoneText = "On this phone only";
 	#endregion
 
 	#region Fields
@@ -96,6 +127,7 @@ public sealed class MenuViewModel : ViewModelBase
 		places.Changed += OnSourceChanged;
 		vehicle.Changed += OnSourceChanged;
 		card.Changed += OnSourceChanged;
+		account.Changed += OnSourceChanged;
 	}
 	#endregion
 
@@ -129,6 +161,42 @@ public sealed class MenuViewModel : ViewModelBase
 	/// Gets a value indicating whether the menu offers the account entry: only a build that can sign in with Google (one built with a Google Web client ID).
 	/// </summary>
 	public bool IsAccountVisible => account.IsAvailable;
+
+	/// <summary>
+	/// Gets a value indicating whether the phone holds a session in a build that can sign in.
+	/// </summary>
+	public bool IsSignedIn => account.IsAvailable && account.IsSignedIn;
+
+	/// <summary>
+	/// Gets the title of the account line: "Account" while signed in, "Sign in" otherwise.
+	/// </summary>
+	public string AccountTitle => IsSignedIn ? AccountTitleText : SignInTitleText;
+
+	/// <summary>
+	/// Gets the text under the account line: "Signed in" with the short account id once it is known, or what signing in keeps.
+	/// </summary>
+	public string AccountText
+	{
+		get
+		{
+			if (!IsSignedIn)
+			{
+				return SignInSubText;
+			}
+
+			return account.Account is null ? SignedInText : $"{SignedInText} · {account.AccountIdText}";
+		}
+	}
+
+	/// <summary>
+	/// Gets the label above the entries: where what they hold is kept.
+	/// </summary>
+	public string SectionLabel => IsSignedIn ? SavedWithAccountText : OnThisPhoneText;
+
+	/// <summary>
+	/// Gets the last account failure shown in the menu, in plain words (for example a failed sign-out); empty when there is none.
+	/// </summary>
+	public string AccountError => account.Error;
 	#endregion
 
 	#region Public Methods
@@ -159,6 +227,24 @@ public sealed class MenuViewModel : ViewModelBase
 	/// </summary>
 	/// <returns>A task that completes when the sheet is open and the account was read.</returns>
 	public Task OpenAccountAsync() => account.OpenAsync();
+
+	/// <summary>
+	/// Opens the account sheet straight into the confirmation of the deletion of the account.
+	/// </summary>
+	/// <returns>A task that completes when the sheet is open.</returns>
+	public Task OpenAccountToDeleteAsync() => account.OpenToDeleteAsync();
+
+	/// <summary>
+	/// Reads whether the phone is signed in, without showing a failure, so that the menu shows the right state when it opens.
+	/// </summary>
+	/// <returns>A task that completes when the state was read.</returns>
+	public Task RefreshAccountAsync() => account.RefreshStateAsync();
+
+	/// <summary>
+	/// Signs this device out; the menu then shows the signed-out state.
+	/// </summary>
+	/// <returns>A task that completes when the phone is signed out or the reason it is not was recorded.</returns>
+	public Task SignOutAsync() => account.SignOutAsync();
 	#endregion
 
 	#region Private Helpers

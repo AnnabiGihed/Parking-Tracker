@@ -1,7 +1,9 @@
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using ParkingTracker.Application.Features.Accounts.Abstractions;
 using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
 using ParkingTracker.Application.Features.Vehicles.Abstractions;
+using ParkingTracker.Contracts.Features.Accounts;
 using ParkingTracker.Domain.Features.SavedPlaces.Aggregates;
 using ParkingTracker.Domain.Features.SavedPlaces.ValueObjects;
 using ParkingTracker.Domain.Features.Shared.ValueObjects;
@@ -10,6 +12,7 @@ using ParkingTracker.ViewModels.Features.Menu;
 using ParkingTracker.ViewModels.Features.Places;
 using ParkingTracker.ViewModels.Features.Vehicles;
 using ParkingTracker.ViewModels.Tests.Features.Shared.TestDoubles;
+using Pivot.Framework.Domain.Shared;
 
 namespace ParkingTracker.ViewModels.Tests.Features.Menu;
 
@@ -20,6 +23,13 @@ namespace ParkingTracker.ViewModels.Tests.Features.Menu;
 /// </summary>
 public sealed class MenuViewModelTests
 {
+	#region Static Instances
+	/// <summary>
+	/// The account the API returns.
+	/// </summary>
+	private static readonly MeResponse Me = new(Guid.Parse("0f3c2a1b-8d4e-4f60-9a7b-123456789abc"), new DateOnly(2026, 11, 3), new DateOnly(2026, 11, 17), 2);
+	#endregion
+
 	#region Test Infrastructure
 	/// <summary>
 	/// Builds the account sheet over substitutes; Google sign-in is available when asked.
@@ -55,6 +65,37 @@ public sealed class MenuViewModelTests
 		var favourites = new FavouritesViewModel(places, picker);
 		var vehicle = new VehicleViewModel(Substitute.For<IVehicleStore>(), ui.Toast, ui.Clock);
 		return (new MenuViewModel(places, picker, favourites, vehicle, ui.Card, Account(ui)), places, picker, favourites);
+	}
+
+	/// <summary>
+	/// Builds a menu in a build that can sign in, over a session client that is signed in or not.
+	/// </summary>
+	/// <param name="ui">The fixture that holds the card and the toast.</param>
+	/// <param name="client">The session client.</param>
+	/// <param name="signInAvailable">Whether the build can sign in with Google.</param>
+	/// <returns>The menu and the account view model it reads.</returns>
+	private static async Task<(MenuViewModel Menu, AccountViewModel Account)> ArrangeAccountAsync(UiFixture ui, ISessionClient client, bool signInAvailable = true)
+	{
+		var (_, places, picker, favourites) = await ArrangeAsync(ui).ConfigureAwait(false);
+		var google = Substitute.For<IGoogleSignIn>();
+		google.IsAvailable.Returns(signInAvailable);
+		var account = new AccountViewModel(client, google, ui.Toast);
+		var menu = new MenuViewModel(places, picker, favourites, new VehicleViewModel(Substitute.For<IVehicleStore>(), ui.Toast, ui.Clock), ui.Card, account);
+		return (menu, account);
+	}
+
+	/// <summary>
+	/// Builds a session client that is signed in or not and returns the account.
+	/// </summary>
+	/// <param name="signedIn">Whether the phone holds a session.</param>
+	/// <returns>The client.</returns>
+	private static ISessionClient Client(bool signedIn)
+	{
+		var client = Substitute.For<ISessionClient>();
+		client.IsSignedInAsync(Arg.Any<CancellationToken>()).Returns(signedIn);
+		client.GetMeAsync(Arg.Any<CancellationToken>()).Returns(Result.Success(Me));
+		client.SignOutAsync(Arg.Any<CancellationToken>()).Returns(Result.Success());
+		return client;
 	}
 	#endregion
 
@@ -159,7 +200,7 @@ public sealed class MenuViewModelTests
 	}
 	#endregion
 
-	#region Account Tests
+	#region Account Section Tests
 	/// <summary>
 	/// Verifies that the account entry is offered only when the build can sign in with Google, and that it opens the account sheet.
 	/// </summary>
@@ -171,13 +212,135 @@ public sealed class MenuViewModelTests
 	public async Task IsAccountVisible_ShouldFollowTheAvailabilityOfGoogleSignIn(bool available)
 	{
 		using var ui = new UiFixture();
-		var (_, places, picker, favourites) = await ArrangeAsync(ui);
-		var account = Account(ui, available);
-		var menu = new MenuViewModel(places, picker, favourites, new VehicleViewModel(Substitute.For<IVehicleStore>(), ui.Toast, ui.Clock), ui.Card, account);
+		var (menu, account) = await ArrangeAccountAsync(ui, Client(signedIn: false), available);
 
 		menu.IsAccountVisible.Should().Be(available);
 		await menu.OpenAccountAsync();
 		account.IsOpen.Should().BeTrue();
+	}
+
+	/// <summary>
+	/// Verifies the texts of the signed-out menu: the sign-in line and the label "On this phone only".
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Texts_SignedOut_ShouldOfferSignInAndSayOnThisPhoneOnly()
+	{
+		using var ui = new UiFixture();
+		var (menu, _) = await ArrangeAccountAsync(ui, Client(signedIn: false));
+
+		await menu.RefreshAccountAsync();
+
+		menu.IsSignedIn.Should().BeFalse();
+		menu.AccountTitle.Should().Be("Sign in");
+		menu.AccountText.Should().Be("Keep your data with your Google account");
+		menu.SectionLabel.Should().Be("On this phone only");
+	}
+
+	/// <summary>
+	/// Verifies the texts of the signed-in menu: the account line with the short id and the label "Saved with your account".
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Texts_SignedIn_ShouldShowTheShortIdAndSayAccount()
+	{
+		using var ui = new UiFixture();
+		var (menu, _) = await ArrangeAccountAsync(ui, Client(signedIn: true));
+
+		await menu.RefreshAccountAsync();
+
+		menu.IsSignedIn.Should().BeTrue();
+		menu.AccountTitle.Should().Be("Account");
+		menu.AccountText.Should().Be("Signed in · 0f3c2a1b");
+		menu.SectionLabel.Should().Be("Saved with your account");
+	}
+
+	/// <summary>
+	/// Verifies that without sign-in in the build the menu never reads the session and says "On this phone only".
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Texts_SignInNotAvailable_ShouldNotReadTheSession()
+	{
+		using var ui = new UiFixture();
+		var client = Client(signedIn: true);
+		var (menu, _) = await ArrangeAccountAsync(ui, client, signInAvailable: false);
+
+		await menu.RefreshAccountAsync();
+
+		menu.IsSignedIn.Should().BeFalse();
+		menu.SectionLabel.Should().Be("On this phone only");
+		await client.DidNotReceive().IsSignedInAsync(Arg.Any<CancellationToken>());
+	}
+
+	/// <summary>
+	/// Verifies that Sign out calls the client and the menu is signed out, raising a change.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task SignOutAsync_ShouldCallTheClientAndSwitchToSignedOut()
+	{
+		using var ui = new UiFixture();
+		var client = Client(signedIn: true);
+		var (menu, _) = await ArrangeAccountAsync(ui, client);
+		await menu.RefreshAccountAsync();
+		var raised = 0;
+		menu.Changed += (_, _) => raised++;
+
+		await menu.SignOutAsync();
+
+		await client.Received(1).SignOutAsync(Arg.Any<CancellationToken>());
+		menu.IsSignedIn.Should().BeFalse();
+		menu.AccountTitle.Should().Be("Sign in");
+		raised.Should().BeGreaterThan(0);
+	}
+
+	/// <summary>
+	/// Verifies that a sign-out that fails keeps the menu signed in and exposes the reason, whether the client refuses or the secure storage fails.
+	/// </summary>
+	/// <param name="storageFails"><see langword="true"/> when the secure storage throws, <see langword="false"/> when the client returns a failure.</param>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public async Task SignOutAsync_Fails_ShouldStaySignedInAndExposeTheReason(bool storageFails)
+	{
+		using var ui = new UiFixture();
+		var client = Client(signedIn: true);
+		if (storageFails)
+		{
+			client.SignOutAsync(Arg.Any<CancellationToken>()).ThrowsAsync(new IOException());
+		}
+		else
+		{
+			client.SignOutAsync(Arg.Any<CancellationToken>()).Returns(Result.Failure(AccountErrors.Network()));
+		}
+
+		var (menu, _) = await ArrangeAccountAsync(ui, client);
+		await menu.RefreshAccountAsync();
+
+		await menu.SignOutAsync();
+
+		menu.IsSignedIn.Should().BeTrue();
+		menu.AccountError.Should().NotBeNullOrEmpty();
+	}
+
+	/// <summary>
+	/// Verifies that Delete account opens the sheet at the confirmation and does not delete.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task OpenAccountToDeleteAsync_ShouldOpenTheSheetAtTheConfirmation()
+	{
+		using var ui = new UiFixture();
+		var client = Client(signedIn: true);
+		var (menu, account) = await ArrangeAccountAsync(ui, client);
+
+		await menu.OpenAccountToDeleteAsync();
+
+		account.IsOpen.Should().BeTrue();
+		account.IsConfirmingDelete.Should().BeTrue();
+		await client.DidNotReceive().DeleteAccountAsync(Arg.Any<CancellationToken>());
 	}
 	#endregion
 

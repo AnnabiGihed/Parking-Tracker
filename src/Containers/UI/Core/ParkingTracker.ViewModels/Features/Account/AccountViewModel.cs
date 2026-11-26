@@ -155,6 +155,58 @@ public sealed class AccountViewModel : ViewModelBase, IDialogViewModel
 		}, cancellationToken).ConfigureAwait(false);
 	}
 
+	/// <summary>
+	/// Reads the signed-in state for the menu: whether the phone holds a session (a local check, no network) and, when it does and the
+	/// account is not known yet, the account. A failure is not shown: the menu falls back to what it knows, and a session the API ended shows as signed out.
+	/// </summary>
+	/// <returns>A task that completes when the state was read.</returns>
+	public Task RefreshStateAsync() => RefreshStateAsync(CancellationToken.None);
+
+	/// <summary>Reads the signed-in state for the menu with caller cancellation.</summary>
+	/// <param name="cancellationToken">A token to cancel the operation.</param>
+	/// <returns>A task that completes when the state was read.</returns>
+	public async Task RefreshStateAsync(CancellationToken cancellationToken)
+	{
+		if (!IsAvailable || IsBusy)
+		{
+			return;
+		}
+
+		try
+		{
+			IsSignedIn = await client.IsSignedInAsync(cancellationToken).ConfigureAwait(false);
+			if (!IsSignedIn)
+			{
+				Account = null;
+			}
+			else if (Account is null)
+			{
+				await LoadAccountQuietlyAsync(cancellationToken).ConfigureAwait(false);
+			}
+		}
+		catch (IOException)
+		{
+			// The secure storage could not be read: the menu keeps what it knew, and the sheet shows the reason when it is opened.
+		}
+
+		if (!IsOpen)
+		{
+			Error = string.Empty;
+		}
+
+		NotifyChanged();
+	}
+
+	/// <summary>
+	/// Opens the sheet straight into the confirmation of the deletion of the account.
+	/// </summary>
+	/// <returns>A task that completes when the sheet is open and, for a signed-in user, asks for the confirmation.</returns>
+	public async Task OpenToDeleteAsync()
+	{
+		await OpenAsync().ConfigureAwait(false);
+		RequestDelete();
+	}
+
 	/// <inheritdoc />
 	public void Close()
 	{
@@ -319,6 +371,24 @@ public sealed class AccountViewModel : ViewModelBase, IDialogViewModel
 		}
 
 		ShowFailure(me.Error);
+	}
+
+	/// <summary>
+	/// Reads the account without showing a failure; a session the API ended shows as signed out, any other failure leaves the account unknown.
+	/// </summary>
+	/// <param name="cancellationToken">A token to cancel the operation.</param>
+	/// <returns>A task that completes when the account was read or the attempt was dropped.</returns>
+	private async Task LoadAccountQuietlyAsync(CancellationToken cancellationToken)
+	{
+		var me = await client.GetMeAsync(cancellationToken).ConfigureAwait(false);
+		if (me.IsSuccess)
+		{
+			Account = me.Value;
+		}
+		else if (string.Equals(me.Error.Code, AccountErrors.NotSignedInCode, StringComparison.Ordinal))
+		{
+			ShowSignedOut();
+		}
 	}
 
 	/// <summary>
