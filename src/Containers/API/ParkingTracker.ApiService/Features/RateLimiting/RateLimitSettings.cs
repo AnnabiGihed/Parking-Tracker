@@ -4,7 +4,8 @@ namespace ParkingTracker.ApiService.Features.RateLimiting;
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
 /// Purpose     : The names and limits of the rate limits, in one place: the health policy, the per-address policy of the session endpoints,
-///              the per-address policy of the refresh endpoint and the per-account policy of the authenticated endpoints.
+///              the per-address policy of the refresh endpoint, the per-account policy of the authenticated endpoints and the per-account policy of
+///              the profile endpoints.
 /// </summary>
 public static class RateLimitSettings
 {
@@ -29,6 +30,11 @@ public static class RateLimitSettings
 	/// The name of the policy of the authenticated endpoints, per account.
 	/// </summary>
 	public const string AccountPolicyName = "account";
+
+	/// <summary>
+	/// The name of the policy of the profile endpoints, per account.
+	/// </summary>
+	public const string ProfilePolicyName = "profile";
 
 	/// <summary>
 	/// The number of requests the whole API handles at once; more are refused, none waits.
@@ -79,6 +85,21 @@ public static class RateLimitSettings
 	/// The tokens an account bucket gets back per replenishment period: the sustained rate per second.
 	/// </summary>
 	public const int AccountTokensPerPeriod = AccountPermitsPerMinute / 60;
+
+	/// <summary>
+	/// The most requests one account may make at once to the profile endpoints: the capacity of its token bucket.
+	/// </summary>
+	public const int ProfileBurst = 10;
+
+	/// <summary>
+	/// The requests per minute one account may sustain on the profile endpoints.
+	/// </summary>
+	public const int ProfilePermitsPerMinute = 30;
+
+	/// <summary>
+	/// The tokens a profile bucket gets back per replenishment period: one.
+	/// </summary>
+	public const int ProfileTokensPerPeriod = 1;
 	#endregion
 
 	#region Fields
@@ -101,5 +122,10 @@ public static class RateLimitSettings
 	/// The interval at which the bucket of an account is refilled, with the permits of that interval.
 	/// </summary>
 	public static readonly TimeSpan AccountReplenishmentPeriod = TimeSpan.FromSeconds(1);
+
+	/// <summary>
+	/// The interval at which the bucket of a profile policy is refilled by one token: 30 per minute is one every two seconds.
+	/// </summary>
+	public static readonly TimeSpan ProfileReplenishmentPeriod = TimeSpan.FromSeconds(60.0 / ProfilePermitsPerMinute);
 	#endregion
 }
