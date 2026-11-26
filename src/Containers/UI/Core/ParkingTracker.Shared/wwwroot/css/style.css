@@ -89,12 +89,15 @@ button, input, select { font: inherit; color: inherit; }
 .chip-float.late { color: var(--pay); }
 /* the Home and Work shortcuts sit in .top, which lets taps through to the map, so they take taps back; they use the surface,
    text and shadow of the search bar so they read on the map in the light and the dark scheme */
-.place-chips { pointer-events: auto; display: flex; gap: 8px; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; padding: 2px 2px 8px; }
+/* the row scrolls sideways, which clips anything drawn outside it: the padding (cancelled by the negative margin) holds the chip
+   shadow, which stays small so that no clipped edge of it shows as a dark box on the map */
+.place-chips { pointer-events: auto; display: flex; gap: 8px; max-width: calc(100% + 20px); overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
+  padding: 6px 10px 10px; margin: -6px -10px -4px; }
 .place-chips::-webkit-scrollbar { display: none; }
 .place-chips .rz-chip.place-go { flex: none; }
 .place-chips .rz-chip.place-favourite .place-name { max-width: 14ch; overflow: hidden; text-overflow: ellipsis; }
 .place-chips .rz-chip.place-go, .place-chips .rz-chip.place-go:not(.rz-state-disabled):hover, .place-chips .rz-chip.place-go:not(.rz-state-disabled):active {
-  background-color: var(--surface); color: var(--fg); box-shadow: var(--shadow); border-radius: 999px; font-weight: 600; cursor: pointer; }
+  background-color: var(--surface); color: var(--fg); box-shadow: 0 1px 4px rgba(0, 0, 0, .3); border-radius: 999px; font-weight: 600; cursor: pointer; }
 .place-chips .rz-chip.place-go .place-label { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; white-space: nowrap; }
 .place-chips .rz-chip.place-go .ic { display: inline-block; flex: none; width: 18px; height: 18px; color: var(--brand); }
 

@@ -8,10 +8,10 @@ namespace ParkingTracker.ViewModels.Features.Account;
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : The debug-only account sheet (stage S5; the mandatory sign-in screen is stage S9): signed out it offers "Sign in with Google"
+/// Purpose     : The account sheet (stage S5; the mandatory sign-in screen is stage S9): signed out it offers "Sign in with Google"
 ///              and shows why a sign-in failed in plain words; signed in it shows the account from the API (short id, created on, last seen
 ///              on, active sessions) with Sign out and Delete account, the latter after a confirm step. The sheet is offered only when the
-///              build can sign in with Google (<see cref="IsAvailable"/>), which is the case in debug builds. A session the API ended is shown
+///              build can sign in with Google (<see cref="IsAvailable"/>), which every build with a Google Web client ID can. A session the API ended is shown
 ///              as signed out; a network error is shown and the session is kept. The sheet is drawn by a <c>DialogBridge</c> through
 ///              <see cref="IDialogViewModel"/>, so this class never references Radzen.
 /// </summary>

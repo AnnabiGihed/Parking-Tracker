@@ -61,7 +61,7 @@ public sealed class MenuViewModel : ViewModelBase
 	private readonly CardViewModel card;
 
 	/// <summary>
-	/// The debug-only account sheet that its entry opens.
+	/// The account sheet that its entry opens.
 	/// </summary>
 	private readonly AccountViewModel account;
 	#endregion
@@ -75,7 +75,7 @@ public sealed class MenuViewModel : ViewModelBase
 	/// <param name="favourites">The list of favourite places that its entry opens.</param>
 	/// <param name="vehicle">The saved vehicle and the dialog that edits it.</param>
 	/// <param name="card">The saved card and the dialog that edits it.</param>
-	/// <param name="account">The debug-only account sheet that its entry opens.</param>
+	/// <param name="account">The account sheet that its entry opens.</param>
 	/// <exception cref="ArgumentNullException">Thrown when an argument is <see langword="null"/>.</exception>
 	public MenuViewModel(PlacesViewModel places, PlacePickerViewModel picker, FavouritesViewModel favourites, VehicleViewModel vehicle, CardViewModel card, AccountViewModel account)
 	{
@@ -126,7 +126,7 @@ public sealed class MenuViewModel : ViewModelBase
 	public string CardText => card.Line.Dot == CardDot.None ? NotSetText : card.Line.Pill;
 
 	/// <summary>
-	/// Gets a value indicating whether the menu offers the account entry: only a build that can sign in with Google, which is a debug build for now (stage S5).
+	/// Gets a value indicating whether the menu offers the account entry: only a build that can sign in with Google (one built with a Google Web client ID).
 	/// </summary>
 	public bool IsAccountVisible => account.IsAvailable;
 	#endregion

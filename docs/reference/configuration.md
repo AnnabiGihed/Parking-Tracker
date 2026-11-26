@@ -55,7 +55,7 @@ Android host; they are separate from the API settings above and contain no secre
 
 | Property | Default | Meaning |
 | --- | --- | --- |
-| `GoogleWebClientId` | Development Web client ID in Debug; empty in Release | The Google Web client ID for Credential Manager; empty hides the account entry |
+| `GoogleWebClientId` | Development Web client ID (Debug and Release until S9) | The Google Web client ID for Credential Manager; empty hides the account entry |
 | `ApiBaseUrl` | `https://api.parking.pivotsoftwares.com/` | The account API base address, ending with a slash |
 
 Override either property with `-p:GoogleWebClientId=...` or `-p:ApiBaseUrl=...` on the Android build command. The API's

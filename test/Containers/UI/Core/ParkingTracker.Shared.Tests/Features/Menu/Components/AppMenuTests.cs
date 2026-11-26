@@ -100,7 +100,7 @@ public sealed class AppMenuTests : UiTestContext
 
 	#region Account Entry Tests
 	/// <summary>
-	/// Verifies that a build without Google sign-in (a release build) shows no account entry.
+	/// Verifies that a build without Google sign-in (one built without a Web client ID) shows no account entry.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
@@ -112,7 +112,7 @@ public sealed class AppMenuTests : UiTestContext
 	}
 
 	/// <summary>
-	/// Verifies that a build with Google sign-in (a debug build) shows the account entry last, and that a tap closes the menu and opens the account sheet.
+	/// Verifies that a build with Google sign-in shows the account entry last, and that a tap closes the menu and opens the account sheet.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
@@ -121,7 +121,7 @@ public sealed class AppMenuTests : UiTestContext
 		Google.IsAvailable.Returns(true);
 		var host = await OpenMenuAsync();
 
-		host.FindAll("#appMenu .app-menu-title").Select(title => title.TextContent).Should().EndWith("Account (debug)");
+		host.FindAll("#appMenu .app-menu-title").Select(title => title.TextContent).Should().EndWith("Account");
 		await host.Find("#menuAccount").ClickAsync();
 
 		await host.WaitForAssertionAsync(() => Resolve<AccountViewModel>().IsOpen.Should().BeTrue());

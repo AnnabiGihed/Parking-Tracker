@@ -141,7 +141,7 @@ public abstract class UiTestContext : BunitContext
 	protected IVehicleStore Vehicles { get; } = Substitute.For<IVehicleStore>();
 
 	/// <summary>
-	/// Gets the Google sign-in substitute, which is not available (as in a release build) unless a test says otherwise.
+	/// Gets the Google sign-in substitute, which is not available (as in a build without a Web client ID) unless a test says otherwise.
 	/// </summary>
 	protected IGoogleSignIn Google { get; } = Substitute.For<IGoogleSignIn>();
 
