@@ -298,6 +298,12 @@ sign-in is newly blocked.
 
 ADR: [0015](adr/0015-require-sign-in-and-keep-the-drivers-data-on-the-phone.md).
 
+**Proposed change (ADR-0032, stage S5A):** on 2026-11-26 the owner asked for the places, the vehicle profile and the
+card to follow the account to a new phone. ADR-0032 (Proposed) chooses a fourth option: one profile document per
+account, encrypted on the server with a server key (`profile_key`), synchronised with revisions and `If-Match`, the
+phone remaining the working copy offline. The parked car and the timer stay on the phone. Until ADR-0032 is accepted
+and stage S5A is released, the decision above still describes the running system.
+
 ### 3.9 API style and versioning
 
 **Decision:** REST over HTTPS with JSON, controllers on Pivot's `ApiController` (`HandleResult`, `HandleFailure`,
@@ -493,7 +499,7 @@ ADR: [0024](adr/0024-fall-back-to-upstream-services-when-the-api-cannot-answer.m
 | Redis | A second API or admin instance |
 | gRPC | A non-HTTP client |
 | Keycloak | A second identity provider or federated organisations (owner decision D2) |
-| Server sync of the driver's data | A multi-device requirement (ADR-0015) |
+| Server sync of the parked car and the timer | A need to see the parked car from another phone (ADR-0032 syncs only the profile) |
 | Offline answers from cached data | An ADR that decides it (decided by default, 10.2) |
 | E-mail alerts | Stage after the admin app's alerts prove useful (decided by default, 10.2) |
 | Prometheus, Grafana, Loki | A need that logs, health checks and the admin app cannot cover |
@@ -1007,6 +1013,8 @@ Errors are ProblemDetails from `ApiController`. Data responses carry `ETag` (has
 
 | Method and route | Who | Answer |
 | --- | --- | --- |
+| `GET /me/profile` (S5A, ADR-0032) | signed-in driver, rate limit `profile` (token bucket per account) | the decrypted profile document with `ETag` = revision; `304` for a matching `If-None-Match`; `404` when there is none |
+| `PUT /me/profile` (S5A, ADR-0032) | signed-in driver, rate limit `profile` | body: the profile document (32 KB at most); `If-Match` with the revision, or `If-None-Match: *` to create; `428` without either, `412` on a stale revision, `200` with the new `ETag` |
 | `POST /sessions/challenges` | anonymous, rate-limited per IP (one bucket of 10 per minute shared with `POST /sessions`) | a one-time nonce, valid 5 minutes |
 | `POST /sessions` | anonymous, rate-limited per IP | body: Google ID token; answer: access token, refresh token, expiry; `401` when the token is invalid |
 | `POST /sessions/refresh` | anonymous (holder of a refresh token), rate-limited per IP, a policy of its own: 30 per minute | body: refresh token; answer as `POST /sessions`; one generic `401` for an unknown, revoked, expired or reused token, and a reuse revokes the family |
@@ -1390,8 +1398,9 @@ or `422`. A family revocation answered with `401`, or a nonce consumed by a fail
 
 | Personal data | Where | Purpose and protection | Retention |
 | --- | --- | --- | --- |
-| Card number, plate | Phone only, encrypted field | Card display; never sent | Until the user deletes it or the app |
-| Home, work, favourite places | Phone only, encrypted coordinates | Shortcuts (R5) | Until deleted |
+| Card number, plate | Phone only, encrypted field (after S5A, ADR-0032: also in the account's encrypted profile on the server) | Card display | Until the user deletes it or the app (after S5A: until erasure) |
+| Home, work, favourite places | Phone only, encrypted coordinates (after S5A: also in the account's encrypted profile) | Shortcuts (R5) | Until deleted (after S5A: until erasure) |
+| Vehicle profile (S5A) | Phone, plate encrypted; server, inside the encrypted profile (ADR-0032) | Suggestions for charging and low-emission zones; follows the account | Until deleted or erasure; backups 6 months |
 | Parked car position and timer | Phone only, encrypted coordinates | As today | Open session plus the last one |
 | Google ID token | Phone memory and the exchange request only | Sign-in; never stored on the server | Seconds |
 | Keyed hash of the Google account ID | API database | Contract (sign-in), abuse protection | Until erasure, or 24 months of inactivity |
@@ -1437,7 +1446,9 @@ as `Tokens__SigningKeys__Current` and `Tokens__SigningKeys__Previous`), with the
 hash key is the file `subject_hash_key` (`Accounts__SubjectHashKey`, base64 of 32 bytes). Outside Development the API
 refuses to start without the current key and the subject hash key, with a key that is not usable, or with Google
 settings (metadata address, issuers) that are not those of Google, so a test issuer cannot be switched on in a
-deployment. The subject hash key is never rotated: a new key orphans every account and
+deployment. After S5A (ADR-0032) a third key file, `profile_key` (current and previous, base64 of 32 bytes each),
+encrypts the account profiles; `provision.sh` creates it once and the owner keeps a copy in the password manager,
+because losing it makes every stored profile unreadable. The subject hash key is never rotated: a new key orphans every account and
 the erasure log, so the owner keeps a copy in the password manager. The Google client IDs are configuration
 (`appsettings.Production.json`), not secrets. Development secrets are AppHost user secrets. The phone has the API
 base URL and the Web client ID per build configuration; nothing secret ships in the APK.
@@ -1581,7 +1592,9 @@ before it. The runbook is [docs/operations/runbook.md](operations/runbook.md).
 There is no off-site copy (ADR-0028). The nightly dump restores one database without touching the other applications;
 OVH's backup restores the whole server, dumps included. A monthly timer at 05:30, after the job window, restores the
 latest dump into a throw-away container with a 256 MB limit, runs sanity queries (every area has a current dataset,
-the newest `verifiedAt` is under 48 h, the erasure log applies) and pings a dead-man switch. After a total loss of the
+the newest `verifiedAt` is under 48 h, the erasure log applies) and pings a dead-man switch. After S5A the dumps hold the
+account profiles encrypted with `profile_key`, which the dumps do not contain; OVH's whole-server backup holds both, so
+it is protected only as well as the server (ADR-0032). After a total loss of the
 server and its backups, drivers sign in again, the owner re-enters the admin allow-list from the runbook, and the run
 history starts again. A PostgreSQL major upgrade is a yearly dump and restore onto a new volume, rehearsed in the
 restore test first.
@@ -1638,6 +1651,7 @@ ADR-0018, superseded by ADR-0026, and ADR-0026, dated 2026-11-18.
 | [0024](adr/0024-fall-back-to-upstream-services-when-the-api-cannot-answer.md) | Upstream fallback and honesty across the network boundary, remotely switchable | A single VPS must not reduce availability; Q1 |
 | [0025](adr/0025-test-the-api-path-with-api-mode-parity-and-testcontainers.md) | API-mode parity and Testcontainers PostgreSQL, no in-memory providers | Proof that the server path changes no verdict |
 | [0026](adr/0026-store-the-drivers-data-with-sqlite-net-pcl-on-the-phone.md) | Device database through sqlite-net-pcl, hand-written repositories per aggregate, `schema_version` steps; supersedes ADR-0018's storage technology, restating its other rules | EF Core missed the S3 budget (+40.09 MB, +827 ms); sqlite-net-pcl met it (+2.84 MB, +97 ms) |
+| [0032](adr/0032-keep-the-drivers-profile-with-the-account-encrypted-on-the-server.md) (Proposed, 2026-11-26) | The places, the vehicle and the card follow the account: one profile per account, encrypted on the server, synchronised with revisions; supersedes in part ADR-0015 and ADR-0031 | The owner's multi-device requirement; a database-only leak exposes nothing readable |
 
 ## 9. Staged plan
 
@@ -1652,6 +1666,7 @@ API-served data reaches the public only in stage S10, after the licence question
 | S3 | Budget spike done 2026-11-18 (see below; EF Core over budget, ADR-0026 chooses sqlite-net-pcl), then device database on sqlite-net-pcl, field encryption, settings migration, Home and Work places; spike code removed. Progress: the device database is done in code, awaiting the CI build, the emulator run and the budget measurement of the real database: `ParkingTracker.Persistence.Device` (schema steps, unit of work, `FieldCipher`, repositories of the three aggregates), the repository ports in `ParkingTracker.Application`, `DeviceSettingsStore` (the card, car and timer now go through the repositories), the start-up gate with `SettingsToDatabaseMigration`, the backup rules and the tests; Home and Work places are done in code too (the shortcut chips, `IPlacesStore`, `DevicePlacesStore`). Done 2026-11-19: the real device database measured +3.08 MB and about +40 ms against `main` before it (see "S3 budget measurement" below), within the budget. The spike code never reached `main` | Upgrade leg green; the real device database measured within 8 MB and 300 ms |
 | S4 | Provisioning on the shared OVH server (ADR-0028): DNS, the Caddy sites, PostgreSQL, nightly dumps and a restore test before any real data; back-end skeleton (AppHost, ServiceDefaults, ApiService with health, OpenAPI and Scalar, persistence with migrations, Dockerfiles, `backend.yml`, `pt-deploy`); runbook. Done 2026-11-19: DNS, the one-time setup of the runbook (protected `main`, the `production` environment, `provision.sh` on the server), the first deployment from `main` (`sha-6bb4a235d0d8`, `/health/ready` 200 through the shared Caddy; API 79 MiB, PostgreSQL 60 MiB), the second (`sha-4f72e2086b7b`), and the drill (run 44512786497: the health gate refused the release and the server fell back to `sha-6bb4a235d0d8`, exit code 3; the newer release was then rolled forward with `rollback`). The first two deploy jobs reported a failure after going live, from a `clean_up` bug fixed in the second release's helper. Moved to S6: the `Hangfire.PostgreSql` check on .NET 10, `/health/data` and the restore test's data queries; to S5: the anonymous `401` smoke check, and trusting forwarded headers only from the shared Caddy (the API trusts any sender on `web` until rate limiting uses the client address) | `/health/ready` green on the VPS through a deployment from `main`; a forced failed health check rolls back |
 | S5 | Credential Manager spike; session exchange, refresh, sign-out, `/me`, erasure, rate limiting. Done 2026-11-26: the Credential Manager spike passed on 2026-11-19 (see "S5 Credential Manager spike" below); the session exchange, `/me` and rate limits (pull request 36), refresh with rotation, sign-out and erasure (pull request 37) and the app's session client with the debug-only account sheet (pull request 38) are on `main` and live, with the authentication tests green in CI. The owner signed in from a Debug build on the local API 34 emulator against the server: the account was created, `/me` was read, the session survived an app restart, the app refreshed silently after the 15-minute access token expired, and sign-out stayed signed out after a restart. Open for S9: the sign-in on a physical phone and the production Google project (move the release-key Android client, added to the development project on 2026-11-26 so release builds can sign in, to the production project; production Web client added to the API audiences, published consent screen) | Authentication tests green; the owner signs in from a debug build against the VPS |
+| S5A | Account profile (ADR-0032): body retry in the app's authenticated handler; `AccountProfile` store, cipher, `profile_key` and erasure; `GET` and `PUT /me/profile` with the rate limit `profile`; the Account menu; device schema step 3 with the account binding and the wipes on sign-out and deletion; the phone's sync service and merge; then the new privacy notice, ADR-0032 accepted, deploy and release | A home set on one emulator appears after sign-in on a second one; concurrent edits keep the newest; sign-out and deletion leave nothing on the phone and, for deletion, on the server |
 | S6 | Jobs host: region job, roadworks job and one pilot municipality; `RefreshRun`, snapshots, freshness, admin endpoints, alerts; a shadow job compares API answers with live upstream at sample points for two weeks | API-mode parity green; no verdict difference on fresh data |
 | S7 | The other 18 municipalities and the City document check | Every area fresh for 7 consecutive days |
 | S8 | Admin web app: sign-in and allow-list, freshness board, runs, details, schedules, run now, rejected datasets, alerts, `/jobs` | Admin tests green; outside checks show only allow-listed access; the owner uses it for a week |
@@ -1742,6 +1757,7 @@ sign-in requirement ships in the APK); a fix is a new release.
 | --- | --- | --- |
 | A day-old dataset gives a wrong answer after an intra-day upstream change | low, high | Shadow comparison in S6; roadworks hourly; the fallback remains |
 | Upstream returns partial or empty data that passes the guard | low, high | Row-count guard per source plus shape checks; admin review of rejected datasets; thresholds tuned in S6 |
+| The account profile (S5A) leaks or is lost | low, high | Encrypted with `profile_key` bound to the account and revision, so a database-only leak exposes nothing readable; the key copy in the password manager; independent review of the store, the endpoints and the phone's sync; the privacy notice states that a whole-server compromise exposes it (ADR-0032) |
 | The exchange endpoint or token handling has a flaw | medium, high | Small surface, tests for every refusal path, independent review of the authentication change, key rotation procedure |
 | A compromised admin Google account | low, high | Allow-list of `sub` values, re-checked per request; 2-step verification required by the owner's rule; the admin app cannot edit the allow-list |
 | Credential Manager bindings do not work in MAUI (A6) | low (spike and owner sign-in passed), high | The S5 spike (2026-11-19) and the owner's sign-in from a Debug build (2026-11-26) passed on the emulator; a sign-in on a physical phone is checked in S9. Fallback if it fails there: the system browser with Google's authorization code flow and PKCE through an App Link redirect on `<domain>`, handled by a new ADR |
