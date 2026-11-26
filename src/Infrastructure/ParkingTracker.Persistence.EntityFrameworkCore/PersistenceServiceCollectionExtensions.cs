@@ -35,6 +35,7 @@ public static class PersistenceServiceCollectionExtensions
 			connectionString,
 			options => options.UseNpgsql(connectionString, npgsql => npgsql.UseNetTopologySuite()));
 		_ = services.AddScoped<IUserAccountRepository>(provider => new UserAccountRepository(provider.GetRequiredService<ParkingDataDbContext>()));
+		_ = services.AddScoped<IAccountProfileRepository>(provider => new AccountProfileRepository(provider.GetRequiredService<ParkingDataDbContext>()));
 		_ = services.AddScoped<IUnitOfWork>(provider => new ParkingDataUnitOfWork(provider.GetRequiredService<ParkingDataDbContext>(), provider.GetRequiredService<ILogger<ParkingDataUnitOfWork>>()));
 		_ = services.AddScoped<ISignInChallengeStore>(provider => new SignInChallengeStore(provider.GetRequiredService<ParkingDataDbContext>()));
 		_ = services.AddScoped<IErasureLog>(provider => new ErasureLog(provider.GetRequiredService<ParkingDataDbContext>()));

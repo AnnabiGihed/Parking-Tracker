@@ -140,17 +140,21 @@ provision_secrets_scenario() {
 		openssl pkey -in "$app/token_signing_key_current.pem" -noout -text | grep -q prime256v1
 		[[ ! -s $app/token_signing_key_previous.pem ]]
 		[[ $(base64 -d <"$app/subject_hash_key" | wc -c) -eq 32 ]]
-		for name in token_signing_key_current.pem token_signing_key_previous.pem subject_hash_key; do
+		[[ $(base64 -d <"$app/profile_key_current" | wc -c) -eq 32 ]]
+		[[ ! -s $app/profile_key_previous ]]
+		[[ $(cat "$app/profile_key_current") != "$(cat "$app/subject_hash_key")" ]]
+		for name in token_signing_key_current.pem token_signing_key_previous.pem subject_hash_key profile_key_current profile_key_previous; do
 			grep -q "^1654:1654 $app/$name\." "$work/chown.log"
 			case "$(uname -s)" in MINGW* | MSYS* | CYGWIN*) ;; *) [[ $(stat -c %a "$app/$name") == 400 ]] ;; esac
 		done
-		[[ -z $(ls -A "$app" | grep -v -e "^token_signing_key_" -e "^subject_hash_key$" || true) ]]
-		before=$(cat "$app"/token_signing_key_current.pem "$app"/subject_hash_key | sha256sum)
+		[[ -z $(ls -A "$app" | grep -v -e "^token_signing_key_" -e "^subject_hash_key$" -e "^profile_key_" || true) ]]
+		before=$(cat "$app"/token_signing_key_current.pem "$app"/subject_hash_key "$app"/profile_key_current | sha256sum)
 		create_token_secrets >/dev/null
-		[[ $before == "$(cat "$app"/token_signing_key_current.pem "$app"/subject_hash_key | sha256sum)" ]]
+		[[ $before == "$(cat "$app"/token_signing_key_current.pem "$app"/subject_hash_key "$app"/profile_key_current | sha256sum)" ]]
 		[[ ! -s $app/token_signing_key_previous.pem ]]
 		old_current=$(cat "$app/token_signing_key_current.pem")
 		subject_key=$(cat "$app/subject_hash_key")
+		profile_key=$(cat "$app/profile_key_current")
 		release=$APP_DIR/releases/sha-0123456789ab
 		mkdir -p "$release"
 		current_release_dir() { echo "$release"; }
@@ -159,8 +163,9 @@ provision_secrets_scenario() {
 		[[ $(cat "$app/token_signing_key_current.pem") != "$old_current" ]]
 		grep -q "BEGIN PRIVATE KEY" "$app/token_signing_key_current.pem"
 		[[ $(cat "$app/subject_hash_key") == "$subject_key" ]]
+		[[ $(cat "$app/profile_key_current") == "$profile_key" && ! -s $app/profile_key_previous ]]
 		grep -qF -e "compose -p parking-tracker --project-directory $release -f $release/compose.yaml --env-file $release/.env up -d --force-recreate --no-deps api" "$work/docker.log"
-		[[ -z $(ls -A "$app" | grep -v -e "^token_signing_key_" -e "^subject_hash_key$" || true) ]]
+		[[ -z $(ls -A "$app" | grep -v -e "^token_signing_key_" -e "^subject_hash_key$" -e "^profile_key_" || true) ]]
 		create_token_secrets >/dev/null
 		[[ $(cat "$app/token_signing_key_previous.pem") == "$old_current" ]]
 	' _ "$work" || status=$?
@@ -228,6 +233,7 @@ provision_with_an_empty_secret() {
 	return "$status"
 }
 check "provision.sh refuses an existing empty subject_hash_key" refuse provision_with_an_empty_secret subject_hash_key
+check "provision.sh refuses an existing empty profile_key_current" refuse provision_with_an_empty_secret profile_key_current
 check "provision.sh refuses an existing empty current signing key" refuse provision_with_an_empty_secret token_signing_key_current.pem
 
 provision_rotation_without_a_key() {

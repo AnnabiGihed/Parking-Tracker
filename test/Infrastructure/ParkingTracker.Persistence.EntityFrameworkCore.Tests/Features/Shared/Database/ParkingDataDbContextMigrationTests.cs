@@ -48,9 +48,9 @@ public sealed class ParkingDataDbContextMigrationTests
 		await context.Database.MigrateAsync();
 
 		var applied = await context.Database.GetAppliedMigrationsAsync();
-		applied.Should().HaveCount(2);
+		applied.Should().HaveCount(3);
 		applied.First().Should().EndWith("_InitialCreate");
-		applied.Last().Should().EndWith("_AddAccounts");
+		applied.Last().Should().EndWith("_AddAccountProfiles");
 		var extensions = await context.Database.SqlQueryRaw<string>("SELECT extname AS \"Value\" FROM pg_extension").ToListAsync();
 		extensions.Should().Contain("postgis");
 	}
@@ -79,7 +79,7 @@ public sealed class ParkingDataDbContextMigrationTests
 
 		await context.Database.MigrateAsync();
 
-		(await context.Database.GetAppliedMigrationsAsync()).Should().HaveCount(2);
+		(await context.Database.GetAppliedMigrationsAsync()).Should().HaveCount(3);
 	}
 
 	/// <summary>
@@ -96,7 +96,7 @@ public sealed class ParkingDataDbContextMigrationTests
 		await using var connection = new NpgsqlConnection(database.ApiConnectionString);
 		await connection.OpenAsync();
 		await using var read = new NpgsqlCommand("SELECT count(*) FROM \"__EFMigrationsHistory\"", connection);
-		(await read.ExecuteScalarAsync()).Should().Be(2L);
+		(await read.ExecuteScalarAsync()).Should().Be(3L);
 		await using var create = new NpgsqlCommand("CREATE TABLE intruder (id int)", connection);
 		var act = async () => await create.ExecuteNonQueryAsync().ConfigureAwait(false);
 		(await act.Should().ThrowAsync<PostgresException>()).Which.SqlState.Should().Be(PostgresErrorCodes.InsufficientPrivilege);

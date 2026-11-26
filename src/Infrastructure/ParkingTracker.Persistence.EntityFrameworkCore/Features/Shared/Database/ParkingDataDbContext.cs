@@ -7,7 +7,7 @@ namespace ParkingTracker.Persistence.EntityFrameworkCore.Features.Shared.Databas
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
 /// Purpose     : The write-side database context of the server (ADR-0010). It declares the PostGIS extension and applies the entity
-///              configurations of the assembly (so far the accounts with their sessions, the sign-in challenges and the erasure log;
+///              configurations of the assembly (so far the accounts with their sessions and encrypted profiles, the sign-in challenges and the erasure log;
 ///              the next aggregates arrive with the stages that need them). The extension itself is created by the migration, which
 ///              runs as the owner role; the API runs with a role that cannot create extensions.
 /// </summary>

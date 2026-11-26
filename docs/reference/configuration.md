@@ -18,10 +18,12 @@ file per key under `/run/secrets`, named like the key with `__` for `:` (see
 | `Tokens:SigningKeys:Current` | none | yes | The P-256 private key (PEM) that signs the access tokens; outside Development it is required |
 | `Tokens:SigningKeys:Previous` | empty | yes | The key of the rotation before, accepted for validation only; empty when there is none |
 | `Accounts:SubjectHashKey` | none | yes | Base64 of 32 random bytes, the key of the subject hash; outside Development it is required; never rotated |
+| `Profiles:Keys:Current` | none | yes | Base64 of 32 random bytes, the AES-256-GCM key that encrypts the stored account profiles (ADR-0032); outside Development it is required; losing it makes every stored profile unreadable, so the owner keeps a copy |
+| `Profiles:Keys:Previous` | empty | yes | The profile key of the rotation before, used to decrypt only; empty when there is none. The provisioning script creates it empty and has no rotation of the profile key yet |
 
 ## Development
 
-In Development the signing key and the subject hash key may be missing: the API makes one for the life of the process, so
+In Development the signing key, the subject hash key and the profile key may be missing: the API makes one for the life of the process, so
 the tokens and the accounts of a run do not survive a restart. The audiences stay empty until a Web client identifier is
 configured, so no Google ID token is accepted. In every other environment the start-up checks above refuse a missing or
 unusable value, and name the key in the message without ever printing the value.

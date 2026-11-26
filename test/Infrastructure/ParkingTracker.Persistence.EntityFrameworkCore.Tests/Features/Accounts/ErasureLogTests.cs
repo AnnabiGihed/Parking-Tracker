@@ -107,6 +107,7 @@ public sealed class ErasureLogTests
 		accounts.Select(account => account.SubjectHash.Value).Should().Equal(new string('b', 64));
 		accounts.Single().Sessions.Should().ContainSingle();
 		(await read.Set<DeviceSession>().CountAsync()).Should().Be(1, "the sessions of the deleted account went with it");
+		(await read.Set<AccountProfile>().Select(profile => profile.Id).ToListAsync()).Should().BeEquivalentTo(new[] { accounts.Single().Id }, "the profile of the deleted account went with it");
 		var log = (await read.Set<ErasureLogEntry>().ToListAsync()).ToDictionary(entry => entry.SubjectHash, entry => entry.ErasedOn, StringComparer.Ordinal);
 		log.Keys.Should().BeEquivalentTo(new[] { new string('a', 64), new string('c', 64) }, "the old row is purged, the others kept");
 		log[new string('a', 64)].Should().Be(today, "the later day wins");
@@ -127,6 +128,7 @@ public sealed class ErasureLogTests
 		await using var read = CreateContext(database.OwnerConnectionString);
 		(await read.Set<UserAccount>().CountAsync()).Should().Be(2);
 		(await read.Set<DeviceSession>().CountAsync()).Should().Be(2);
+		(await read.Set<AccountProfile>().CountAsync()).Should().Be(2);
 		(await read.Set<ErasureLogEntry>().CountAsync()).Should().Be(3);
 	}
 
@@ -167,7 +169,7 @@ public sealed class ErasureLogTests
 
 	#region Private Helpers
 	/// <summary>
-	/// Seeds two accounts with one session each, and a log with a row of the first subject of today, a recent row of another subject and one older than six months.
+	/// Seeds two accounts with one session and one profile each, and a log with a row of the first subject of today, a recent row of another subject and one older than six months.
 	/// </summary>
 	/// <param name="database">The database.</param>
 	/// <returns>A task that completes when the rows are saved.</returns>
@@ -179,6 +181,7 @@ public sealed class ErasureLogTests
 			var account = UserAccount.Create(Subject(subject), Start);
 			_ = account.StartSession(Token(token), Start);
 			await new UserAccountRepository(context).AddAsync(account).ConfigureAwait(false);
+			await new AccountProfileRepository(context).AddAsync(AccountProfile.Create(account.Id, 1, EncryptedProfile.Create("0a1b2c3d", [1, 2, 3]).Value, DateOnly.FromDateTime(Start.UtcDateTime)).Value).ConfigureAwait(false);
 		}
 
 		var today = DateOnly.FromDateTime(DateTime.UtcNow);

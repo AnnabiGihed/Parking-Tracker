@@ -14,8 +14,8 @@ namespace ParkingTracker.Backend.Application.Tests.Features.Accounts;
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
 /// Purpose     : Unit tests for <see cref="EndSessionCommandHandler"/> and <see cref="EraseAccountCommandHandler"/> with the ports
-///              replaced: the sign-out revokes only the family of the caller and is idempotent; the erasure stages the log record and
-///              the deletion together, saves once, and is idempotent; a failed save is reported.
+///              replaced: the sign-out revokes only the family of the caller and is idempotent; the erasure stages the log record, the deletion of the
+///              profile and the deletion of the account together, saves once, and is idempotent; a failed save is reported.
 /// </summary>
 public sealed class EndSessionAndEraseAccountHandlerTests
 {
@@ -24,6 +24,11 @@ public sealed class EndSessionAndEraseAccountHandlerTests
 	/// The accounts.
 	/// </summary>
 	private readonly IUserAccountRepository accounts = Substitute.For<IUserAccountRepository>();
+
+	/// <summary>
+	/// The encrypted profiles.
+	/// </summary>
+	private readonly IAccountProfileRepository profiles = Substitute.For<IAccountProfileRepository>();
 
 	/// <summary>
 	/// The erasure log.
@@ -131,6 +136,28 @@ public sealed class EndSessionAndEraseAccountHandlerTests
 	}
 
 	/// <summary>
+	/// Verifies that the profile of the account is deleted in the same save as the account, and that an account without a profile
+	/// deletes none.
+	/// </summary>
+	/// <param name="hasProfile">Whether the account has a profile.</param>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Theory]
+	[InlineData(true)]
+	[InlineData(false)]
+	public async Task Erase_AccountWithOrWithoutProfile_ShouldDeleteTheProfileInTheSameSave(bool hasProfile)
+	{
+		var account = NewAccount();
+		var profile = AccountProfile.Create(account.Id, 1, EncryptedProfile.Create("0a1b2c3d", [1, 2, 3]).Value, new DateOnly(2026, 11, 20)).Value;
+		_ = profiles.FindByIdAsync(account.Id, Arg.Any<CancellationToken>()).Returns(hasProfile ? profile : null);
+
+		var result = await Handler().Handle(new EraseAccountCommand(account.Id.Value), CancellationToken.None);
+
+		result.IsSuccess.Should().BeTrue();
+		await profiles.Received(hasProfile ? 1 : 0).DeleteAsync(profile, Arg.Any<CancellationToken>());
+		await unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+	}
+
+	/// <summary>
 	/// Verifies that erasing an account that is gone succeeds and records and deletes nothing.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>
@@ -184,7 +211,7 @@ public sealed class EndSessionAndEraseAccountHandlerTests
 	/// Creates the erase handler on the replaced ports.
 	/// </summary>
 	/// <returns>The handler.</returns>
-	private EraseAccountCommandHandler Handler() => new(accounts, erasureLog, unitOfWork, clock);
+	private EraseAccountCommandHandler Handler() => new(accounts, profiles, erasureLog, unitOfWork, clock);
 
 	/// <summary>
 	/// Makes an account and lets the repository find it by identifier.

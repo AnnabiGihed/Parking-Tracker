@@ -9,7 +9,8 @@ namespace ParkingTracker.Backend.Application.Features.Accounts.Commands.EraseAcc
 /// <summary>
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
-/// Purpose     : Handles <see cref="EraseAccountCommand"/> (ADR-0015, architecture 6.1): deletes the account with its sessions and
+/// Purpose     : Handles <see cref="EraseAccountCommand"/> (ADR-0015, architecture 6.1): deletes the account with its sessions and its encrypted profile
+///              (the foreign key would cascade, but the deletion is staged explicitly so the intent does not hide in the schema) and
 ///              records its subject hash in the erasure log, staged together and saved by one unit of work, so either both happen or
 ///              neither does. It is idempotent: an account that is gone is a success, also when a second request erased it first. The erasure log is not a ban; the same Google
 ///              account can sign in again and gets a new account.
@@ -21,6 +22,11 @@ public sealed class EraseAccountCommandHandler : ICommandHandler<EraseAccountCom
 	/// The accounts.
 	/// </summary>
 	private readonly IUserAccountRepository accounts;
+
+	/// <summary>
+	/// The encrypted profiles.
+	/// </summary>
+	private readonly IAccountProfileRepository profiles;
 
 	/// <summary>
 	/// The erasure log.
@@ -43,17 +49,20 @@ public sealed class EraseAccountCommandHandler : ICommandHandler<EraseAccountCom
 	/// Initializes a new instance of the <see cref="EraseAccountCommandHandler"/> class.
 	/// </summary>
 	/// <param name="accounts">The accounts.</param>
+	/// <param name="profiles">The encrypted profiles.</param>
 	/// <param name="erasureLog">The erasure log.</param>
 	/// <param name="unitOfWork">Saves the deletion and the record in one transaction.</param>
 	/// <param name="clock">The clock.</param>
 	/// <exception cref="ArgumentNullException">An argument is <see langword="null"/>.</exception>
-	public EraseAccountCommandHandler(IUserAccountRepository accounts, IErasureLog erasureLog, IUnitOfWork unitOfWork, TimeProvider clock)
+	public EraseAccountCommandHandler(IUserAccountRepository accounts, IAccountProfileRepository profiles, IErasureLog erasureLog, IUnitOfWork unitOfWork, TimeProvider clock)
 	{
 		ArgumentNullException.ThrowIfNull(accounts);
+		ArgumentNullException.ThrowIfNull(profiles);
 		ArgumentNullException.ThrowIfNull(erasureLog);
 		ArgumentNullException.ThrowIfNull(unitOfWork);
 		ArgumentNullException.ThrowIfNull(clock);
 		this.accounts = accounts;
+		this.profiles = profiles;
 		this.erasureLog = erasureLog;
 		this.unitOfWork = unitOfWork;
 		this.clock = clock;
@@ -72,6 +81,12 @@ public sealed class EraseAccountCommandHandler : ICommandHandler<EraseAccountCom
 
 		var today = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
 		await erasureLog.RecordAsync(account.SubjectHash, today, cancellationToken).ConfigureAwait(false);
+		var profile = await profiles.FindByIdAsync(account.Id, cancellationToken).ConfigureAwait(false);
+		if (profile is not null)
+		{
+			await profiles.DeleteAsync(profile, cancellationToken).ConfigureAwait(false);
+		}
+
 		await accounts.DeleteAsync(account, cancellationToken).ConfigureAwait(false);
 		var save = await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 		return save.IsSuccess || await IsGoneAsync(request.AccountId, cancellationToken).ConfigureAwait(false) ? Result.Success() : save;

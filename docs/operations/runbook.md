@@ -80,7 +80,7 @@ reads it as `ReverseProxy__Key`. The API trusts `X-Forwarded-For`, `-Proto` and 
 the key (ADR-0029), and in Production it refuses to start without it. Check that the shared Caddy sets no
 `trusted_proxies`.
 
-The script also creates the three secrets of the sign-in, each once (a rerun keeps it; a file that exists but is empty
+The script also creates the secrets of the sign-in, each once (a rerun keeps it; a file that exists but is empty
 stops the script, because a new value would orphan the accounts or sign everyone out; restore it from its copy), owner uid 1654, mode 0400, and
 the API reads them as the settings named in brackets: `secrets/app/token_signing_key_current.pem` (a P-256 private key,
 `Tokens__SigningKeys__Current`), `secrets/app/token_signing_key_previous.pem` (empty until the first rotation,
@@ -91,6 +91,12 @@ Google subject, so a lost or changed key orphans every account and the erasure l
 secrets needs `provision.sh` from its branch run on the server before it is merged, or the deployment that follows
 fails at start. The Google Web client identifiers are configuration, not secrets: `appsettings.Production.json` holds
 the development client; add the production client there when it exists.
+
+It creates two more secrets for the encrypted account profiles (ADR-0032), owner uid 1654, mode 0400:
+`secrets/app/profile_key_current` (32 random bytes in base64, `Profiles__Keys__Current`) and `secrets/app/profile_key_previous`
+(empty, `Profiles__Keys__Previous`; there is no rotation of the profile key yet). In Production the API refuses to start without
+the current key. **Copy `profile_key_current` to the password manager now:** losing it makes every stored profile unreadable.
+The same rule holds as for the other secrets: run `provision.sh` from the branch on the server before the pull request is merged.
 
 The apex, `https://parking.pivotsoftwares.com`, serves the privacy notice: `/privacy` answers with the page,
 `/` redirects to it and any other path answers 404. The page is `deploy/site/privacy-notice.html`; the script copies it

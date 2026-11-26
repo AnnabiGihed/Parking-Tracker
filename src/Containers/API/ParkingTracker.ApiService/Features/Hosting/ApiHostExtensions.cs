@@ -3,6 +3,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.OpenApi;
 using ParkingTracker.ApiService.Features.Authentication;
 using ParkingTracker.ApiService.Features.OpenApi;
+using ParkingTracker.ApiService.Features.Profiles;
 using ParkingTracker.ApiService.Features.RateLimiting;
 using ParkingTracker.ApiService.Features.ReverseProxy;
 using ParkingTracker.Backend.Application;
@@ -79,6 +80,7 @@ public static class ApiHostExtensions
 		TagRegistrationsAsReady(builder.Services);
 		_ = builder.Services.AddBackendApplication();
 		_ = builder.Services.AddParkingAuthentication(builder.Configuration);
+		_ = builder.Services.AddParkingProfiles(builder.Configuration);
 		_ = builder.Services.AddPivotApiVersioning();
 		_ = builder.Services.AddControllers();
 		_ = builder.Services.AddSwaggerGen(ConfigureOpenApi);
