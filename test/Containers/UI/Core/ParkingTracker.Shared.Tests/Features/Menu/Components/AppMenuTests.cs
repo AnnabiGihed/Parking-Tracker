@@ -1,6 +1,9 @@
 using Bunit;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
+using ParkingTracker.Application.Features.Accounts.Abstractions;
 using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
+using ParkingTracker.Contracts.Features.Accounts;
 using ParkingTracker.ViewModels.Features.Account;
 using ParkingTracker.Domain.Features.SavedPlaces.Aggregates;
 using ParkingTracker.Domain.Features.SavedPlaces.ValueObjects;
@@ -11,6 +14,7 @@ using ParkingTracker.ViewModels.Features.Card;
 using ParkingTracker.ViewModels.Features.Places;
 using ParkingTracker.ViewModels.Features.Shared;
 using ParkingTracker.ViewModels.Features.Vehicles;
+using Pivot.Framework.Domain.Shared;
 using Radzen.Blazor;
 
 namespace ParkingTracker.Shared.Tests.Features.Menu.Components;
@@ -20,10 +24,17 @@ namespace ParkingTracker.Shared.Tests.Features.Menu.Components;
 /// Date        : 11-2026
 /// Purpose     : Component tests for the side menu (ADR-0030): the menu button of the search bar opens it as a Radzen side dialog, it
 ///              lists Home, Work and the parking card with what is saved under each, a tap closes it and starts the picker or opens the screen of the
-///              entry, and the back button of the phone closes it.
+///              entry, and the back button of the phone closes it. In a build that can sign in it is one Account section: the account line, the label, Sign out and Delete account.
 /// </summary>
 public sealed class AppMenuTests : UiTestContext
 {
+	#region Static Instances
+	/// <summary>
+	/// The account the API returns.
+	/// </summary>
+	private static readonly MeResponse Me = new(Guid.Parse("0f3c2a1b-8d4e-4f60-9a7b-123456789abc"), new DateOnly(2026, 11, 3), new DateOnly(2026, 11, 17), 2);
+	#endregion
+
 	#region Test Infrastructure
 	/// <summary>
 	/// A saved home.
@@ -43,6 +54,20 @@ public sealed class AppMenuTests : UiTestContext
 
 		await host.WaitForAssertionAsync(() => host.FindAll("#appMenu").Should().HaveCount(1)).ConfigureAwait(false);
 		return host;
+	}
+
+	/// <summary>
+	/// Makes the build able to sign in, sets whether the phone holds a session, and opens the menu.
+	/// </summary>
+	/// <param name="signedIn">Whether the phone holds a session.</param>
+	/// <returns>The Radzen dialog host, which holds the menu while it is open.</returns>
+	private async Task<IRenderedComponent<RadzenDialog>> OpenAccountMenuAsync(bool signedIn)
+	{
+		Google.IsAvailable.Returns(true);
+		Session.IsSignedInAsync(Arg.Any<CancellationToken>()).Returns(signedIn);
+		Session.GetMeAsync(Arg.Any<CancellationToken>()).Returns(Result.Success(Me));
+		Session.SignOutAsync(Arg.Any<CancellationToken>()).Returns(Result.Success());
+		return await OpenMenuAsync().ConfigureAwait(false);
 	}
 	#endregion
 
@@ -98,9 +123,9 @@ public sealed class AppMenuTests : UiTestContext
 	}
 	#endregion
 
-	#region Account Entry Tests
+	#region Account Section Tests
 	/// <summary>
-	/// Verifies that a build without Google sign-in (one built without a Web client ID) shows no account entry.
+	/// Verifies that a build without Google sign-in shows no account line, no Sign out or Delete account, and the label "On this phone only".
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
@@ -108,24 +133,123 @@ public sealed class AppMenuTests : UiTestContext
 	{
 		var host = await OpenMenuAsync();
 
-		host.FindAll("#menuAccount").Should().BeEmpty();
+		host.FindAll("#menuAccount, #menuSignOut, #menuDeleteAccount").Should().BeEmpty();
+		host.Find("#menuSectionLabel").TextContent.Should().Be("On this phone only");
+		await Session.DidNotReceive().IsSignedInAsync(Arg.Any<CancellationToken>());
 	}
 
 	/// <summary>
-	/// Verifies that a build with Google sign-in shows the account entry last, and that a tap closes the menu and opens the account sheet.
+	/// Verifies that signed out, the account line offers the sign-in, the label says "On this phone only", and a tap opens the account sheet.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
-	public async Task Menu_GoogleSignInAvailable_ShouldShowTheAccountEntryAndOpenTheSheet()
+	public async Task Menu_SignedOut_ShouldOfferSignInAndOpenTheSheet()
 	{
-		Google.IsAvailable.Returns(true);
-		var host = await OpenMenuAsync();
+		var host = await OpenAccountMenuAsync(signedIn: false);
 
-		host.FindAll("#appMenu .app-menu-title").Select(title => title.TextContent).Should().EndWith("Account");
+		host.Find("#menuAccount .app-menu-title").TextContent.Should().Be("Sign in");
+		host.Find("#menuAccountText").TextContent.Should().Be("Keep your data with your Google account");
+		host.Find("#menuSectionLabel").TextContent.Should().Be("On this phone only");
+		host.FindAll("#appMenu .app-menu-item").Should().HaveCount(6);
+		host.FindAll("#menuSignOut, #menuDeleteAccount").Should().BeEmpty();
 		await host.Find("#menuAccount").ClickAsync();
 
 		await host.WaitForAssertionAsync(() => Resolve<AccountViewModel>().IsOpen.Should().BeTrue());
 		await host.WaitForAssertionAsync(() => host.FindAll("#appMenu").Should().BeEmpty());
+	}
+
+	/// <summary>
+	/// Verifies that signed in, the account line shows the short id, the label says "Saved with your account", and Sign out and Delete account close the section.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Menu_SignedIn_ShouldShowTheAccountLineTheLabelAndTheActions()
+	{
+		var host = await OpenAccountMenuAsync(signedIn: true);
+
+		await host.WaitForAssertionAsync(() => host.Find("#menuAccountText").TextContent.Should().Be("Signed in · 0f3c2a1b"));
+		host.Find("#menuAccount .app-menu-title").TextContent.Should().Be("Account");
+		host.Find("#menuSectionLabel").TextContent.Should().Be("Saved with your account");
+		host.FindAll("#appMenu .app-menu-title").Select(title => title.TextContent).Should().Equal("Account", "Home", "Work", "Favourite places", "My vehicle", "Parking card", "Sign out", "Delete account");
+	}
+
+	/// <summary>
+	/// Verifies that a menu opened signed in shows "Signed in" alone while the account is not known.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Menu_SignedInAccountUnknown_ShouldShowSignedInAlone()
+	{
+		Google.IsAvailable.Returns(true);
+		Session.IsSignedInAsync(Arg.Any<CancellationToken>()).Returns(true);
+		Session.GetMeAsync(Arg.Any<CancellationToken>()).Returns(Result.Failure<MeResponse>(AccountErrors.Network()));
+
+		var host = await OpenMenuAsync();
+
+		host.Find("#menuAccountText").TextContent.Should().Be("Signed in");
+		Resolve<AccountViewModel>().Error.Should().BeEmpty();
+	}
+
+	/// <summary>
+	/// Verifies that Sign out calls the client and the menu switches to the signed-out state, without closing.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task SignOut_Tap_ShouldSignOutAndShowTheSignedOutMenu()
+	{
+		var host = await OpenAccountMenuAsync(signedIn: true);
+
+		await host.Find("#menuSignOut").ClickAsync();
+
+		await host.WaitForAssertionAsync(() => host.Find("#menuAccount .app-menu-title").TextContent.Should().Be("Sign in"));
+		await Session.Received(1).SignOutAsync(Arg.Any<CancellationToken>());
+		host.Find("#menuSectionLabel").TextContent.Should().Be("On this phone only");
+		host.FindAll("#menuSignOut, #menuDeleteAccount").Should().BeEmpty();
+	}
+
+	/// <summary>
+	/// Verifies that a sign-out that fails shows the reason in the menu and keeps the menu signed in, whether the client refuses or the secure storage fails.
+	/// </summary>
+	/// <param name="storageFails"><see langword="true"/> when the secure storage throws, <see langword="false"/> when the client returns a failure.</param>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public async Task SignOut_Fails_ShouldShowTheReasonAndStaySignedIn(bool storageFails)
+	{
+		var host = await OpenAccountMenuAsync(signedIn: true);
+		if (storageFails)
+		{
+			Session.SignOutAsync(Arg.Any<CancellationToken>()).ThrowsAsync(new IOException());
+		}
+		else
+		{
+			Session.SignOutAsync(Arg.Any<CancellationToken>()).Returns(Result.Failure(AccountErrors.Network()));
+		}
+
+		await host.Find("#menuSignOut").ClickAsync();
+
+		await host.WaitForAssertionAsync(() => host.Find("#menuAccountError").TextContent.Should().NotBeNullOrEmpty());
+		host.Find("#menuAccount .app-menu-title").TextContent.Should().Be("Account");
+		host.FindAll("#menuSignOut").Should().HaveCount(1);
+	}
+
+	/// <summary>
+	/// Verifies that Delete account closes the menu and opens the account sheet at the confirmation, without deleting.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task DeleteAccount_Tap_ShouldOpenTheSheetAtTheConfirmation()
+	{
+		var host = await OpenAccountMenuAsync(signedIn: true);
+
+		await host.Find("#menuDeleteAccount").ClickAsync();
+
+		var account = Resolve<AccountViewModel>();
+		await host.WaitForAssertionAsync(() => account.IsConfirmingDelete.Should().BeTrue());
+		account.IsOpen.Should().BeTrue();
+		await host.WaitForAssertionAsync(() => host.FindAll("#appMenu").Should().BeEmpty());
+		await Session.DidNotReceive().DeleteAccountAsync(Arg.Any<CancellationToken>());
 	}
 	#endregion
 

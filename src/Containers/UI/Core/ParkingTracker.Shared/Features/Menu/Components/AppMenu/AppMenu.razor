@@ -5,6 +5,17 @@
         <span class="app-menu-logo"><Icon Name="parking" /></span>
         <span class="app-menu-name">Parking Tracker</span>
     </header>
+    @if (ViewModel.IsAccountVisible)
+    {
+        <RadzenPanelMenu class="app-menu-account" AriaLabel="Account">
+            <RadzenPanelMenuItem id="menuAccount" Click="OnAccountAsync">
+                <Template>
+                    <span class="app-menu-item"><Icon Name="person" /><span class="app-menu-text"><span class="app-menu-title">@ViewModel.AccountTitle</span><span id="menuAccountText" class="app-menu-sub">@ViewModel.AccountText</span></span></span>
+                </Template>
+            </RadzenPanelMenuItem>
+        </RadzenPanelMenu>
+    }
+    <div id="menuSectionLabel" class="app-menu-section">@ViewModel.SectionLabel</div>
     <RadzenPanelMenu class="app-menu-items" AriaLabel="Menu">
         <RadzenPanelMenuItem id="menuHome" Click="OnHomeAsync">
             <Template>
@@ -31,13 +42,24 @@
                 <span class="app-menu-item"><Icon Name="card" /><span class="app-menu-text"><span class="app-menu-title">Parking card</span><span class="app-menu-sub">@ViewModel.CardText</span></span></span>
             </Template>
         </RadzenPanelMenuItem>
-        @if (ViewModel.IsAccountVisible)
-        {
-            <RadzenPanelMenuItem id="menuAccount" Click="OnAccountAsync">
+    </RadzenPanelMenu>
+    @if (ViewModel.IsAccountVisible && ViewModel.IsSignedIn)
+    {
+        <RadzenPanelMenu class="app-menu-items app-menu-foot" AriaLabel="Account actions">
+            <RadzenPanelMenuItem id="menuSignOut" Click="OnSignOutAsync">
                 <Template>
-                    <span class="app-menu-item"><Icon Name="person" /><span class="app-menu-text"><span class="app-menu-title">Account</span><span class="app-menu-sub">Google sign-in</span></span></span>
+                    <span class="app-menu-item"><Icon Name="logout" /><span class="app-menu-text"><span class="app-menu-title">Sign out</span></span></span>
                 </Template>
             </RadzenPanelMenuItem>
+            <RadzenPanelMenuItem id="menuDeleteAccount" Click="OnDeleteAccountAsync">
+                <Template>
+                    <span class="app-menu-item app-menu-danger"><Icon Name="delete" /><span class="app-menu-text"><span class="app-menu-title">Delete account</span></span></span>
+                </Template>
+            </RadzenPanelMenuItem>
+        </RadzenPanelMenu>
+        @if (!string.IsNullOrEmpty(ViewModel.AccountError))
+        {
+            <p id="menuAccountError" class="app-menu-error" role="alert">@ViewModel.AccountError</p>
         }
-    </RadzenPanelMenu>
+    }
 </div>

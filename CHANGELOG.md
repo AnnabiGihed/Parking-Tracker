@@ -46,6 +46,10 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
 
 ### Changed
 
+- The side menu is one Account section in builds that can sign in: an account line at the top (Sign in, or Account with
+  the start of your account id), a label that says whether the entries are on this phone only or saved with your
+  account, and Sign out and Delete account at the bottom while signed in. Delete account opens the confirmation. Nothing
+  is synced yet; the wording only says where the data is kept.
 - Release builds now offer the Account entry and Google sign-in (until S9 through the development Google project, which
   holds an Android client for the release key). The entry is called "Account".
 - The card, car and welcome screens open as the same bottom sheets as the other screens, with the Android back button
