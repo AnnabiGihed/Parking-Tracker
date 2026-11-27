@@ -11,6 +11,10 @@
         {
             <p class="account-note">Developer build: sign in with Google against the API.</p>
             <RadzenButton id="accountSignIn" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Primary" Text="Sign in with Google" Disabled="ViewModel.IsBusy" Click="OnSignInAsync" />
+            @if (ViewModel.IsWipePending)
+            {
+                <RadzenButton id="accountWipeRetry" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Outlined" Text="Remove data from this phone" Disabled="ViewModel.IsBusy" Click="OnRetryWipeAsync" />
+            }
         }
         else
         {
@@ -27,9 +31,17 @@
                     <dd id="accountSessions">@ViewModel.ActiveSessionsText</dd>
                 </dl>
             }
-            @if (ViewModel.IsConfirmingDelete)
+            @if (ViewModel.IsConfirmingOwnerChange)
             {
-                <p class="account-note">This deletes your account on the server and signs this phone out. Data on this phone stays.</p>
+                <p id="accountOwnerChangeNote" class="account-note">This phone holds the places, vehicle and card of another account. Remove them to continue with this account?</p>
+                <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" class="account-actions">
+                    <RadzenButton id="accountOwnerChangeCancel" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Base" Variant="Variant.Outlined" Text="Cancel" Disabled="ViewModel.IsBusy" Click="OnCancelOwnerChangeAsync" />
+                    <RadzenButton id="accountOwnerChangeConfirm" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Danger" Text="Remove and continue" Disabled="ViewModel.IsBusy" Click="OnConfirmOwnerChangeAsync" Style="flex:1" />
+                </RadzenStack>
+            }
+            else if (ViewModel.IsConfirmingDelete)
+            {
+                <p class="account-note">This deletes your account on the server, removes its data from this phone and signs this phone out.</p>
                 <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" class="account-actions">
                     <RadzenButton id="accountDeleteCancel" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Base" Variant="Variant.Outlined" Text="Keep account" Disabled="ViewModel.IsBusy" Click="OnCancelDelete" />
                     <RadzenButton id="accountDeleteConfirm" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Danger" Text="Delete for good" Disabled="ViewModel.IsBusy" Click="OnConfirmDeleteAsync" Style="flex:1" />

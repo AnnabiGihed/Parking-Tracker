@@ -1,6 +1,7 @@
 using Bunit;
 using NSubstitute;
 using ParkingTracker.Application.Features.Accounts.Abstractions;
+using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Contracts.Features.Accounts;
 using ParkingTracker.Shared.Features.Account.Components;
 using ParkingTracker.Shared.Tests.Features.Shared.TestDoubles;
@@ -44,6 +45,20 @@ public sealed class AccountSheetTests : UiTestContext
 		await host.InvokeAsync(Resolve<AccountViewModel>().OpenAsync).ConfigureAwait(false);
 
 		await host.WaitForAssertionAsync(() => host.FindAll("#accountSheet").Should().HaveCount(1)).ConfigureAwait(false);
+		return host;
+	}
+
+	/// <summary>
+	/// Signs in with an account other than the one the phone holds the data of, and opens the sheet.
+	/// </summary>
+	/// <returns>The Radzen dialog host with the question about the data.</returns>
+	private async Task<IRenderedComponent<RadzenDialog>> SignInAsOtherAccountAsync()
+	{
+		Session.SignInAsync(Arg.Any<CancellationToken>()).Returns(Result.Success());
+		Owner.GetAccountHashAsync(Arg.Any<CancellationToken>()).Returns(Result.Success("other"));
+		var host = await OpenAsync(signedIn: false).ConfigureAwait(false);
+		await host.Find("#accountSignIn").ClickAsync().ConfigureAwait(false);
+		await host.WaitForAssertionAsync(() => host.FindAll("#accountOwnerChangeConfirm").Should().HaveCount(1)).ConfigureAwait(false);
 		return host;
 	}
 	#endregion
@@ -104,6 +119,78 @@ public sealed class AccountSheetTests : UiTestContext
 
 		await host.WaitForAssertionAsync(() => host.Find("#accountError").TextContent.Trim().Should().Be(message));
 		host.FindAll("#accountSignIn").Should().HaveCount(1);
+	}
+	#endregion
+
+	#region Other Account Tests
+	/// <summary>
+	/// Verifies that signing in with another account asks whether to remove the data of the previous one, with the words of the design, and offers nothing else.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task SignIn_OtherAccount_ShouldAskBeforeRemovingTheData()
+	{
+		var host = await SignInAsOtherAccountAsync();
+
+		host.Find("#accountOwnerChangeNote").TextContent.Should().Be("This phone holds the places, vehicle and card of another account. Remove them to continue with this account?");
+		host.Find("#accountOwnerChangeConfirm").TextContent.Should().Contain("Remove and continue");
+		host.Find("#accountOwnerChangeCancel").TextContent.Should().Contain("Cancel");
+		host.FindAll("#accountSignOut, #accountDelete").Should().BeEmpty();
+		await Wiper.DidNotReceiveWithAnyArgs().WipeProfileAsync();
+	}
+
+	/// <summary>
+	/// Verifies that "Remove and continue" removes the profile, binds the account and shows the account again.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task OwnerChange_Confirm_ShouldWipeTheProfileAndShowTheAccount()
+	{
+		var host = await SignInAsOtherAccountAsync();
+
+		await host.Find("#accountOwnerChangeConfirm").ClickAsync();
+
+		await host.WaitForAssertionAsync(() => host.FindAll("#accountSignOut").Should().HaveCount(1));
+		await Wiper.Received(1).WipeProfileAsync(Arg.Any<CancellationToken>());
+		await Owner.Received(1).BindAsync(DeviceOwnerHash.Of(Me.AccountId), Arg.Any<CancellationToken>());
+		host.FindAll("#accountOwnerChangeConfirm").Should().BeEmpty();
+	}
+
+	/// <summary>
+	/// Verifies that "Cancel" signs the new account out and keeps the data.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task OwnerChange_Cancel_ShouldSignOutAndKeepTheData()
+	{
+		var host = await SignInAsOtherAccountAsync();
+
+		await host.Find("#accountOwnerChangeCancel").ClickAsync();
+
+		await host.WaitForAssertionAsync(() => host.FindAll("#accountSignIn").Should().HaveCount(1));
+		await Session.Received(1).SignOutAsync(Arg.Any<CancellationToken>());
+		await Wiper.DidNotReceiveWithAnyArgs().WipeProfileAsync();
+	}
+
+	/// <summary>
+	/// Verifies that a wipe that failed after the deletion shows the error line and a button that tries again.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Delete_WipeFails_ShouldShowTheErrorAndRetryRemovesTheData()
+	{
+		Wiper.WipeAllAsync(Arg.Any<CancellationToken>()).Returns(Result.Failure(new Error("x", "x")), Result.Success());
+		var host = await OpenAsync(signedIn: true);
+		await host.Find("#accountDelete").ClickAsync();
+		await host.Find("#accountDeleteConfirm").ClickAsync();
+
+		await host.WaitForAssertionAsync(() => host.Find("#accountError").TextContent.Trim().Should().Be(AccountViewModel.WipeFailedText));
+		host.FindAll("#accountWipeRetry").Should().HaveCount(1);
+
+		await host.Find("#accountWipeRetry").ClickAsync();
+
+		await host.WaitForAssertionAsync(() => host.FindAll("#accountWipeRetry, #accountError").Should().BeEmpty());
+		await Wiper.Received(2).WipeAllAsync(Arg.Any<CancellationToken>());
 	}
 	#endregion
 

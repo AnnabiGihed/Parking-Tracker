@@ -1,8 +1,12 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
 using ParkingTracker.Application.Features.ParkingDetection.Abstractions;
 using ParkingTracker.Application.Features.ParkingDetection.Services;
+using ParkingTracker.Application.Features.Accounts.Abstractions;
+using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
 using ParkingTracker.Application.Features.Shared.Abstractions;
+using ParkingTracker.Application.Features.Vehicles.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Queries.DecideSpot;
 using ParkingTracker.Application.Features.SpotDecisions.Queries.FindFreeSpots;
@@ -10,14 +14,19 @@ using ParkingTracker.Domain.Features.Cars.ValueObjects;
 using ParkingTracker.Domain.Features.MapLayers.ValueObjects;
 using ParkingTracker.Domain.Features.ParkingDetection.ValueObjects;
 using ParkingTracker.Domain.Features.Sectors.ValueObjects;
+using ParkingTracker.Domain.Features.Vehicles.ValueObjects;
 using ParkingTracker.Domain.Features.Shared.ValueObjects;
 using ParkingTracker.Domain.Features.SpotDecisions.ValueObjects;
 using ParkingTracker.Domain.Features.Zones.ValueObjects;
+using ParkingTracker.ViewModels.Features.Account;
 using ParkingTracker.ViewModels.Features.Car;
 using ParkingTracker.ViewModels.Features.Card;
 using ParkingTracker.ViewModels.Features.MapLayers;
+using ParkingTracker.ViewModels.Features.Places;
 using ParkingTracker.ViewModels.Features.Shared;
+using ParkingTracker.ViewModels.Features.Shared.Settings;
 using ParkingTracker.ViewModels.Features.SpotCheck;
+using ParkingTracker.ViewModels.Features.Vehicles;
 using ParkingTracker.ViewModels.Features.Welcome;
 using Pivot.Framework.Application.Abstractions.Messaging;
 using Pivot.Framework.Domain.Shared;
@@ -70,6 +79,17 @@ internal sealed class UiFixture : IDisposable
 		Alarms.ScheduleAsync(Arg.Any<IReadOnlyList<TimerReminder>>(), Arg.Any<CancellationToken>()).Returns(AlarmPrecision.Exact);
 		Car = new CarViewModel(Settings, Launcher, Spot, Toast, Clock, Alarms, Notifier, AlertCoordinator);
 		Layers = new MapLayersViewModel(Sender, Settings, Network, Launcher, Clock);
+		PlacesStore.GetPlacesAsync(Arg.Any<CancellationToken>()).Returns([]);
+		VehicleStore.GetAsync(Arg.Any<CancellationToken>()).Returns((VehicleDetails?)null);
+		Places = new PlacesViewModel(PlacesStore, Spot, Toast);
+		Vehicle = new VehicleViewModel(VehicleStore, Toast, Clock);
+		Wiper.WipeProfileAsync(Arg.Any<CancellationToken>()).Returns(Result.Success());
+		Wiper.WipeAllAsync(Arg.Any<CancellationToken>()).Returns(Result.Success());
+		Owner.GetAccountHashAsync(Arg.Any<CancellationToken>()).Returns(Result.Failure<string>(DeviceDataErrors.NotStored, ResultExceptionType.NotFound));
+		Owner.BindAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Result.Success());
+		Owner.GetErasePendingAsync(Arg.Any<CancellationToken>()).Returns(Result.Success(false));
+		Owner.MarkErasePendingAsync(Arg.Any<CancellationToken>()).Returns(Result.Success());
+		Eraser = new LocalDataEraser(Wiper, ResetNotice, Places, Vehicle, Card, Car, Alarms, NullLogger<LocalDataEraser>.Instance);
 	}
 	#endregion
 
@@ -178,9 +198,57 @@ internal sealed class UiFixture : IDisposable
 	/// Gets the real view model of the map layers, over the mediator, settings and network substitutes.
 	/// </summary>
 	public MapLayersViewModel Layers { get; }
+
+	/// <summary>
+	/// Gets the substitute for the saved places store, which holds no place.
+	/// </summary>
+	public IPlacesStore PlacesStore { get; } = Substitute.For<IPlacesStore>();
+
+	/// <summary>
+	/// Gets the substitute for the vehicle store, which holds no vehicle.
+	/// </summary>
+	public IVehicleStore VehicleStore { get; } = Substitute.For<IVehicleStore>();
+
+	/// <summary>
+	/// Gets the real view model of the saved places, over <see cref="PlacesStore"/>.
+	/// </summary>
+	public PlacesViewModel Places { get; }
+
+	/// <summary>
+	/// Gets the real view model of the vehicle profile, over <see cref="VehicleStore"/>.
+	/// </summary>
+	public VehicleViewModel Vehicle { get; }
+
+	/// <summary>
+	/// Gets the substitute for the wiper of the account data, which succeeds until a test says otherwise.
+	/// </summary>
+	public IDeviceDataWiper Wiper { get; } = Substitute.For<IDeviceDataWiper>();
+
+	/// <summary>
+	/// Gets the substitute for the store of the device owner, which holds no owner.
+	/// </summary>
+	public IDeviceOwnerStore Owner { get; } = Substitute.For<IDeviceOwnerStore>();
+
+	/// <summary>
+	/// Gets the notice that tells the stores about a wipe.
+	/// </summary>
+	public DeviceDataResetNotice ResetNotice { get; } = new();
+
+	/// <summary>
+	/// Gets the real eraser of the account data, over <see cref="Wiper"/> and the view models above.
+	/// </summary>
+	public LocalDataEraser Eraser { get; }
 	#endregion
 
 	#region Public Methods
+	/// <summary>
+	/// Builds the account view model over the given client and Google sign-in, with the owner store and the eraser of this fixture.
+	/// </summary>
+	/// <param name="client">The session client.</param>
+	/// <param name="google">Tells whether this build can sign in with Google.</param>
+	/// <returns>The account view model.</returns>
+	public AccountViewModel CreateAccount(ISessionClient client, IGoogleSignIn google) => new(client, google, Toast, Owner, Eraser);
+
 	/// <summary>
 	/// Makes every spot check answer with a decision.
 	/// </summary>
