@@ -12,22 +12,30 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
 
 ### Added
 
+- The phone now keeps the home and work places, the favourite places, the vehicle and the residents' card with your
+  account (ADR-0032). After sign-in, when the app starts or comes back, when the network returns and two seconds after
+  a change, the app reads and writes `/api/v1/me/profile`: a new phone gets the saved data after sign-in, and when
+  both sides hold data the newer change of each section wins (the favourites count as one section; a clear counts as a
+  change). The menu shows "Saved to your account", "Saving…", "Waiting for network" or "Not saved, try later" under
+  the account line. Signing out first saves the changes and then removes the places, vehicle and card from the phone;
+  when they could not be saved the account sheet asks "Sign out anyway" (they are removed) or "Stay signed in". A
+  phone with no saved data binds a second account without asking. The parked car, the timer and the card photos are
+  not synced. A section you clear on one phone also wins over an older edit made offline on another phone: the profile
+  document now carries the time of each clear (an optional `cleared` field; the schema version stays 1).
 - The phone now remembers which account its saved data belongs to (a hash of the account ID, never the ID itself).
   The first account to sign in keeps the places, vehicle and card already on the phone; signing in with another
   account asks "Remove and continue" or "Cancel" (which signs that account out and keeps the data). Deleting the
-  account now also removes its data from the phone, and the account sheet shows a retry when that fails. Signing out
-  still keeps the data.
-- Step 3 of the phone database schema adds the `sync_state` table that the profile sync will use; nothing reads it
-  yet.
+  account now also removes its data from the phone, and the account sheet shows a retry when that fails.
+- Step 3 of the phone database schema adds the `sync_state` table that the profile sync uses.
 - The API's profile endpoints, which the app will use to sync the places, vehicle and residents' card: `GET
   /api/v1/me/profile` (the decrypted document with the revision as a strong `ETag`, `304` for a matching
-  `If-None-Match`, `404` when there is none) and `PUT /api/v1/me/profile` (`If-Match` with the revision, or `If-None-Match:
-  *` to create; `428` without either, `412` for a stale revision or a lost race, `413` above 40 KB). The document is
-  validated (schema version 1, coordinates inside Brussels, field lengths) before it is encrypted. Limited per account
-  to 30 requests per minute with a burst of 10. The app does not use them yet.
+  `If-None-Match`, `404` when there is none) and `PUT /api/v1/me/profile` (`If-Match` with the revision, or
+  `If-None-Match: *` to create; `428` without either, `412` for a stale revision or a lost race, `413` above 40 KB).
+  The document is validated (schema version 1, coordinates inside Brussels, field lengths) before it is encrypted.
+  Limited per account to 30 requests per minute with a burst of 10.
 - The server can store one encrypted profile per account (table `account_profiles`, AES-256-GCM under a new secret
   profile key, deleted with the account and by the erasure re-apply). The provisioning script creates the secrets
-  `profile_key_current` and an empty `profile_key_previous`. The app does not use the store yet.
+  `profile_key_current` and an empty `profile_key_previous`.
 - The S5 account sheet in builds with a Google Web client ID: sign in with Google, view the account, sign out,
   or confirm account deletion. Session tokens stay in encrypted storage and refresh automatically. Default Release
   builds keep this entry hidden until production sign-in is configured.
@@ -55,8 +63,7 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
 
 - The side menu is one Account section in builds that can sign in: an account line at the top (Sign in, or Account with
   the start of your account id), a label that says whether the entries are on this phone only or saved with your
-  account, and Sign out and Delete account at the bottom while signed in. Delete account opens the confirmation. Nothing
-  is synced yet; the wording only says where the data is kept.
+  account, and Sign out and Delete account at the bottom while signed in. Delete account opens the confirmation.
 - Release builds now offer the Account entry and Google sign-in (until S9 through the development Google project, which
   holds an Android client for the release key). The entry is called "Account".
 - The card, car and welcome screens open as the same bottom sheets as the other screens, with the Android back button

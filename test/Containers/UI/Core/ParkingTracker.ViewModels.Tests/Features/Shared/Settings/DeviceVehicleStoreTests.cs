@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using ParkingTracker.Application.Features.ProfileSync.Abstractions;
 using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Application.Features.Vehicles.Abstractions;
 using ParkingTracker.Domain.Features.Cards.ValueObjects;
@@ -44,7 +45,7 @@ public sealed class DeviceVehicleStoreTests
 	/// <returns>The store.</returns>
 	private static DeviceVehicleStore NewStore(DeviceTestDatabase db, DeviceDataResetNotice? notice = null)
 	{
-		return new DeviceVehicleStore(db.Vehicles, db.Places, db.Cards, db.Sessions, db.UnitOfWork, db.Initializer, new FakeStartupGate(), db.Clock, NullLogger<DeviceVehicleStore>.Instance, notice ?? new DeviceDataResetNotice());
+		return new DeviceVehicleStore(db.Vehicles, db.Places, db.Cards, db.Sessions, db.UnitOfWork, db.Initializer, new FakeStartupGate(), db.Clock, NullLogger<DeviceVehicleStore>.Instance, notice ?? new DeviceDataResetNotice(), db.Tracker);
 	}
 	#endregion
 
@@ -249,8 +250,8 @@ public sealed class DeviceVehicleStoreTests
 	{
 		await using var db = await DeviceTestDatabase.CreateAsync();
 		var store = NewStore(db);
-		var settings = new DeviceSettingsStore(new SettingsStore(new InMemoryKeyValueStorage(), new InMemoryKeyValueStorage()), db.Cards, db.Sessions, db.Places, db.Vehicles, db.UnitOfWork, db.Initializer, new FakeStartupGate(), db.ReferenceData, NullLogger<DeviceSettingsStore>.Instance, new DeviceDataResetNotice());
-		var places = new DevicePlacesStore(db.Places, db.Cards, db.Vehicles, db.Sessions, db.UnitOfWork, db.Initializer, new FakeStartupGate(), NullLogger<DevicePlacesStore>.Instance, new DeviceDataResetNotice());
+		var settings = new DeviceSettingsStore(new SettingsStore(new InMemoryKeyValueStorage(), new InMemoryKeyValueStorage()), db.Cards, db.Sessions, db.Places, db.Vehicles, db.UnitOfWork, db.Initializer, new FakeStartupGate(), db.ReferenceData, NullLogger<DeviceSettingsStore>.Instance, new DeviceDataResetNotice(), db.Tracker);
+		var places = new DevicePlacesStore(db.Places, db.Cards, db.Vehicles, db.Sessions, db.UnitOfWork, db.Initializer, new FakeStartupGate(), NullLogger<DevicePlacesStore>.Instance, new DeviceDataResetNotice(), db.Tracker);
 		await settings.SaveCardAsync(new ParkingCard("bruxelles", null, new CardPeriod(null, null), [], [], [], "N-1", "1ABC234"));
 		await settings.SaveCarAsync(new ParkedCar(new GeoPoint(50.8467, 4.3525), DateTimeOffset.UnixEpoch, "Paid parking", "Rue de la Loi"));
 		await places.SavePlaceAsync(PlaceKind.Home, new GeoPoint(50.8467, 4.3525), null);
@@ -296,16 +297,16 @@ public sealed class DeviceVehicleStoreTests
 		var notice = new DeviceDataResetNotice();
 		var log = NullLogger<DeviceVehicleStore>.Instance;
 
-		var noVehicles = () => new DeviceVehicleStore(null!, db.Places, db.Cards, db.Sessions, db.UnitOfWork, db.Initializer, gate, db.Clock, log, notice); // null on purpose: proves the guard clause rejects it
-		var noPlaces = () => new DeviceVehicleStore(db.Vehicles, null!, db.Cards, db.Sessions, db.UnitOfWork, db.Initializer, gate, db.Clock, log, notice); // null on purpose: proves the guard clause rejects it
-		var noCards = () => new DeviceVehicleStore(db.Vehicles, db.Places, null!, db.Sessions, db.UnitOfWork, db.Initializer, gate, db.Clock, log, notice); // null on purpose: proves the guard clause rejects it
-		var noSessions = () => new DeviceVehicleStore(db.Vehicles, db.Places, db.Cards, null!, db.UnitOfWork, db.Initializer, gate, db.Clock, log, notice); // null on purpose: proves the guard clause rejects it
-		var noUnitOfWork = () => new DeviceVehicleStore(db.Vehicles, db.Places, db.Cards, db.Sessions, null!, db.Initializer, gate, db.Clock, log, notice); // null on purpose: proves the guard clause rejects it
-		var noInitializer = () => new DeviceVehicleStore(db.Vehicles, db.Places, db.Cards, db.Sessions, db.UnitOfWork, null!, gate, db.Clock, log, notice); // null on purpose: proves the guard clause rejects it
-		var noGate = () => new DeviceVehicleStore(db.Vehicles, db.Places, db.Cards, db.Sessions, db.UnitOfWork, db.Initializer, null!, db.Clock, log, notice); // null on purpose: proves the guard clause rejects it
-		var noClock = () => new DeviceVehicleStore(db.Vehicles, db.Places, db.Cards, db.Sessions, db.UnitOfWork, db.Initializer, gate, null!, log, notice); // null on purpose: proves the guard clause rejects it
-		var noLog = () => new DeviceVehicleStore(db.Vehicles, db.Places, db.Cards, db.Sessions, db.UnitOfWork, db.Initializer, gate, db.Clock, null!, notice); // null on purpose: proves the guard clause rejects it
-		var noNotice = () => new DeviceVehicleStore(db.Vehicles, db.Places, db.Cards, db.Sessions, db.UnitOfWork, db.Initializer, gate, db.Clock, log, null!); // null on purpose: proves the guard clause rejects it
+		var noVehicles = () => new DeviceVehicleStore(null!, db.Places, db.Cards, db.Sessions, db.UnitOfWork, db.Initializer, gate, db.Clock, log, notice, db.Tracker); // null on purpose: proves the guard clause rejects it
+		var noPlaces = () => new DeviceVehicleStore(db.Vehicles, null!, db.Cards, db.Sessions, db.UnitOfWork, db.Initializer, gate, db.Clock, log, notice, db.Tracker); // null on purpose: proves the guard clause rejects it
+		var noCards = () => new DeviceVehicleStore(db.Vehicles, db.Places, null!, db.Sessions, db.UnitOfWork, db.Initializer, gate, db.Clock, log, notice, db.Tracker); // null on purpose: proves the guard clause rejects it
+		var noSessions = () => new DeviceVehicleStore(db.Vehicles, db.Places, db.Cards, null!, db.UnitOfWork, db.Initializer, gate, db.Clock, log, notice, db.Tracker); // null on purpose: proves the guard clause rejects it
+		var noUnitOfWork = () => new DeviceVehicleStore(db.Vehicles, db.Places, db.Cards, db.Sessions, null!, db.Initializer, gate, db.Clock, log, notice, db.Tracker); // null on purpose: proves the guard clause rejects it
+		var noInitializer = () => new DeviceVehicleStore(db.Vehicles, db.Places, db.Cards, db.Sessions, db.UnitOfWork, null!, gate, db.Clock, log, notice, db.Tracker); // null on purpose: proves the guard clause rejects it
+		var noGate = () => new DeviceVehicleStore(db.Vehicles, db.Places, db.Cards, db.Sessions, db.UnitOfWork, db.Initializer, null!, db.Clock, log, notice, db.Tracker); // null on purpose: proves the guard clause rejects it
+		var noClock = () => new DeviceVehicleStore(db.Vehicles, db.Places, db.Cards, db.Sessions, db.UnitOfWork, db.Initializer, gate, null!, log, notice, db.Tracker); // null on purpose: proves the guard clause rejects it
+		var noLog = () => new DeviceVehicleStore(db.Vehicles, db.Places, db.Cards, db.Sessions, db.UnitOfWork, db.Initializer, gate, db.Clock, null!, notice, db.Tracker); // null on purpose: proves the guard clause rejects it
+		var noNotice = () => new DeviceVehicleStore(db.Vehicles, db.Places, db.Cards, db.Sessions, db.UnitOfWork, db.Initializer, gate, db.Clock, log, null!, db.Tracker); // null on purpose: proves the guard clause rejects it
 
 		noVehicles.Should().Throw<ArgumentNullException>();
 		noPlaces.Should().Throw<ArgumentNullException>();
@@ -331,7 +332,7 @@ public sealed class DeviceVehicleStoreTests
 		scope.CommitAsync(Arg.Any<CancellationToken>()).Returns(Result.Failure(new Error("Test.Refused", "The database refused the change.")));
 		var unitOfWork = Substitute.For<IDeviceUnitOfWork>();
 		unitOfWork.BeginAsync(Arg.Any<CancellationToken>()).Returns(scope);
-		var store = new DeviceVehicleStore(Substitute.For<IVehicleRepository>(), db.Places, db.Cards, db.Sessions, unitOfWork, db.Initializer, new FakeStartupGate(), db.Clock, NullLogger<DeviceVehicleStore>.Instance, new DeviceDataResetNotice());
+		var store = new DeviceVehicleStore(Substitute.For<IVehicleRepository>(), db.Places, db.Cards, db.Sessions, unitOfWork, db.Initializer, new FakeStartupGate(), db.Clock, NullLogger<DeviceVehicleStore>.Instance, new DeviceDataResetNotice(), Substitute.For<IProfileChangeTracker>());
 
 		var remove = () => store.RemoveAsync();
 

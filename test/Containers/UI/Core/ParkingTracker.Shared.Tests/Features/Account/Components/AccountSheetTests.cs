@@ -6,6 +6,7 @@ using ParkingTracker.Contracts.Features.Accounts;
 using ParkingTracker.Shared.Features.Account.Components;
 using ParkingTracker.Shared.Tests.Features.Shared.TestDoubles;
 using ParkingTracker.ViewModels.Features.Account;
+using ParkingTracker.ViewModels.Features.ProfileSync;
 using ParkingTracker.ViewModels.Features.Shared;
 using Pivot.Framework.Domain.Shared;
 using Radzen.Blazor;
@@ -260,6 +261,153 @@ public sealed class AccountSheetTests : UiTestContext
 
 		await host.WaitForAssertionAsync(() => host.FindAll("#accountDelete").Should().HaveCount(1));
 		await Session.DidNotReceive().DeleteAccountAsync(Arg.Any<CancellationToken>());
+	}
+	#endregion
+
+	#region Sign Out With Unsaved Changes Tests
+	/// <summary>
+	/// Opens the sheet for an account whose data is bound to the phone, with a sync that ended in the given state.
+	/// </summary>
+	/// <param name="state">The state the sync ends in.</param>
+	/// <returns>The Radzen dialog host.</returns>
+	private async Task<IRenderedComponent<RadzenDialog>> OpenVerifiedAsync(ProfileSyncState state)
+	{
+		Owner.GetAccountHashAsync(Arg.Any<CancellationToken>()).Returns(Result.Success(DeviceOwnerHash.Of(Me.AccountId)));
+		Sync.SyncAsync(Arg.Any<CancellationToken>()).Returns(new ProfileSyncResult(true, state));
+		return await OpenAsync(signedIn: true).ConfigureAwait(false);
+	}
+
+	/// <summary>
+	/// Verifies that a sign-out with changes that are not saved asks, with the words of the question and its two buttons, and signs nothing out yet.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task SignOut_NotSynced_ShouldAskWithTheTwoChoices()
+	{
+		var host = await OpenVerifiedAsync(ProfileSyncState.Offline);
+
+		await host.Find("#accountSignOut").ClickAsync();
+
+		await host.WaitForAssertionAsync(() => host.FindAll("#accountSignOutNote").Should().HaveCount(1));
+		host.Find("#accountSignOutNote").TextContent.Should().Be("Your latest changes are not saved to your account yet. If you sign out now they are removed from this phone.");
+		host.Find("#accountSignOutAnyway").TextContent.Should().Contain("Sign out anyway");
+		host.Find("#accountSignOutStay").TextContent.Should().Contain("Stay signed in");
+		host.FindAll("#accountSignOut, #accountDelete").Should().BeEmpty();
+		await Session.DidNotReceive().SignOutAsync(Arg.Any<CancellationToken>());
+	}
+
+	/// <summary>
+	/// Verifies that "Stay signed in" returns to the account with nothing signed out or removed.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task SignOut_Stay_ShouldKeepTheSessionAndTheData()
+	{
+		var host = await OpenVerifiedAsync(ProfileSyncState.Error);
+		await host.Find("#accountSignOut").ClickAsync();
+		await host.WaitForAssertionAsync(() => host.FindAll("#accountSignOutStay").Should().HaveCount(1));
+
+		await host.Find("#accountSignOutStay").ClickAsync();
+
+		await host.WaitForAssertionAsync(() => host.FindAll("#accountSignOut").Should().HaveCount(1));
+		host.FindAll("#accountSignOutNote").Should().BeEmpty();
+		await Session.DidNotReceive().SignOutAsync(Arg.Any<CancellationToken>());
+		await Wiper.DidNotReceiveWithAnyArgs().WipeProfileAsync();
+	}
+
+	/// <summary>
+	/// Verifies that "Sign out anyway" signs out and removes the profile from the phone.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task SignOut_Anyway_ShouldSignOutAndWipeTheProfile()
+	{
+		var host = await OpenVerifiedAsync(ProfileSyncState.Offline);
+		await host.Find("#accountSignOut").ClickAsync();
+		await host.WaitForAssertionAsync(() => host.FindAll("#accountSignOutAnyway").Should().HaveCount(1));
+
+		await host.Find("#accountSignOutAnyway").ClickAsync();
+
+		await host.WaitForAssertionAsync(() => host.FindAll("#accountSignIn").Should().HaveCount(1));
+		await Session.Received(1).SignOutAsync(Arg.Any<CancellationToken>());
+		await Wiper.Received(1).WipeProfileAsync(Arg.Any<CancellationToken>());
+	}
+
+	/// <summary>
+	/// Verifies that a sign-out whose sync ended synced signs out without asking and removes the profile.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task SignOut_Synced_ShouldSignOutWithoutAsking()
+	{
+		var host = await OpenVerifiedAsync(ProfileSyncState.Synced);
+
+		await host.Find("#accountSignOut").ClickAsync();
+
+		await host.WaitForAssertionAsync(() => host.FindAll("#accountSignIn").Should().HaveCount(1));
+		host.FindAll("#accountSignOutNote").Should().BeEmpty();
+		await Wiper.Received(1).WipeProfileIfSavedAsync(Arg.Any<CancellationToken>());
+	}
+	#endregion
+
+	#region Local Removal Tests
+	/// <summary>
+	/// Verifies that a sign-out that found a change saved after the sync leaves the phone signed out and asks, in the signed-out sheet, whether to
+	/// remove the data from the phone or keep it there.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task SignOut_ChangedSinceTheSync_ShouldAskToRemoveOrKeepTheData()
+	{
+		Wiper.WipeProfileIfSavedAsync(Arg.Any<CancellationToken>()).Returns(Result.Success(false));
+		var host = await OpenVerifiedAsync(ProfileSyncState.Synced);
+
+		await host.Find("#accountSignOut").ClickAsync();
+
+		await host.WaitForAssertionAsync(() => host.FindAll("#accountLocalRemovalNote").Should().HaveCount(1));
+		host.Find("#accountLocalRemovalNote").TextContent.Should().Be(AccountViewModel.LocalRemovalNoteText);
+		host.Find("#accountRemoveFromPhone").TextContent.Should().Contain("Remove from this phone");
+		host.Find("#accountKeepOnPhone").TextContent.Should().Contain("Keep on this phone");
+		host.FindAll("#accountSignIn").Should().HaveCount(1);
+		await Wiper.DidNotReceiveWithAnyArgs().WipeProfileAsync();
+	}
+
+	/// <summary>
+	/// Verifies that "Remove from this phone" removes the data and "Keep on this phone" does not.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task LocalRemoval_Choices_ShouldRemoveOrKeepTheData()
+	{
+		Wiper.WipeProfileIfSavedAsync(Arg.Any<CancellationToken>()).Returns(Result.Success(false));
+		var host = await OpenVerifiedAsync(ProfileSyncState.Synced);
+		await host.Find("#accountSignOut").ClickAsync();
+		await host.WaitForAssertionAsync(() => host.FindAll("#accountKeepOnPhone").Should().HaveCount(1));
+
+		await host.Find("#accountKeepOnPhone").ClickAsync();
+
+		await host.WaitForAssertionAsync(() => host.FindAll("#accountLocalRemovalNote").Should().BeEmpty());
+		await Wiper.DidNotReceiveWithAnyArgs().WipeProfileAsync();
+		var again = Resolve<AccountViewModel>();
+		again.IsConfirmingLocalRemoval.Should().BeFalse();
+	}
+
+	/// <summary>
+	/// Verifies that "Remove from this phone" removes the profile.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task LocalRemoval_Remove_ShouldWipeTheProfile()
+	{
+		Wiper.WipeProfileIfSavedAsync(Arg.Any<CancellationToken>()).Returns(Result.Success(false));
+		var host = await OpenVerifiedAsync(ProfileSyncState.Synced);
+		await host.Find("#accountSignOut").ClickAsync();
+		await host.WaitForAssertionAsync(() => host.FindAll("#accountRemoveFromPhone").Should().HaveCount(1));
+
+		await host.Find("#accountRemoveFromPhone").ClickAsync();
+
+		await host.WaitForAssertionAsync(() => host.FindAll("#accountLocalRemovalNote").Should().BeEmpty());
+		await Wiper.Received(1).WipeProfileAsync(Arg.Any<CancellationToken>());
 	}
 	#endregion
 }

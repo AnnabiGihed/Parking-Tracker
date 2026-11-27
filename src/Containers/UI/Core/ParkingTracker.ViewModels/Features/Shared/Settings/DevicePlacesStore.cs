@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using ParkingTracker.Application.Features.ParkingSessions.Abstractions;
+using ParkingTracker.Application.Features.ProfileSync.Abstractions;
 using ParkingTracker.Application.Features.ResidentCards.Abstractions;
 using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
 using ParkingTracker.Application.Features.Shared.Abstractions;
@@ -21,7 +22,8 @@ namespace ParkingTracker.ViewModels.Features.Shared.Settings;
 ///              exists but cannot be read is never read as "none": the read throws <see cref="SavedDataUnreadableException"/>; a write
 ///              replaces a list that is unreadable for good, but never one whose key cannot be read now. When the key was lost
 ///              (<see cref="DeviceDataErrors.KeyLost"/>), saving a place removes the stale encrypted rows in the same scope, and only then
-///              does a new key get created.
+///              does a new key get created. Every save or clear of a place stamps its synced section in the same scope (ADR-0032), and a
+///              commit tells the sync trigger.
 /// </summary>
 public sealed partial class DevicePlacesStore : IPlacesStore
 {
@@ -70,6 +72,11 @@ public sealed partial class DevicePlacesStore : IPlacesStore
 	/// Tells the other stores that the stale rows were removed, so that they forget what they remembered.
 	/// </summary>
 	private readonly DeviceDataResetNotice resetNotice;
+
+	/// <summary>
+	/// Records the moment of a change of a synced section, in the scope of the change (ADR-0032).
+	/// </summary>
+	private readonly IProfileChangeTracker tracker;
 	#endregion
 
 	#region Constructors
@@ -85,6 +92,7 @@ public sealed partial class DevicePlacesStore : IPlacesStore
 	/// <param name="gate">The start-up gate that finishes before the saved values are read.</param>
 	/// <param name="logger">The log.</param>
 	/// <param name="resetNotice">Tells the other stores that the stale rows were removed.</param>
+	/// <param name="tracker">Records the moment of a change of a synced section, in the scope of the change.</param>
 	/// <exception cref="ArgumentNullException">An argument is <see langword="null"/>.</exception>
 	public DevicePlacesStore(
 		ISavedPlacesRepository places,
@@ -95,7 +103,8 @@ public sealed partial class DevicePlacesStore : IPlacesStore
 		IDeviceDatabaseInitializer initializer,
 		IStartupGate gate,
 		ILogger<DevicePlacesStore> logger,
-		DeviceDataResetNotice resetNotice)
+		DeviceDataResetNotice resetNotice,
+		IProfileChangeTracker tracker)
 	{
 		ArgumentNullException.ThrowIfNull(places);
 		ArgumentNullException.ThrowIfNull(cards);
@@ -106,6 +115,7 @@ public sealed partial class DevicePlacesStore : IPlacesStore
 		ArgumentNullException.ThrowIfNull(gate);
 		ArgumentNullException.ThrowIfNull(logger);
 		ArgumentNullException.ThrowIfNull(resetNotice);
+		ArgumentNullException.ThrowIfNull(tracker);
 		this.places = places;
 		this.cards = cards;
 		this.vehicles = vehicles;
@@ -115,6 +125,7 @@ public sealed partial class DevicePlacesStore : IPlacesStore
 		this.gate = gate;
 		this.logger = logger;
 		this.resetNotice = resetNotice;
+		this.tracker = tracker;
 	}
 	#endregion
 
@@ -161,34 +172,34 @@ public sealed partial class DevicePlacesStore : IPlacesStore
 	public async Task<Result> SavePlaceAsync(PlaceKind kind, GeoPoint point, string? addressText, CancellationToken cancellationToken = default)
 	{
 		ThrowIfNotShortcut(kind);
-		return await ChangeAsync(list => kind == PlaceKind.Home ? list.SetHome(kind.ToString(), point, addressText) : list.SetWork(kind.ToString(), point, addressText), cancellationToken).ConfigureAwait(false);
+		return await ChangeAsync(list => kind == PlaceKind.Home ? list.SetHome(kind.ToString(), point, addressText) : list.SetWork(kind.ToString(), point, addressText), SectionOf(kind), cancellationToken).ConfigureAwait(false);
 	}
 
 	/// <inheritdoc />
 	public async Task ClearPlaceAsync(PlaceKind kind, CancellationToken cancellationToken = default)
 	{
 		ThrowIfNotShortcut(kind);
-		await RemoveAsync(list => FindShortcut(list, kind), cancellationToken).ConfigureAwait(false);
+		await RemoveAsync(list => FindShortcut(list, kind), SectionOf(kind), cancellationToken).ConfigureAwait(false);
 	}
 
 	/// <inheritdoc />
 	public Task<Result> AddFavouriteAsync(string label, GeoPoint point, string? addressText, CancellationToken cancellationToken = default)
 	{
-		return ChangeAsync(list => list.AddFavourite(label, point, addressText), cancellationToken);
+		return ChangeAsync(list => list.AddFavourite(label, point, addressText), SyncSection.Favourites, cancellationToken);
 	}
 
 	/// <inheritdoc />
 	public Task<Result> UpdateFavouriteAsync(SavedPlaceId id, string label, GeoPoint point, string? addressText, CancellationToken cancellationToken = default)
 	{
 		ArgumentNullException.ThrowIfNull(id);
-		return ChangeAsync(list => list.UpdateFavourite(id, label, point, addressText), cancellationToken);
+		return ChangeAsync(list => list.UpdateFavourite(id, label, point, addressText), SyncSection.Favourites, cancellationToken);
 	}
 
 	/// <inheritdoc />
 	public Task RemoveFavouriteAsync(SavedPlaceId id, CancellationToken cancellationToken = default)
 	{
 		ArgumentNullException.ThrowIfNull(id);
-		return RemoveAsync(list => list.Places.FirstOrDefault(place => place.Id == id && place.Kind == PlaceKind.Favourite), cancellationToken);
+		return RemoveAsync(list => list.Places.FirstOrDefault(place => place.Id == id && place.Kind == PlaceKind.Favourite), SyncSection.Favourites, cancellationToken);
 	}
 	#endregion
 
@@ -197,10 +208,11 @@ public sealed partial class DevicePlacesStore : IPlacesStore
 	/// Applies one change to the list and writes it: the change runs on the stored list (or a new one), and nothing is written when it fails.
 	/// </summary>
 	/// <param name="change">The change of the domain.</param>
+	/// <param name="section">The synced section the change belongs to.</param>
 	/// <param name="cancellationToken">Cancels the write.</param>
 	/// <returns>A task with success, or the failure of the change.</returns>
 	/// <exception cref="InvalidOperationException">The database refused the change.</exception>
-	private async Task<Result> ChangeAsync(Func<PlaceList, Result> change, CancellationToken cancellationToken)
+	private async Task<Result> ChangeAsync(Func<PlaceList, Result> change, SyncSection section, CancellationToken cancellationToken)
 	{
 		await EnsureReadyAsync().ConfigureAwait(false);
 		var scope = await unitOfWork.BeginAsync(cancellationToken).ConfigureAwait(false);
@@ -220,7 +232,9 @@ public sealed partial class DevicePlacesStore : IPlacesStore
 			}
 
 			ThrowIfFailed(staged);
+			tracker.Stage(scope, section);
 			await CommitAsync(scope, cancellationToken).ConfigureAwait(false);
+			tracker.NotifyCommitted();
 			return Result.Success();
 		}
 	}
@@ -229,10 +243,11 @@ public sealed partial class DevicePlacesStore : IPlacesStore
 	/// Removes one place from the list and writes it; nothing happens when the place is not saved.
 	/// </summary>
 	/// <param name="find">Finds the place in the stored list.</param>
+	/// <param name="section">The synced section the removal belongs to.</param>
 	/// <param name="cancellationToken">Cancels the write.</param>
 	/// <returns>A task that completes when the place is removed.</returns>
 	/// <exception cref="InvalidOperationException">The database refused the change.</exception>
-	private async Task RemoveAsync(Func<PlaceList, SavedPlace?> find, CancellationToken cancellationToken)
+	private async Task RemoveAsync(Func<PlaceList, SavedPlace?> find, SyncSection section, CancellationToken cancellationToken)
 	{
 		await EnsureReadyAsync().ConfigureAwait(false);
 		var scope = await unitOfWork.BeginAsync(cancellationToken).ConfigureAwait(false);
@@ -255,7 +270,9 @@ public sealed partial class DevicePlacesStore : IPlacesStore
 				ThrowIfFailed(await places.UpdateAsync(scope, list, cancellationToken).ConfigureAwait(false));
 			}
 
+			tracker.Stage(scope, section);
 			await CommitAsync(scope, cancellationToken).ConfigureAwait(false);
+			tracker.NotifyCommitted();
 		}
 	}
 
@@ -360,6 +377,13 @@ public sealed partial class DevicePlacesStore : IPlacesStore
 	/// <param name="kind">Home or work.</param>
 	/// <returns>The place, or <see langword="null"/> when it is not saved.</returns>
 	private static SavedPlace? FindShortcut(PlaceList list, PlaceKind kind) => kind == PlaceKind.Home ? list.Home : list.Work;
+
+	/// <summary>
+	/// Gives the synced section of a shortcut.
+	/// </summary>
+	/// <param name="kind">Home or work.</param>
+	/// <returns>The section.</returns>
+	private static SyncSection SectionOf(PlaceKind kind) => kind == PlaceKind.Home ? SyncSection.Home : SyncSection.Work;
 
 	/// <summary>
 	/// Refuses a kind that is not a shortcut.

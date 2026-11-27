@@ -60,6 +60,7 @@ public sealed class ContractSchemaFilter : ISchemaFilter
 				["updatedAt"] = "2026-11-20T10:00:00+00:00",
 			},
 			["card"] = null,
+			["cleared"] = new JsonObject { ["work"] = "2026-11-20T09:00:00+00:00" },
 		},
 		[typeof(ProblemDetails)] = new JsonObject { ["type"] = "Error.Code", ["title"] = "Short title of the problem", ["status"] = 400, ["detail"] = "What went wrong, without private data." },
 	};

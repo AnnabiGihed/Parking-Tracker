@@ -4,11 +4,13 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using ParkingTracker.Application.Features.Accounts.Abstractions;
 using ParkingTracker.Application.Features.AddressSearch.Abstractions;
+using ParkingTracker.Application.Features.ProfileSync.Abstractions;
 using ParkingTracker.Application.Features.Sectors.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
 using ParkingTracker.Infrastructure.Features.Accounts;
 using ParkingTracker.Infrastructure.Features.AddressSearch;
 using ParkingTracker.Infrastructure.Features.PaidHours;
+using ParkingTracker.Infrastructure.Features.ProfileSync;
 using ParkingTracker.Infrastructure.Features.Sectors;
 using ParkingTracker.Infrastructure.Features.Shared.Http;
 using ParkingTracker.Infrastructure.Features.Zones;
@@ -77,6 +79,7 @@ public sealed class InfrastructureServiceInstaller : BaseServiceInstaller, IServ
 		services.AddTransient<AuthenticatedHandler>();
 		services.AddHttpClient(SessionApiClient.ClientName, ConfigureAccountClient);
 		services.AddHttpClient<ISessionClient, SessionClient>(ConfigureAccountClient).AddHttpMessageHandler<AuthenticatedHandler>();
+		services.AddHttpClient<IProfileClient, ProfileClient>(ConfigureAccountClient).AddHttpMessageHandler<AuthenticatedHandler>();
 	}
 
 	/// <summary>

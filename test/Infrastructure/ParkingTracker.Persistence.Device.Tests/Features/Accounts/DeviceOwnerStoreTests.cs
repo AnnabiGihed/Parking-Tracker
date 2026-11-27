@@ -122,7 +122,7 @@ public sealed class DeviceOwnerStoreTests
 		await Create(db).MarkErasePendingAsync();
 		var restarted = Create(db);
 		(await restarted.GetErasePendingAsync()).Value.Should().BeTrue();
-		var wiper = new DeviceDataWiper(db.UnitOfWork, db.Initializer, db.Places, db.Vehicles, db.Cards, db.Sessions);
+		var wiper = new DeviceDataWiper(db.UnitOfWork, db.Initializer, db.Places, db.Vehicles, db.Cards, db.Sessions, db.SyncState);
 
 		(await wiper.WipeAllAsync()).IsSuccess.Should().BeTrue();
 

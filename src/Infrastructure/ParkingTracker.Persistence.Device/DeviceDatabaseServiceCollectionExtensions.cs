@@ -1,11 +1,13 @@
 using Microsoft.Extensions.DependencyInjection;
 using ParkingTracker.Application.Features.ParkingSessions.Abstractions;
+using ParkingTracker.Application.Features.ProfileSync.Abstractions;
 using ParkingTracker.Application.Features.ResidentCards.Abstractions;
 using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
 using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Application.Features.Vehicles.Abstractions;
 using ParkingTracker.Persistence.Device.Features.Accounts;
 using ParkingTracker.Persistence.Device.Features.ParkingSessions;
+using ParkingTracker.Persistence.Device.Features.ProfileSync;
 using ParkingTracker.Persistence.Device.Features.ResidentCards;
 using ParkingTracker.Persistence.Device.Features.SavedPlaces;
 using ParkingTracker.Persistence.Device.Features.Shared.Database;
@@ -49,6 +51,9 @@ public static class DeviceDatabaseServiceCollectionExtensions
 		services.AddSingleton<IVehicleRepository, VehicleRepository>();
 		services.AddSingleton<IDeviceOwnerStore, DeviceOwnerStore>();
 		services.AddSingleton<IDeviceDataWiper, DeviceDataWiper>();
+		services.AddSingleton<ISyncStateRepository, SyncStateRepository>();
+		services.AddSingleton<IProfileChangeTracker, ProfileChangeTracker>();
+		services.AddSingleton<IProfileLocalStore, ProfileLocalStore>();
 		return services;
 	}
 	#endregion

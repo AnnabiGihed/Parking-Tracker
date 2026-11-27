@@ -4,7 +4,9 @@ using NSubstitute;
 using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
 using ParkingTracker.Domain.Features.Sectors.ValueObjects;
+using ParkingTracker.Persistence.Device.Features.Accounts;
 using ParkingTracker.Persistence.Device.Features.ParkingSessions;
+using ParkingTracker.Persistence.Device.Features.ProfileSync;
 using ParkingTracker.Persistence.Device.Features.ResidentCards;
 using ParkingTracker.Persistence.Device.Features.SavedPlaces;
 using ParkingTracker.Persistence.Device.Features.Shared.Database;
@@ -61,6 +63,10 @@ public sealed class DeviceTestDatabase : IAsyncDisposable
 		Places = new SavedPlacesRepository(Database, Cipher, NullLogger<SavedPlacesRepository>.Instance);
 		Sessions = new ParkingSessionRepository(Database, Cipher, NullLogger<ParkingSessionRepository>.Instance);
 		Vehicles = new VehicleRepository(Database, Cipher, NullLogger<VehicleRepository>.Instance);
+		SyncState = new SyncStateRepository(Database, NullLogger<SyncStateRepository>.Instance);
+		Tracker = new ProfileChangeTracker(SyncState, Clock);
+		Owner = new DeviceOwnerStore(Database, UnitOfWork, Initializer, Clock, NullLogger<DeviceOwnerStore>.Instance);
+		LocalProfile = new ProfileLocalStore(Places, Vehicles, Cards, SyncState, Owner, UnitOfWork, Initializer, ReferenceData, Clock, NullLogger<ProfileLocalStore>.Instance);
 	}
 	#endregion
 
@@ -135,6 +141,26 @@ public sealed class DeviceTestDatabase : IAsyncDisposable
 	/// Gets the repository of the vehicle profile.
 	/// </summary>
 	public VehicleRepository Vehicles { get; }
+
+	/// <summary>
+	/// Gets the repository of the sync state.
+	/// </summary>
+	public SyncStateRepository SyncState { get; }
+
+	/// <summary>
+	/// Gets the tracker that stamps the changes of the synced sections, over the fake clock.
+	/// </summary>
+	public ProfileChangeTracker Tracker { get; }
+
+	/// <summary>
+	/// Gets the store of the account the data on the phone is bound to.
+	/// </summary>
+	public DeviceOwnerStore Owner { get; }
+
+	/// <summary>
+	/// Gets the store that reads and writes the local profile for the sync.
+	/// </summary>
+	public ProfileLocalStore LocalProfile { get; }
 	#endregion
 
 	#region Factory Methods

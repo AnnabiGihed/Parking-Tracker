@@ -34,7 +34,7 @@ public sealed class LostKeyCleanupTests
 	public async Task RemoveStaleRows_LostKey_ShouldRemoveRowsClearThePlateAndRaiseTheNotice()
 	{
 		await using var db = await DeviceTestDatabase.CreateAsync();
-		var places = new DevicePlacesStore(db.Places, db.Cards, db.Vehicles, db.Sessions, db.UnitOfWork, db.Initializer, new FakeStartupGate(), NullLogger<DevicePlacesStore>.Instance, new DeviceDataResetNotice());
+		var places = new DevicePlacesStore(db.Places, db.Cards, db.Vehicles, db.Sessions, db.UnitOfWork, db.Initializer, new FakeStartupGate(), NullLogger<DevicePlacesStore>.Instance, new DeviceDataResetNotice(), db.Tracker);
 		await places.SavePlaceAsync(PlaceKind.Home, new GeoPoint(50.8467, 4.3525), null);
 		var vehicle = Vehicle.Create(new VehicleDetails("renault", "Clio", 2019, FuelType.Petrol, EuroNorm.Euro6, null, "1ABC234"), 2026).Value;
 		await db.ApplyAsync(scope => db.Vehicles.AddAsync(scope, vehicle));

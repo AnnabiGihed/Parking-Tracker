@@ -1168,11 +1168,11 @@ sequenceDiagram
   year, fuel and Euro standard as enum numbers, plugs as a JSON array of numbers, battery kWh, range km, plate as
   ciphertext), `sync_state` (step 3, one row: the base revision of the server copy, a changed flag, the
   pending-removal flag `erase_pending` and the moment each synced section last changed, in milliseconds since 1970;
-  only the account flow and the wipes write it until the sync service exists) and `schema_version`. There is no outbox
-  table (3.1). The phone holds one card, one list of places, one session and one vehicle profile, and the schema
-  enforces it: a `slot` column that is always 1 and unique in `resident_cards`, `parking_sessions` and `vehicles`, a
-  unique index on `position` and a partial unique index on `kind` for home and work in `saved_places`. Every row
-  carries the identifier of its aggregate (`saved_places` also the identifier of the list).
+  written by the stores (a user change), by `ProfileLocalStore` (the sync) and by the wipes) and `schema_version`.
+  There is no outbox table (3.1). The phone holds one card, one list of places, one session and one vehicle profile,
+  and the schema enforces it: a `slot` column that is always 1 and unique in `resident_cards`, `parking_sessions` and
+  `vehicles`, a unique index on `position` and a partial unique index on `kind` for home and work in `saved_places`.
+  Every row carries the identifier of its aggregate (`saved_places` also the identifier of the list).
 - **Repositories.** One per aggregate (`ResidentCard`, `SavedPlaces`, `ParkingSession`, `Vehicle`): narrow ports in the
   phone's Application project, implementations by hand in `ParkingTracker.Persistence.Device`. They map each aggregate
   to row types that never leave the project and rehydrate through the aggregates' `Restore` factories (stored
@@ -1282,8 +1282,6 @@ sequenceDiagram
     it holds the migration marker, the old car and timer, the alerts, layers and welcome flags. It is excluded because a
     restored marker without the excluded database would tell the move that the data was already moved. The price: those
     preferences are not restored on a new phone either.
-  - *Not done yet.* The sync service (ADR-0032) does not write `sync_state` yet, and sign-out does not wipe the phone:
-    with no sync, the data would exist nowhere else.
 - **Binding to the account.** Whenever a signed-in account becomes known (after sign-in and `GET /me`, when the sheet
   opens, and when the menu refreshes the state at start), `AccountViewModel` compares the hash of the API account ID
   (lowercase hex SHA-256 of the ID in the `N` format, so no account ID is stored in plain text) with `device_owner`
@@ -1301,8 +1299,89 @@ sequenceDiagram
   at the next open or refresh while the flag is set, whatever the sign-in state, also after a restart. Each wipe is
   one transaction of `IDeviceDataWiper` in `ParkingTracker.Persistence.Device`; afterwards `DeviceDataResetNotice`
   makes the stores forget what they cached and the view models read their data again, so the screens show it empty
-  without a restart. Sign-out keeps the data until the sync service arrives (ADR-0032).
-- **What syncs:** nothing (3.8). The tokens live in `SecureStorage` (`pt.session`), never in the database.
+  without a restart. A phone that holds no place, vehicle or card (`IProfileLocalStore.ReadAsync` says empty; a
+  profile that cannot be read counts as full) skips that question: it wipes the old sync state, binds the new hash and
+  verifies it, because the old base revision must never be matched against another account's revisions.
+- **What syncs (ADR-0032).** The home place, the work place, the list of favourites (one section), the vehicle and the
+  residents' card with its number and plate. The parked car, the timer and the card photos never sync. The tokens live
+  in `SecureStorage` (`pt.session`), never in the database.
+- **Change tracking.** Every save or clear of a section by `DevicePlacesStore`, `DeviceVehicleStore` or
+  `DeviceSettingsStore` stages, through `IProfileChangeTracker`, the section's `*_updated_at` (clock, in milliseconds)
+  and `dirty = 1` in the scope of the data change, so data and stamp are committed together or not at all; after the
+  commit the tracker raises `Changed`. Writing data that came from the server goes through `IProfileLocalStore` and
+  never stamps. A section that was cleared keeps its moment, with no data.
+- **Sync (`ProfileSyncService`).** One run at a time; later callers join it. It starts only when `OwnerVerification`
+  holds the hash of the account read from `/me` in this run and the hash stored in `device_owner` equals it; otherwise
+  it makes no call. A round reads the local profile as a `ProfileDocument` (a section without a moment carries the
+  Unix epoch, which reads as "no moment") and the sync state, then `GET /me/profile` with `If-None-Match` of the base
+  revision: 304 uploads with `If-Match` when `dirty`; 200 applies the server copy when the base is set and the phone
+  did not change, otherwise merges, applies the merge and uploads it with `If-Match` of the revision just read when it
+  differs from the server copy; 404 creates the profile with `If-None-Match: *` when the phone holds a section. `412`
+  repeats from the read, at most three rounds (then `Error`); `400`, `413` and `428` are logged by status only and
+  stop the run with the changes kept; a network failure or timeout ends `Offline` with the changes kept. The base
+  revision is stored and `dirty` cleared in one transaction that first checks that no section moment changed since the
+  snapshot; an edit made during the upload therefore keeps `dirty` and runs one more round, and applying a download is
+  refused the same way. The state (`Synced`, `Pending`, `Syncing`, `Offline`, `Error`) has a `Changed` event; the menu
+  shows it under the account line (`menuSyncText`): "Saved to your account", "Saving…", "Waiting for network", "Not
+  saved, try later".
+- **Document shape.** `schemaVersion` 1, `home`, `work`, `favourites` (always present, with its own `updatedAt`),
+  `vehicle`, `card` and the optional `cleared` (`home`, `work`, `vehicle`, `card`: the moment a section that is absent
+  from the document was cleared). The phone writes a `cleared` moment for each absent section that has a
+  `*_updated_at` and reads it back as the moment of that absent section; the server accepts it only for a section that
+  is absent from the same document, within a day ahead of its clock, and stores it in the encrypted JSON like the
+  rest.
+- **Merge (`ProfileMerge`).** Per section: the newer moment wins; a missing moment is older than any moment; on equal
+  moments the server wins; a section cleared on the phone (no data, a moment) beats an older server value. Where
+  neither side has a moment, the side that holds data wins over an empty one, so data from before the sync existed is
+  not discarded; with data on both sides the server wins. A clear travels in `cleared`, so a clear made on another
+  phone beats this phone's older value in a merge too; a document written before `cleared` existed has no moment for
+  an absent section, which reads as "no moment". Applying a document writes only the sections that differ from the
+  phone, in one transaction with the new sync state.
+- **Triggers.** After the owner is verified (sign-in, open, refresh), when the app starts or resumes and when the
+  network returns (`PlatformRelay` calls `ProfileSyncTrigger.RequestNow`), and two seconds after the last user change
+  (`ProfileSyncTrigger` debounces the tracker's `Changed`).
+- **Sign-out.** When the owner is verified, `AccountViewModel.SignOutAsync` asks for a sync and waits at most ten
+  seconds for it (an unreachable server must not hold the sheet; the sync itself goes on). Only a request that
+  actually ran a sync that ended `Synced` counts (`ProfileSyncResult.IsSaved`); a state kept from an earlier run
+  proves nothing. It then signs out on the server and removes the places, vehicle, card and sync state (not the
+  parking session and not `device_owner`) with `IDeviceDataWiper.WipeProfileIfSavedAsync`, which reads the changed
+  flag in the transaction of the removal. If a change landed after the sync, nothing is removed and the signed-out
+  sheet asks "Remove from this phone" or "Keep on this phone". Any other end of the sync (not saved, offline, timeout,
+  did not run) opens the sheet with "Your latest changes are not saved to your account yet. If you sign out now they
+  are removed from this phone.": "Sign out anyway" signs out and wipes without condition, "Stay signed in" changes
+  nothing. An owner that was never verified signs out without a sync and without a wipe, because the data was never
+  synced to this account. A failed server sign-out wipes nothing.
+- **Races.** A caller that asks for a sync while one runs makes it go through one more pass when it ends (still one
+  run at a time), so a change made after a pass read the phone is not left for the next trigger. A round that wrote
+  nothing reads the changed flag again before it reports `Synced`. Every write of the sync (`ApplyAsync`,
+  `MarkSavedAsync`) names the verified account hash and is refused, inside its transaction, when the phone is bound
+  to another account or its profile was removed since the snapshot.
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant S as Stores
+    participant P as ProfileSyncService
+    participant L as Device database
+    participant A as API
+    U->>S: save or clear a section
+    S->>L: data + updated_at + dirty (one transaction)
+    S-->>P: Changed (2 s debounce)
+    P->>L: read local profile and sync state
+    P->>A: GET /me/profile (If-None-Match base)
+    alt 304 and dirty
+        P->>A: PUT If-Match base
+    else 200
+        P->>P: apply server copy, or merge
+        P->>L: write sections + base revision (only if no section changed)
+        opt merge differs from server copy
+            P->>A: PUT If-Match revision read
+        end
+    else 404 and the phone has data
+        P->>A: PUT If-None-Match *
+    end
+    P->>L: base revision, dirty = 0 (only if no section changed)
+```
 - The upgrade job of `android.yml` gets a second leg: install the latest release, seed card, car and timer through the
   test hooks, install the new APK over it, and check that the card comes from the database and the marker says
   `migrated`.

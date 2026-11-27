@@ -13,7 +13,7 @@ namespace ParkingTracker.Backend.Application.Features.Accounts.Commands.SaveProf
 /// Date        : 11-2026
 /// Purpose     : Checks the plain profile document before it is encrypted (ADR-0032): the supported schema version, the lengths of the
 ///              texts, the coordinates inside the Brussels box (edges included), at most 50 favourites, the vehicle and the card within
-///              the limits of the domain, the names of the enumerations, and no time more than a day ahead of the server. The limits
+///              the limits of the domain, the names of the enumerations, and no time more than a day ahead of the server, and a moment of a clear only for a section that is absent. The limits
 ///              of the domain are used where the domain has them. The messages never repeat a value of the document.
 /// </summary>
 public sealed class ProfileDocumentValidator : AbstractValidator<ProfileDocument>
@@ -76,10 +76,30 @@ public sealed class ProfileDocumentValidator : AbstractValidator<ProfileDocument
 		_ = RuleFor(document => document.Favourites).SetValidator(new FavouritesSectionValidator(clock)).When(document => document.Favourites is not null);
 		_ = RuleFor(document => document.Vehicle!).SetValidator(new VehicleSectionValidator(clock)).When(document => document.Vehicle is not null);
 		_ = RuleFor(document => document.Card!).SetValidator(new CardSectionValidator(clock)).When(document => document.Card is not null);
+		AddClearedRules(clock);
 	}
 	#endregion
 
 	#region Private Helpers
+	/// <summary>
+	/// Adds the rules of the optional moments at which sections were cleared: a moment only for a section that is absent from the same
+	/// document, and not more than a day ahead of the server, like the moment of a section.
+	/// </summary>
+	/// <param name="clock">The clock.</param>
+	private void AddClearedRules(TimeProvider clock)
+	{
+		_ = RuleFor(document => document.Cleared)
+			.Must((document, cleared) => cleared is null
+				|| ((cleared.Home is null || document.Home is null)
+					&& (cleared.Work is null || document.Work is null)
+					&& (cleared.Vehicle is null || document.Vehicle is null)
+					&& (cleared.Card is null || document.Card is null)))
+			.WithMessage("A section that is present cannot also be cleared.");
+		_ = RuleFor(document => document.Cleared)
+			.Must(cleared => cleared is null || new[] { cleared.Home, cleared.Work, cleared.Vehicle, cleared.Card }.All(at => at is null || at.Value <= clock.GetUtcNow().AddDays(MaximumDaysAhead)))
+			.WithMessage("The time is more than a day in the future.");
+	}
+
 	/// <summary>
 	/// Adds the rule of a time set by the phone: not more than a day ahead of the server.
 	/// </summary>

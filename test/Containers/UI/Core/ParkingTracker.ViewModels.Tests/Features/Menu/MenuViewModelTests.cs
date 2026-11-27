@@ -2,6 +2,7 @@ using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using ParkingTracker.Application.Features.Accounts.Abstractions;
 using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
+using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Application.Features.Vehicles.Abstractions;
 using ParkingTracker.Contracts.Features.Accounts;
 using ParkingTracker.Domain.Features.SavedPlaces.Aggregates;
@@ -10,6 +11,7 @@ using ParkingTracker.Domain.Features.Shared.ValueObjects;
 using ParkingTracker.ViewModels.Features.Account;
 using ParkingTracker.ViewModels.Features.Menu;
 using ParkingTracker.ViewModels.Features.Places;
+using ParkingTracker.ViewModels.Features.ProfileSync;
 using ParkingTracker.ViewModels.Features.Vehicles;
 using ParkingTracker.ViewModels.Tests.Features.Shared.TestDoubles;
 using Pivot.Framework.Domain.Shared;
@@ -64,7 +66,7 @@ public sealed class MenuViewModelTests
 		var picker = new PlacePickerViewModel(store, ui.Sender, ui.Spot, places, ui.Toast);
 		var favourites = new FavouritesViewModel(places, picker);
 		var vehicle = new VehicleViewModel(Substitute.For<IVehicleStore>(), ui.Toast, ui.Clock);
-		return (new MenuViewModel(places, picker, favourites, vehicle, ui.Card, Account(ui)), places, picker, favourites);
+		return (new MenuViewModel(places, picker, favourites, vehicle, ui.Card, Account(ui), ui.Sync), places, picker, favourites);
 	}
 
 	/// <summary>
@@ -80,7 +82,7 @@ public sealed class MenuViewModelTests
 		var google = Substitute.For<IGoogleSignIn>();
 		google.IsAvailable.Returns(signInAvailable);
 		var account = ui.CreateAccount(client, google);
-		var menu = new MenuViewModel(places, picker, favourites, new VehicleViewModel(Substitute.For<IVehicleStore>(), ui.Toast, ui.Clock), ui.Card, account);
+		var menu = new MenuViewModel(places, picker, favourites, new VehicleViewModel(Substitute.For<IVehicleStore>(), ui.Toast, ui.Clock), ui.Card, account, ui.Sync);
 		return (menu, account);
 	}
 
@@ -356,13 +358,14 @@ public sealed class MenuViewModelTests
 		var (_, places, picker, favourites) = await ArrangeAsync(ui);
 
 		var vehicle = new VehicleViewModel(Substitute.For<IVehicleStore>(), ui.Toast, ui.Clock);
-		var noPlaces = () => new MenuViewModel(null!, picker, favourites, vehicle, ui.Card, Account(ui)); // null on purpose: proves the guard clause rejects it
-		var noPicker = () => new MenuViewModel(places, null!, favourites, vehicle, ui.Card, Account(ui)); // null on purpose: proves the guard clause rejects it
-		var noFavourites = () => new MenuViewModel(places, picker, null!, vehicle, ui.Card, Account(ui)); // null on purpose: proves the guard clause rejects it
-		var noVehicle = () => new MenuViewModel(places, picker, favourites, null!, ui.Card, Account(ui)); // null on purpose: proves the guard clause rejects it
-		var noCard = () => new MenuViewModel(places, picker, favourites, vehicle, null!, Account(ui)); // null on purpose: proves the guard clause rejects it
+		var noPlaces = () => new MenuViewModel(null!, picker, favourites, vehicle, ui.Card, Account(ui), ui.Sync); // null on purpose: proves the guard clause rejects it
+		var noPicker = () => new MenuViewModel(places, null!, favourites, vehicle, ui.Card, Account(ui), ui.Sync); // null on purpose: proves the guard clause rejects it
+		var noFavourites = () => new MenuViewModel(places, picker, null!, vehicle, ui.Card, Account(ui), ui.Sync); // null on purpose: proves the guard clause rejects it
+		var noVehicle = () => new MenuViewModel(places, picker, favourites, null!, ui.Card, Account(ui), ui.Sync); // null on purpose: proves the guard clause rejects it
+		var noCard = () => new MenuViewModel(places, picker, favourites, vehicle, null!, Account(ui), ui.Sync); // null on purpose: proves the guard clause rejects it
 
-		var noAccount = () => new MenuViewModel(places, picker, favourites, vehicle, ui.Card, null!); // null on purpose: proves the guard clause rejects it
+		var noAccount = () => new MenuViewModel(places, picker, favourites, vehicle, ui.Card, null!, ui.Sync); // null on purpose: proves the guard clause rejects it
+		var noSync = () => new MenuViewModel(places, picker, favourites, vehicle, ui.Card, Account(ui), null!); // null on purpose: proves the guard clause rejects it
 
 		noPlaces.Should().Throw<ArgumentNullException>();
 		noPicker.Should().Throw<ArgumentNullException>();
@@ -370,6 +373,72 @@ public sealed class MenuViewModelTests
 		noVehicle.Should().Throw<ArgumentNullException>();
 		noCard.Should().Throw<ArgumentNullException>();
 		noAccount.Should().Throw<ArgumentNullException>();
+		noSync.Should().Throw<ArgumentNullException>();
+	}
+	#endregion
+
+	#region Sync Line Tests
+	/// <summary>
+	/// Verifies that the sync line follows the state of the sync: saved, saving (pending or syncing), waiting for the network, not saved.
+	/// </summary>
+	/// <param name="state">The state of the sync.</param>
+	/// <param name="expected">The text of the line.</param>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Theory]
+	[InlineData(ProfileSyncState.Synced, "Saved to your account")]
+	[InlineData(ProfileSyncState.Pending, "Saving…")]
+	[InlineData(ProfileSyncState.Syncing, "Saving…")]
+	[InlineData(ProfileSyncState.Offline, "Waiting for network")]
+	[InlineData(ProfileSyncState.Error, "Not saved, try later")]
+	public async Task SyncText_ShouldFollowTheSyncState(ProfileSyncState state, string expected)
+	{
+		using var ui = new UiFixture();
+		var (menu, _) = await ArrangeAccountAsync(ui, Client(signedIn: true));
+		ui.Sync.State.Returns(state);
+
+		menu.SyncText.Should().Be(expected);
+	}
+
+	/// <summary>
+	/// Verifies that the line is shown only for a signed-in user whose data is known to belong to the account.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task IsSyncVisible_ShouldNeedASignedInVerifiedOwner()
+	{
+		using var ui = new UiFixture();
+		var (signedOut, _) = await ArrangeAccountAsync(ui, Client(signedIn: false));
+		await signedOut.RefreshAccountAsync();
+		using var uiSignedIn = new UiFixture();
+		uiSignedIn.Owner.GetAccountHashAsync(Arg.Any<CancellationToken>()).Returns(Result.Success(DeviceOwnerHash.Of(Me.AccountId)));
+		var (verified, _) = await ArrangeAccountAsync(uiSignedIn, Client(signedIn: true));
+		using var uiOther = new UiFixture();
+		uiOther.Owner.GetAccountHashAsync(Arg.Any<CancellationToken>()).Returns(Result.Success("other"));
+		var (other, _) = await ArrangeAccountAsync(uiOther, Client(signedIn: true));
+
+		await verified.RefreshAccountAsync();
+		await other.RefreshAccountAsync();
+
+		signedOut.IsSyncVisible.Should().BeFalse();
+		verified.IsSyncVisible.Should().BeTrue();
+		other.IsSyncVisible.Should().BeFalse();
+	}
+
+	/// <summary>
+	/// Verifies that a change of the sync state is passed on, so that an open menu renders again.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task SyncChanged_ShouldRaiseChanged()
+	{
+		using var ui = new UiFixture();
+		var (menu, _) = await ArrangeAccountAsync(ui, Client(signedIn: true));
+		var raised = 0;
+		menu.Changed += (_, _) => raised++;
+
+		ui.Sync.Changed += Raise.Event();
+
+		raised.Should().Be(1);
 	}
 	#endregion
 }

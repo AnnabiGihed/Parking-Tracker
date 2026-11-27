@@ -39,7 +39,7 @@ public sealed class DeviceDataWiperTests
 	/// <returns>The wiper.</returns>
 	private static DeviceDataWiper Create(DeviceTestDatabase db)
 	{
-		return new DeviceDataWiper(db.UnitOfWork, db.Initializer, db.Places, db.Vehicles, db.Cards, db.Sessions);
+		return new DeviceDataWiper(db.UnitOfWork, db.Initializer, db.Places, db.Vehicles, db.Cards, db.Sessions, db.SyncState);
 	}
 
 	/// <summary>
@@ -125,6 +125,50 @@ public sealed class DeviceDataWiperTests
 		{
 			(await CountAsync(db, table)).Should().Be(1, table);
 		}
+	}
+	#endregion
+
+	#region Conditional Wipe Tests
+	/// <summary>
+	/// Verifies that the conditional wipe removes the profile when no change is waiting, and keeps the session and the owner like the plain one.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task WipeProfileIfSavedAsync_NothingWaiting_ShouldRemoveTheProfile()
+	{
+		await using var db = await DeviceTestDatabase.CreateAsync();
+		await FillAsync(db);
+		await db.ExecuteAsync("UPDATE sync_state SET dirty = 0");
+
+		var wiped = await Create(db).WipeProfileIfSavedAsync();
+
+		wiped.Value.Should().BeTrue();
+		(await CountAsync(db, "saved_places")).Should().Be(0);
+		(await CountAsync(db, "vehicles")).Should().Be(0);
+		(await CountAsync(db, "resident_cards")).Should().Be(0);
+		(await CountAsync(db, "sync_state")).Should().Be(0);
+		(await CountAsync(db, "parking_sessions")).Should().Be(1);
+		(await CountAsync(db, "device_owner")).Should().Be(1);
+	}
+
+	/// <summary>
+	/// Verifies that a change that is waiting to be saved stops the conditional wipe: nothing is removed and the answer says so.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task WipeProfileIfSavedAsync_ChangeWaiting_ShouldRemoveNothing()
+	{
+		await using var db = await DeviceTestDatabase.CreateAsync();
+		await FillAsync(db);
+
+		var wiped = await Create(db).WipeProfileIfSavedAsync();
+
+		wiped.IsSuccess.Should().BeTrue();
+		wiped.Value.Should().BeFalse();
+		(await CountAsync(db, "saved_places")).Should().Be(1);
+		(await CountAsync(db, "vehicles")).Should().Be(1);
+		(await CountAsync(db, "resident_cards")).Should().Be(1);
+		(await CountAsync(db, "sync_state")).Should().Be(1);
 	}
 	#endregion
 }

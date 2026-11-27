@@ -804,6 +804,32 @@
         },
         "additionalProperties": false
       },
+      "ProfileClearedSections": {
+        "type": "object",
+        "properties": {
+          "home": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "work": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "vehicle": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "card": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "ProfileDocument": {
         "required": [
           "favourites",
@@ -829,6 +855,9 @@
           },
           "card": {
             "$ref": "#/components/schemas/ProfileCardSection"
+          },
+          "cleared": {
+            "$ref": "#/components/schemas/ProfileClearedSections"
           }
         },
         "additionalProperties": false,
@@ -868,7 +897,10 @@
             "plate": null,
             "updatedAt": "2026-11-20T10:00:00+00:00"
           },
-          "card": null
+          "card": null,
+          "cleared": {
+            "work": "2026-11-20T09:00:00+00:00"
+          }
         }
       },
       "ProfileFavouritePlace": {

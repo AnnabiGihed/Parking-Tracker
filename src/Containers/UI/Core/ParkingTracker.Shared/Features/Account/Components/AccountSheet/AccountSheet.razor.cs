@@ -28,6 +28,28 @@ public sealed partial class AccountSheet : ViewModelComponent<AccountViewModel>
 	private Task OnSignOutAsync() => ViewModel.SignOutAsync();
 
 	/// <summary>
+	/// Handles "Sign out anyway": the changes that are not saved are removed from the phone with the rest of the profile.
+	/// </summary>
+	/// <returns>A task that completes when the phone is signed out.</returns>
+	private Task OnConfirmSignOutAsync() => ViewModel.ConfirmSignOutAsync();
+
+	/// <summary>
+	/// Handles "Remove from this phone", after a sign-out that left changes that were not saved.
+	/// </summary>
+	/// <returns>A task that completes when the data was removed.</returns>
+	private Task OnConfirmLocalRemovalAsync() => ViewModel.ConfirmLocalRemovalAsync();
+
+	/// <summary>
+	/// Handles "Keep on this phone".
+	/// </summary>
+	private void OnKeepOnPhone() => ViewModel.KeepOnPhone();
+
+	/// <summary>
+	/// Handles "Stay signed in".
+	/// </summary>
+	private void OnCancelSignOut() => ViewModel.CancelSignOut();
+
+	/// <summary>
 	/// Handles "Delete account", which asks for a confirmation.
 	/// </summary>
 	private void OnDelete() => ViewModel.RequestDelete();

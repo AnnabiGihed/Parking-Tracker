@@ -4,12 +4,14 @@ using NSubstitute;
 using ParkingTracker.Application.Features.ParkingDetection.Abstractions;
 using ParkingTracker.Application.Features.ParkingDetection.Services;
 using ParkingTracker.Application.Features.Accounts.Abstractions;
+using ParkingTracker.Application.Features.ProfileSync.Abstractions;
 using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
 using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Application.Features.Vehicles.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Abstractions;
 using ParkingTracker.Application.Features.SpotDecisions.Queries.DecideSpot;
 using ParkingTracker.Application.Features.SpotDecisions.Queries.FindFreeSpots;
+using ParkingTracker.Contracts.Features.Profiles;
 using ParkingTracker.Domain.Features.Cars.ValueObjects;
 using ParkingTracker.Domain.Features.MapLayers.ValueObjects;
 using ParkingTracker.Domain.Features.ParkingDetection.ValueObjects;
@@ -23,6 +25,7 @@ using ParkingTracker.ViewModels.Features.Car;
 using ParkingTracker.ViewModels.Features.Card;
 using ParkingTracker.ViewModels.Features.MapLayers;
 using ParkingTracker.ViewModels.Features.Places;
+using ParkingTracker.ViewModels.Features.ProfileSync;
 using ParkingTracker.ViewModels.Features.Shared;
 using ParkingTracker.ViewModels.Features.Shared.Settings;
 using ParkingTracker.ViewModels.Features.SpotCheck;
@@ -85,10 +88,14 @@ internal sealed class UiFixture : IDisposable
 		Vehicle = new VehicleViewModel(VehicleStore, Toast, Clock);
 		Wiper.WipeProfileAsync(Arg.Any<CancellationToken>()).Returns(Result.Success());
 		Wiper.WipeAllAsync(Arg.Any<CancellationToken>()).Returns(Result.Success());
+		Wiper.WipeProfileIfSavedAsync(Arg.Any<CancellationToken>()).Returns(Result.Success(true));
 		Owner.GetAccountHashAsync(Arg.Any<CancellationToken>()).Returns(Result.Failure<string>(DeviceDataErrors.NotStored, ResultExceptionType.NotFound));
 		Owner.BindAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Result.Success());
 		Owner.GetErasePendingAsync(Arg.Any<CancellationToken>()).Returns(Result.Success(false));
 		Owner.MarkErasePendingAsync(Arg.Any<CancellationToken>()).Returns(Result.Success());
+		Sync.State.Returns(ProfileSyncState.Synced);
+		Sync.SyncAsync(Arg.Any<CancellationToken>()).Returns(new ProfileSyncResult(true, ProfileSyncState.Synced));
+		LocalProfile.ReadAsync(Arg.Any<CancellationToken>()).Returns(Result.Success(WithAHome));
 		Eraser = new LocalDataEraser(Wiper, ResetNotice, Places, Vehicle, Card, Car, Alarms, NullLogger<LocalDataEraser>.Instance);
 	}
 	#endregion
@@ -238,6 +245,35 @@ internal sealed class UiFixture : IDisposable
 	/// Gets the real eraser of the account data, over <see cref="Wiper"/> and the view models above.
 	/// </summary>
 	public LocalDataEraser Eraser { get; }
+
+	/// <summary>
+	/// Gets the real record of whether the data on the phone belongs to the signed-in account.
+	/// </summary>
+	public OwnerVerification Verification { get; } = new();
+
+	/// <summary>
+	/// Gets the substitute for the profile sync, which ends synced until a test says otherwise.
+	/// </summary>
+	public IProfileSync Sync { get; } = Substitute.For<IProfileSync>();
+
+	/// <summary>
+	/// Gets the substitute for the local profile, which holds a home place until a test says otherwise.
+	/// </summary>
+	public IProfileLocalStore LocalProfile { get; } = Substitute.For<IProfileLocalStore>();
+
+	/// <summary>
+	/// Gets a profile that holds one home place, so that the phone has something worth protecting.
+	/// </summary>
+	public static ProfileSnapshot WithAHome { get; } = new(
+		new ProfileDocument(ProfileDocument.SupportedSchemaVersion, new ProfilePlaceSection("Home", 50.85, 4.35, "Rue", DateTimeOffset.UnixEpoch), null, new ProfileFavouritesSection(DateTimeOffset.UnixEpoch, []), null, null),
+		SyncState.Empty);
+
+	/// <summary>
+	/// Gets a profile that holds nothing.
+	/// </summary>
+	public static ProfileSnapshot Nothing { get; } = new(
+		new ProfileDocument(ProfileDocument.SupportedSchemaVersion, null, null, new ProfileFavouritesSection(DateTimeOffset.UnixEpoch, []), null, null),
+		SyncState.Empty);
 	#endregion
 
 	#region Public Methods
@@ -247,7 +283,7 @@ internal sealed class UiFixture : IDisposable
 	/// <param name="client">The session client.</param>
 	/// <param name="google">Tells whether this build can sign in with Google.</param>
 	/// <returns>The account view model.</returns>
-	public AccountViewModel CreateAccount(ISessionClient client, IGoogleSignIn google) => new(client, google, Toast, Owner, Eraser);
+	public AccountViewModel CreateAccount(ISessionClient client, IGoogleSignIn google) => new(client, google, Toast, Owner, Eraser, Verification, Sync, LocalProfile, Clock);
 
 	/// <summary>
 	/// Makes every spot check answer with a decision.

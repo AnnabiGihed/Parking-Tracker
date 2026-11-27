@@ -4,6 +4,7 @@ using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.ViewModels.Features.Car;
 using ParkingTracker.ViewModels.Features.Card;
 using ParkingTracker.ViewModels.Features.Places;
+using ParkingTracker.ViewModels.Features.ProfileSync;
 using ParkingTracker.ViewModels.Features.Shared.Settings;
 using ParkingTracker.ViewModels.Features.Vehicles;
 using Pivot.Framework.Domain.Shared;
@@ -21,7 +22,7 @@ namespace ParkingTracker.ViewModels.Features.Account;
 ///              reminder alarms of its timer are cancelled too, once the wipe is committed. Nothing is read again after a failed wipe,
 ///              because nothing was removed.
 /// </summary>
-public sealed partial class LocalDataEraser
+public sealed partial class LocalDataEraser : IScreenReloader
 {
 	#region Fields
 	/// <summary>
@@ -122,6 +123,24 @@ public sealed partial class LocalDataEraser
 	}
 
 	/// <summary>
+	/// Removes the places, the vehicle and the card when no change is waiting to be saved to the account, and keeps the parked car. The flag
+	/// is read in the transaction of the removal.
+	/// </summary>
+	/// <param name="cancellationToken">Cancels the wipe before it starts.</param>
+	/// <returns>A task with <see langword="true"/> when the data was removed, <see langword="false"/> when a change is waiting and nothing was removed, or the failure of the wipe.</returns>
+	public async Task<Result<bool>> WipeProfileIfSavedAsync(CancellationToken cancellationToken = default)
+	{
+		var result = await wiper.WipeProfileIfSavedAsync(cancellationToken).ConfigureAwait(false);
+		if (result.IsFailure || !result.Value)
+		{
+			return result;
+		}
+
+		await ReloadAsync().ConfigureAwait(false);
+		return result;
+	}
+
+	/// <summary>
 	/// Removes everything: the profile, the parked car and the owner binding.
 	/// </summary>
 	/// <param name="cancellationToken">Cancels the wipe before it starts.</param>
@@ -135,6 +154,18 @@ public sealed partial class LocalDataEraser
 		}
 
 		return await ShowAsync(result).ConfigureAwait(false);
+	}
+	#endregion
+
+	#region IScreenReloader Implementation
+	/// <inheritdoc />
+	public async Task ReloadAsync()
+	{
+		resetNotice.Raise();
+		await places.LoadAsync().ConfigureAwait(false);
+		await vehicle.LoadAsync().ConfigureAwait(false);
+		await card.RefreshLineAsync().ConfigureAwait(false);
+		await car.LoadAsync().ConfigureAwait(false);
 	}
 	#endregion
 
@@ -169,11 +200,7 @@ public sealed partial class LocalDataEraser
 			return result;
 		}
 
-		resetNotice.Raise();
-		await places.LoadAsync().ConfigureAwait(false);
-		await vehicle.LoadAsync().ConfigureAwait(false);
-		await card.RefreshLineAsync().ConfigureAwait(false);
-		await car.LoadAsync().ConfigureAwait(false);
+		await ReloadAsync().ConfigureAwait(false);
 		return result;
 	}
 	#endregion
