@@ -46,13 +46,17 @@ a {
 <body>
 <main>
 <h1>Parking Tracker: privacy notice</h1>
-<p>Last updated: 19 November 2026</p>
+<p>Last updated: 27 November 2026</p>
 
 <h2>Who is responsible</h2>
 <p>Parking Tracker is a personal project by Gihed Annabi, Belgium. Questions or requests: <a href="mailto:contact@pivotsoftwares.com">contact@pivotsoftwares.com</a>.</p>
 
+<h2>What follows your account</h2>
+<p>Your Home and Work places, your favourite places, your vehicle profile (make, model, year, fuel, emission standard, charging details and plate) and your parking card (number, plate, municipality, areas, dates) are kept with your account so that they come back when you sign in on a new phone. On the phone they are stored in an encrypted database. On our server they are stored as one encrypted document per account. The encryption protects them if the database alone is ever exposed, for example a copy of it; it does not protect them if the whole server is compromised, because the key is kept on that server.</p>
+<p>We keep them to provide the service you asked for (performance of the contract). When you sign out, they are saved to your account and removed from that phone.</p>
+
 <h2>What stays on your phone</h2>
-<p>Your parking card (number, plate, municipality, areas, dates), your Home and Work places, your parked car's position and your timer are stored only on your phone, in an encrypted database. They are never sent to our server and never synchronised. Card photos are read on the phone and are not kept or sent anywhere. Your position is used on the phone to check where you may park and to send parking alerts.</p>
+<p>Your parked car's position and your timer are stored only on your phone and are never sent to our server. Card photos are read on the phone and are not kept or sent anywhere. Your position is used on the phone to check where you may park and to send parking alerts.</p>
 
 <h2>Signing in with Google</h2>
 <p>You sign in with your Google account. Google sends the app a one-time sign-in proof. Our server checks it and then forgets it. From your Google account we keep only a scrambled identifier (a keyed hash of your Google account ID). We don't keep your name, e-mail address or picture.</p>
@@ -62,6 +66,7 @@ a {
 <li>The scrambled account identifier.</li>
 <li>The day your account was created and the day it was last used.</li>
 <li>Your sign-in sessions, with hashed refresh tokens only.</li>
+<li>Your encrypted profile: places, vehicle and parking card (see "What follows your account"), and the day it last changed.</li>
 </ul>
 <p>We use this to keep you signed in (performance of the contract) and to protect the service against abuse (legitimate interest).</p>
 
@@ -80,13 +85,13 @@ a {
 <ul>
 <li>Until you delete your account, or after 24 months without any use.</li>
 <li>Sessions last at most 90 days.</li>
-<li>Server backups may keep a deleted account for up to 6 months. If a backup is ever restored, deleted accounts are removed again.</li>
+<li>Server backups may keep a deleted account and its profile for up to 6 months. If a backup is ever restored, deleted accounts are removed again.</li>
 </ul>
 
 <h2>Your choices and rights</h2>
 <ul>
-<li>Delete your account in the app (Settings → Delete my account). This deletes your account on our server and wipes the app's data on your phone.</li>
-<li>Sign out keeps your data on the phone.</li>
+<li>Delete your account in the app (menu → Delete account). This deletes your account and your profile on our server and wipes the app's data on your phone.</li>
+<li>Sign out saves your profile to your account and removes it from the phone. If it can't be saved first, the app asks before removing it. The parked car and timer stay on the phone.</li>
 <li>Remove the app's access to your Google account at any time: <a href="https://myaccount.google.com/connections">https://myaccount.google.com/connections</a></li>
 <li>You have the right to access, correct, erase or object to the processing of your data. Write to <a href="mailto:contact@pivotsoftwares.com">contact@pivotsoftwares.com</a>. You can also complain to the Belgian Data Protection Authority: <a href="https://www.dataprotectionauthority.be">https://www.dataprotectionauthority.be</a></li>
 </ul>
