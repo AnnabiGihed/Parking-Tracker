@@ -298,11 +298,11 @@ sign-in is newly blocked.
 
 ADR: [0015](adr/0015-require-sign-in-and-keep-the-drivers-data-on-the-phone.md).
 
-**Proposed change (ADR-0032, stage S5A):** on 2026-11-26 the owner asked for the places, the vehicle profile and the
-card to follow the account to a new phone. ADR-0032 (Proposed) chooses a fourth option: one profile document per
+**Changed by ADR-0032 (stage S5A, accepted 2026-11-27):** on 2026-11-26 the owner asked for the places, the vehicle
+profile and the card to follow the account to a new phone. ADR-0032 chooses a fourth option: one profile document per
 account, encrypted on the server with a server key (`profile_key`), synchronised with revisions and `If-Match`, the
-phone remaining the working copy offline. The parked car and the timer stay on the phone. Until ADR-0032 is accepted
-and stage S5A is released, the decision above still describes the running system.
+phone remaining the working copy offline (5.8). The parked car and the timer stay on the phone. The decision above
+still holds for mandatory sign-in and for everything outside the profile.
 
 ### 3.9 API style and versioning
 

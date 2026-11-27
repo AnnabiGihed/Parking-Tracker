@@ -12,6 +12,9 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
 
 ### Added
 
+- The privacy notice at <https://parking.pivotsoftwares.com/privacy> now says that your places, vehicle and card
+  follow your account in one encrypted document on the server, what that encryption protects, and that sign-out saves
+  and then removes them from the phone (ADR-0032, now accepted).
 - The phone now keeps the home and work places, the favourite places, the vehicle and the residents' card with your
   account (ADR-0032). After sign-in, when the app starts or comes back, when the network returns and two seconds after
   a change, the app reads and writes `/api/v1/me/profile`: a new phone gets the saved data after sign-in, and when

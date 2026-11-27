@@ -1,6 +1,6 @@
 # ADR-0032: Keep the driver's profile with the account, encrypted on the server
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-26
 - Deciders: Gihed Annabi
 - Supersedes in part: ADR-0015, ADR-0031
