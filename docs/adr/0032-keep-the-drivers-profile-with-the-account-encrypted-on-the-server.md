@@ -46,8 +46,11 @@ We keep the driver's profile with the account as one document per account, encry
   server's secrets folder (`profile_key`, with a current and a previous key for rotation), mounted like the token
   signing keys. The owner keeps a copy in the password manager.
 - **Document.** `schemaVersion`, `home`, `work`, `favourites` (at most 50), `vehicle` and `card`. Each section carries
-  the `updatedAt` time the phone set when it changed. The API validates the plain document (32 KB at most, field
-  lengths, coordinates inside the Brussels region) before it encrypts it.
+  the `updatedAt` time the phone set when it changed. A section the user cleared is absent, and the optional `cleared`
+  object (`home`, `work`, `vehicle`, `card`) holds the time of the clear, so that a clear beats an older value on
+  another phone; the favourites list needs none, because it always carries its `updatedAt`. The field is additive: the
+  schema version stays 1 and a document without it is valid. The API validates the plain document (32 KB at most,
+  field lengths, coordinates inside the Brussels region) before it encrypts it.
 - **API.** `GET /api/v1/me/profile` (200 with an `ETag`, 304 for a matching `If-None-Match`, 404 when there is no
   profile) and `PUT /api/v1/me/profile` (`If-Match` with the revision, or `If-None-Match: *` to create; 428 without
   either, 412 on a stale revision). A token-bucket rate limit `profile` per account.

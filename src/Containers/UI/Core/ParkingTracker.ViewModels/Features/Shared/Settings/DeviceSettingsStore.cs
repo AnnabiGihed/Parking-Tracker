@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using ParkingTracker.Application.Features.ParkingSessions.Abstractions;
+using ParkingTracker.Application.Features.ProfileSync.Abstractions;
 using ParkingTracker.Application.Features.ResidentCards.Abstractions;
 using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
 using ParkingTracker.Application.Features.Shared.Abstractions;
@@ -36,6 +37,8 @@ namespace ParkingTracker.ViewModels.Features.Shared.Settings;
 ///              Every read and every write first waits for the start-up gate, outside any scope, because a background reader may run
 ///              before the screens and must not cache "no card" while the old values are still being moved. A change made before the
 ///              one-time move has finished also removes the old copy of the value, so that the next launch cannot bring deleted data back.
+///              Saving or clearing the card stamps the synced card section in the same scope (ADR-0032) and a commit tells the sync trigger;
+///              the parked car and the timer are never synced and stamp nothing.
 /// </summary>
 public sealed partial class DeviceSettingsStore : ISettingsStore, IDisposable
 {
@@ -119,6 +122,11 @@ public sealed partial class DeviceSettingsStore : ISettingsStore, IDisposable
 	/// The code of the error that made the saved parked car unreadable, or <see langword="null"/> while it is readable or not read yet.
 	/// </summary>
 	private string? sessionUnreadableCode;
+
+	/// <summary>
+	/// Records the moment of a change of a synced section, in the scope of the change (ADR-0032).
+	/// </summary>
+	private readonly IProfileChangeTracker tracker;
 	#endregion
 
 	#region Constructors
@@ -136,6 +144,7 @@ public sealed partial class DeviceSettingsStore : ISettingsStore, IDisposable
 	/// <param name="referenceData">The municipalities that a saved card is checked against.</param>
 	/// <param name="logger">The log.</param>
 	/// <param name="resetNotice">Tells this store that the stale encrypted rows were removed; the store listens until it is disposed.</param>
+	/// <param name="tracker">Records the moment of a change of a synced section, in the scope of the change.</param>
 	/// <exception cref="ArgumentNullException">An argument is <see langword="null"/>.</exception>
 	public DeviceSettingsStore(
 		ISettingsStore inner,
@@ -148,7 +157,8 @@ public sealed partial class DeviceSettingsStore : ISettingsStore, IDisposable
 		IStartupGate gate,
 		IReferenceData referenceData,
 		ILogger<DeviceSettingsStore> logger,
-		DeviceDataResetNotice resetNotice)
+		DeviceDataResetNotice resetNotice,
+		IProfileChangeTracker tracker)
 	{
 		ArgumentNullException.ThrowIfNull(inner);
 		ArgumentNullException.ThrowIfNull(cards);
@@ -161,6 +171,7 @@ public sealed partial class DeviceSettingsStore : ISettingsStore, IDisposable
 		ArgumentNullException.ThrowIfNull(referenceData);
 		ArgumentNullException.ThrowIfNull(logger);
 		ArgumentNullException.ThrowIfNull(resetNotice);
+		ArgumentNullException.ThrowIfNull(tracker);
 		this.inner = inner;
 		this.cards = cards;
 		this.sessions = sessions;
@@ -172,6 +183,7 @@ public sealed partial class DeviceSettingsStore : ISettingsStore, IDisposable
 		this.referenceData = referenceData;
 		this.logger = logger;
 		this.resetNotice = resetNotice;
+		this.tracker = tracker;
 		resetNotice.StaleRowsRemoved += OnStaleRowsRemoved;
 	}
 	#endregion
@@ -255,8 +267,11 @@ public sealed partial class DeviceSettingsStore : ISettingsStore, IDisposable
 			}
 
 			ThrowIfFailed(staged);
+			tracker.Stage(scope, SyncSection.Card);
 			await CommitAsync(scope).ConfigureAwait(false);
 		}
+
+		tracker.NotifyCommitted();
 
 		// What the next start would read: the aggregate has trimmed the number and normalised the plate.
 		CacheCard(aggregate.ToParkingCard());
@@ -271,9 +286,11 @@ public sealed partial class DeviceSettingsStore : ISettingsStore, IDisposable
 		await using (scope.ConfigureAwait(false))
 		{
 			cards.Remove(scope);
+			tracker.Stage(scope, SyncSection.Card);
 			await CommitAsync(scope).ConfigureAwait(false);
 		}
 
+		tracker.NotifyCommitted();
 		CacheCard(null);
 		await RemoveOldCopyAsync(inner.ClearCardAsync).ConfigureAwait(false);
 	}

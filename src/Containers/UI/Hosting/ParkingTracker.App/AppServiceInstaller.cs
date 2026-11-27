@@ -13,6 +13,7 @@ using ParkingTracker.Application.Features.Accounts.Abstractions;
 using ParkingTracker.Application.Features.Cards.Abstractions;
 using ParkingTracker.Application.Features.ParkingDetection.Abstractions;
 using ParkingTracker.Application.Features.ParkingSessions.Abstractions;
+using ParkingTracker.Application.Features.ProfileSync.Abstractions;
 using ParkingTracker.Application.Features.ResidentCards.Abstractions;
 using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
 using ParkingTracker.Application.Features.Shared.Abstractions;
@@ -103,7 +104,8 @@ public sealed class AppServiceInstaller : IServiceInstaller
 			provider.GetRequiredService<IStartupGate>(),
 			provider.GetRequiredService<IReferenceData>(),
 			provider.GetRequiredService<ILogger<DeviceSettingsStore>>(),
-			provider.GetRequiredService<DeviceDataResetNotice>()));
+			provider.GetRequiredService<DeviceDataResetNotice>(),
+			provider.GetRequiredService<IProfileChangeTracker>()));
 
 		// The Home and Work places of the shortcut chips, in the same database.
 		services.AddSingleton<IPlacesStore>(provider => new DevicePlacesStore(
@@ -115,7 +117,8 @@ public sealed class AppServiceInstaller : IServiceInstaller
 			provider.GetRequiredService<IDeviceDatabaseInitializer>(),
 			provider.GetRequiredService<IStartupGate>(),
 			provider.GetRequiredService<ILogger<DevicePlacesStore>>(),
-			provider.GetRequiredService<DeviceDataResetNotice>()));
+			provider.GetRequiredService<DeviceDataResetNotice>(),
+			provider.GetRequiredService<IProfileChangeTracker>()));
 
 		// The vehicle profile of the My vehicle dialog, in the same database.
 		services.AddSingleton<IVehicleStore>(provider => new DeviceVehicleStore(
@@ -128,7 +131,8 @@ public sealed class AppServiceInstaller : IServiceInstaller
 			provider.GetRequiredService<IStartupGate>(),
 			provider.GetRequiredService<TimeProvider>(),
 			provider.GetRequiredService<ILogger<DeviceVehicleStore>>(),
-			provider.GetRequiredService<DeviceDataResetNotice>()));
+			provider.GetRequiredService<DeviceDataResetNotice>(),
+			provider.GetRequiredService<IProfileChangeTracker>()));
 	}
 
 	/// <summary>

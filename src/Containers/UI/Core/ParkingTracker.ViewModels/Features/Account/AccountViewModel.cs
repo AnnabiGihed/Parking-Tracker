@@ -1,8 +1,11 @@
 using System.Globalization;
 using ParkingTracker.Application.Features.Accounts.Abstractions;
+using ParkingTracker.Application.Features.ProfileSync.Abstractions;
 using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Contracts.Features.Accounts;
+using ParkingTracker.ViewModels.Features.ProfileSync;
 using ParkingTracker.ViewModels.Features.Shared;
+using Pivot.Framework.Domain.Shared;
 
 namespace ParkingTracker.ViewModels.Features.Account;
 
@@ -17,7 +20,13 @@ namespace ParkingTracker.ViewModels.Features.Account;
 ///              signed out again); the check runs wherever the account becomes known (sign-in, open, refresh at start), and a
 ///              mismatch found at start opens the sheet; a deleted account takes its data from the phone too, a removal that did
 ///              not finish (the flag is written once the server confirmed the deletion) runs again at the next open or refresh,
-///              and a wipe that failed can be retried from the signed-out sheet. The sheet is offered only when the build can
+///              and a wipe that failed can be retried from the signed-out sheet. The profile follows the account (ADR-0032): once the
+///              owner is verified (sign-in, open, refresh) a sync is requested; signing out first syncs, and only a sync that ended
+///              synced signs out and then removes the profile from the phone, if no change landed meanwhile (the flag is read in the transaction
+///              of the removal; a change that did land is asked about too: remove it from the phone or keep it); the wait for that sync is
+///              bounded, so that an unreachable server does not hold the sheet, and a sync that did not run counts for nothing; otherwise the sheet asks whether to sign out anyway (the
+///              unsaved changes are removed) or to stay signed in; an owner that was never verified signs out without removing anything;
+///              and a phone with no places, vehicle or card binds the new account without asking. The sheet is offered only when the build can
 ///              sign in with Google (<see cref="IsAvailable"/>), which every build with a Google Web client ID can. A session the
 ///              API ended is shown as signed out; a network error is shown and the session is kept. The sheet is drawn by a
 ///              <c>DialogBridge</c> through <see cref="IDialogViewModel"/>, so this class never references Radzen.
@@ -51,9 +60,26 @@ public sealed class AccountViewModel : ViewModelBase, IDialogViewModel, IDisposa
 	public const string OwnerUnknownText = "This phone could not check which account its saved data belongs to. Sign in again.";
 
 	/// <summary>
+	/// What is shown when the phone was signed out but its saved data could not be removed.
+	/// </summary>
+	public const string SignOutWipeFailedText = "You are signed out, but your saved places, vehicle and card could not be removed from this phone. Clear the app data in the phone settings.";
+
+	/// <summary>
+	/// What is shown when the phone was signed out but changes were saved on it after the last sync, so that nothing was removed.
+	/// </summary>
+	public const string LocalRemovalNoteText = "You are signed out. Some of your latest changes were not saved to your account. Remove your places, vehicle and card from this phone, or keep them on this phone?";
+
+	/// <summary>
 	/// The number of characters of the account id that are shown.
 	/// </summary>
 	public const int ShortIdLength = 8;
+	#endregion
+
+	#region Static Instances
+	/// <summary>
+	/// How long a sign-out waits for the sync before it treats the changes as not saved.
+	/// </summary>
+	public static readonly TimeSpan SignOutSyncTimeout = TimeSpan.FromSeconds(10);
 	#endregion
 
 	#region Fields
@@ -81,6 +107,26 @@ public sealed class AccountViewModel : ViewModelBase, IDialogViewModel, IDisposa
 	/// Removes the data of an account from the phone and refreshes the screens.
 	/// </summary>
 	private readonly LocalDataEraser eraser;
+
+	/// <summary>
+	/// Says whether the data on the phone belongs to the signed-in account, for the sync.
+	/// </summary>
+	private readonly OwnerVerification verification;
+
+	/// <summary>
+	/// Syncs the profile with the account.
+	/// </summary>
+	private readonly IProfileSync sync;
+
+	/// <summary>
+	/// Reads whether the phone holds any place, vehicle or card.
+	/// </summary>
+	private readonly IProfileLocalStore localProfile;
+
+	/// <summary>
+	/// The clock of the bounded wait for the sync.
+	/// </summary>
+	private readonly TimeProvider clock;
 
 	/// <summary>
 	/// The hash of the account that signed in while the phone held the data of another one; empty when no decision is pending.
@@ -112,19 +158,31 @@ public sealed class AccountViewModel : ViewModelBase, IDialogViewModel, IDisposa
 	/// <param name="toast">Shows the message after a deletion.</param>
 	/// <param name="owner">Remembers which account the data on the phone belongs to.</param>
 	/// <param name="eraser">Removes the data of an account from the phone and refreshes the screens.</param>
+	/// <param name="verification">Says whether the data on the phone belongs to the signed-in account.</param>
+	/// <param name="sync">Syncs the profile with the account.</param>
+	/// <param name="localProfile">Reads whether the phone holds any place, vehicle or card.</param>
+	/// <param name="clock">The clock of the bounded wait for the sync at sign-out.</param>
 	/// <exception cref="ArgumentNullException">Thrown when an argument is <see langword="null"/>.</exception>
-	public AccountViewModel(ISessionClient client, IGoogleSignIn google, ToastViewModel toast, IDeviceOwnerStore owner, LocalDataEraser eraser)
+	public AccountViewModel(ISessionClient client, IGoogleSignIn google, ToastViewModel toast, IDeviceOwnerStore owner, LocalDataEraser eraser, OwnerVerification verification, IProfileSync sync, IProfileLocalStore localProfile, TimeProvider clock)
 	{
 		ArgumentNullException.ThrowIfNull(client);
 		ArgumentNullException.ThrowIfNull(google);
 		ArgumentNullException.ThrowIfNull(toast);
 		ArgumentNullException.ThrowIfNull(owner);
 		ArgumentNullException.ThrowIfNull(eraser);
+		ArgumentNullException.ThrowIfNull(verification);
+		ArgumentNullException.ThrowIfNull(sync);
+		ArgumentNullException.ThrowIfNull(localProfile);
+		ArgumentNullException.ThrowIfNull(clock);
 		this.client = client;
 		this.google = google;
 		this.toast = toast;
 		this.owner = owner;
 		this.eraser = eraser;
+		this.verification = verification;
+		this.sync = sync;
+		this.localProfile = localProfile;
+		this.clock = clock;
 	}
 	#endregion
 
@@ -162,7 +220,19 @@ public sealed class AccountViewModel : ViewModelBase, IDialogViewModel, IDisposa
 	/// of that account. It is <see langword="false"/> while signed out, before the check ran, while another account's data is still on
 	/// the phone and when the owner could not be read. The sync service must not upload anything unless it is <see langword="true"/>.
 	/// </summary>
-	public bool IsOwnerVerified { get; private set; }
+	public bool IsOwnerVerified => verification.IsVerified;
+
+	/// <summary>
+	/// Gets a value indicating whether the sheet waits for the user to decide what to do with changes that are not saved to the account yet:
+	/// sign out anyway, which removes them from the phone, or stay signed in.
+	/// </summary>
+	public bool IsConfirmingSignOut { get; private set; }
+
+	/// <summary>
+	/// Gets a value indicating whether the phone was signed out while changes that are not saved to the account were on it, so that the signed-out
+	/// sheet asks whether to remove them from the phone or keep them there.
+	/// </summary>
+	public bool IsConfirmingLocalRemoval { get; private set; }
 
 	/// <summary>
 	/// Gets a value indicating whether the account was deleted but its data is still on the phone, so that the signed-out sheet offers to remove it.
@@ -219,6 +289,8 @@ public sealed class AccountViewModel : ViewModelBase, IDialogViewModel, IDisposa
 
 		Error = string.Empty;
 		IsConfirmingDelete = false;
+		IsConfirmingSignOut = false;
+		IsConfirmingLocalRemoval = false;
 		IsOpen = true;
 		await RunAsync(async token =>
 		{
@@ -315,6 +387,8 @@ public sealed class AccountViewModel : ViewModelBase, IDialogViewModel, IDisposa
 
 		IsOpen = false;
 		IsConfirmingDelete = false;
+		IsConfirmingSignOut = false;
+		IsConfirmingLocalRemoval = false;
 		NotifyChanged();
 	}
 
@@ -340,15 +414,17 @@ public sealed class AccountViewModel : ViewModelBase, IDialogViewModel, IDisposa
 
 			IsSignedIn = true;
 			IsWipePending = false;
+			IsConfirmingLocalRemoval = false;
 			await LoadAccountAsync(token).ConfigureAwait(false);
 			await CheckAccountAsync(freshSignIn: true, token).ConfigureAwait(false);
 		}, cancellationToken);
 	}
 
 	/// <summary>
-	/// Signs this device out; the sheet shows the signed-out state.
+	/// Signs this device out; the sheet shows the signed-out state. When the data on the phone belongs to the account, the profile is
+	/// synced first: only a sync that ended synced signs out and removes the profile from the phone, anything else asks first.
 	/// </summary>
-	/// <returns>A task that completes when the phone is signed out.</returns>
+	/// <returns>A task that completes when the phone is signed out or the question was asked.</returns>
 	public Task SignOutAsync() => SignOutAsync(CancellationToken.None);
 
 	/// <summary>Signs this device out with caller cancellation.</summary>
@@ -358,15 +434,92 @@ public sealed class AccountViewModel : ViewModelBase, IDialogViewModel, IDisposa
 	{
 		return RunAsync(async token =>
 		{
-			var result = await client.SignOutAsync(token).ConfigureAwait(false);
-			if (result.IsFailure)
+			if (!IsOwnerVerified)
 			{
-				Error = result.Error.Message;
+				// The data on the phone was never synced to this account, so it is not this account's to remove.
+				await SignOutOnServerAsync(WipeMode.None, token).ConfigureAwait(false);
 				return;
 			}
 
-			ShowSignedOut();
+			// Only a sync that ran for this request and ended synced counts; a state kept from an earlier run proves nothing.
+			var result = await SyncForSignOutAsync(token).ConfigureAwait(false);
+			if (result.IsSaved)
+			{
+				await SignOutOnServerAsync(WipeMode.WhenSaved, token).ConfigureAwait(false);
+				return;
+			}
+
+			IsConfirmingSignOut = true;
+			IsOpen = true;
 		}, cancellationToken);
+	}
+
+	/// <summary>
+	/// Signs out although changes are not saved to the account yet, and removes the profile from the phone.
+	/// </summary>
+	/// <returns>A task that completes when the phone is signed out.</returns>
+	public Task ConfirmSignOutAsync() => ConfirmSignOutAsync(CancellationToken.None);
+
+	/// <summary>Signs out anyway with caller cancellation.</summary>
+	/// <param name="cancellationToken">A token to cancel the operation.</param>
+	/// <returns>A task that completes when the action finishes.</returns>
+	public Task ConfirmSignOutAsync(CancellationToken cancellationToken)
+	{
+		if (!IsConfirmingSignOut)
+		{
+			return Task.CompletedTask;
+		}
+
+		return RunAsync(async token =>
+		{
+			IsConfirmingSignOut = false;
+			await SignOutOnServerAsync(WipeMode.Always, token).ConfigureAwait(false);
+		}, cancellationToken);
+	}
+
+	/// <summary>
+	/// Removes the places, vehicle and card from the phone after the sign-out, because the user chose to.
+	/// </summary>
+	/// <returns>A task that completes when the data was removed or the reason it was not was shown.</returns>
+	public Task ConfirmLocalRemovalAsync() => ConfirmLocalRemovalAsync(CancellationToken.None);
+
+	/// <summary>Removes the data from the phone after the sign-out with caller cancellation.</summary>
+	/// <param name="cancellationToken">A token to cancel the operation.</param>
+	/// <returns>A task that completes when the action finishes.</returns>
+	public Task ConfirmLocalRemovalAsync(CancellationToken cancellationToken)
+	{
+		if (!IsConfirmingLocalRemoval)
+		{
+			return Task.CompletedTask;
+		}
+
+		return RunAsync(async _ =>
+		{
+			IsConfirmingLocalRemoval = false;
+			var wiped = await eraser.WipeProfileAsync(CancellationToken.None).ConfigureAwait(false);
+			if (wiped.IsFailure)
+			{
+				Error = SignOutWipeFailedText;
+			}
+		}, cancellationToken);
+	}
+
+	/// <summary>
+	/// Keeps the changes that are not saved on the phone after the sign-out; they are saved to an account when one signs in.
+	/// </summary>
+	public void KeepOnPhone()
+	{
+		IsConfirmingLocalRemoval = false;
+		NotifyChanged();
+	}
+
+	/// <summary>
+	/// Withdraws the sign-out: the phone stays signed in and keeps its data.
+	/// </summary>
+	public void CancelSignOut()
+	{
+		IsConfirmingSignOut = false;
+		NotifyChanged();
 	}
 
 	/// <summary>
@@ -479,8 +632,9 @@ public sealed class AccountViewModel : ViewModelBase, IDialogViewModel, IDisposa
 				return;
 			}
 
-			IsOwnerVerified = true;
+			verification.Verify(pendingOwnerHash);
 			ClearOwnerChange();
+			sync.Request();
 		}, cancellationToken);
 	}
 
@@ -565,6 +719,75 @@ public sealed class AccountViewModel : ViewModelBase, IDialogViewModel, IDisposa
 	}
 
 	/// <summary>
+	/// Runs the sync that a sign-out waits for, for at most <see cref="SignOutSyncTimeout"/>. The sync itself goes on after the wait ended.
+	/// </summary>
+	/// <param name="cancellationToken">A token to cancel the operation.</param>
+	/// <returns>A task with the result of the sync, or a result that says no sync ended in time.</returns>
+	private async Task<ProfileSyncResult> SyncForSignOutAsync(CancellationToken cancellationToken)
+	{
+		using var timeout = new CancellationTokenSource(SignOutSyncTimeout, clock);
+		using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
+		try
+		{
+			return await sync.SyncAsync(linked.Token).ConfigureAwait(false);
+		}
+		catch (OperationCanceledException) when (timeout.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+		{
+			return ProfileSyncResult.NotRun(sync.State);
+		}
+	}
+
+	/// <summary>
+	/// Signs the device out on the server and shows the signed-out state; the owner stays bound to the phone. A failed sign-out removes
+	/// nothing, because the phone is still signed in.
+	/// </summary>
+	/// <param name="mode">Whether and how the places, vehicle and card are removed from the phone afterwards.</param>
+	/// <param name="cancellationToken">A token to cancel the sign-out call.</param>
+	/// <returns>A task that completes when the phone is signed out and, when asked, emptied.</returns>
+	private async Task SignOutOnServerAsync(WipeMode mode, CancellationToken cancellationToken)
+	{
+		var result = await client.SignOutAsync(cancellationToken).ConfigureAwait(false);
+		if (result.IsFailure)
+		{
+			Error = result.Error.Message;
+			return;
+		}
+
+		// The verification goes first, so that no sync starts on data that is about to be removed.
+		ShowSignedOut();
+		if (mode == WipeMode.None)
+		{
+			return;
+		}
+
+		// The sign-out is done, so the removal does not stop on the token. After a sync the removal is conditional: the changed flag is read in
+		// its transaction, and a change that was saved since the sync is asked about, not removed.
+		var wiped = mode == WipeMode.Always
+			? await eraser.WipeProfileAsync(CancellationToken.None).ConfigureAwait(false)
+			: await WipeWhenStillSavedAsync().ConfigureAwait(false);
+		if (wiped.IsFailure)
+		{
+			Error = SignOutWipeFailedText;
+		}
+	}
+
+	/// <summary>
+	/// Removes the profile unless a change landed since the sync; then it asks the user what to do with it.
+	/// </summary>
+	/// <returns>A task with the result of the removal; a success also when the question was asked instead.</returns>
+	private async Task<Result> WipeWhenStillSavedAsync()
+	{
+		var wiped = await eraser.WipeProfileIfSavedAsync(CancellationToken.None).ConfigureAwait(false);
+		if (wiped.IsSuccess && !wiped.Value)
+		{
+			IsConfirmingLocalRemoval = true;
+			IsOpen = true;
+		}
+
+		return wiped.IsFailure ? Result.Failure(wiped.Error, wiped.ResultExceptionType) : Result.Success();
+	}
+
+	/// <summary>
 	/// Reads the account; a session the API ended shows the signed-out state with a reason, any other failure is shown and the session is kept.
 	/// </summary>
 	/// <param name="cancellationToken">A token to cancel the operation.</param>
@@ -613,13 +836,18 @@ public sealed class AccountViewModel : ViewModelBase, IDialogViewModel, IDisposa
 		await ResumePendingEraseAsync(cancellationToken).ConfigureAwait(false);
 		if (!IsSignedIn)
 		{
-			IsOwnerVerified = false;
+			verification.Clear();
 			return;
 		}
 
 		if (Account is not null)
 		{
 			await VerifyOwnerAsync(Account, freshSignIn, cancellationToken).ConfigureAwait(false);
+		}
+
+		if (IsOwnerVerified)
+		{
+			sync.Request();
 		}
 	}
 
@@ -638,21 +866,18 @@ public sealed class AccountViewModel : ViewModelBase, IDialogViewModel, IDisposa
 		var bound = await owner.GetAccountHashAsync(cancellationToken).ConfigureAwait(false);
 		if (bound.IsSuccess)
 		{
-			var same = string.Equals(bound.Value, hash, StringComparison.Ordinal);
-			IsOwnerVerified = same;
-			IsConfirmingOwnerChange = !same;
-			pendingOwnerHash = same ? string.Empty : hash;
+			await VerifyBoundOwnerAsync(hash, string.Equals(bound.Value, hash, StringComparison.Ordinal), cancellationToken).ConfigureAwait(false);
 			return;
 		}
 
-		IsOwnerVerified = false;
+		verification.Clear();
 		if (DeviceDataErrors.IsNotStored(bound))
 		{
 			// The data already on the phone belongs to the first account that signs in.
 			var result = await owner.BindAsync(hash, cancellationToken).ConfigureAwait(false);
-			IsOwnerVerified = result.IsSuccess;
 			if (result.IsSuccess)
 			{
+				verification.Verify(hash);
 				return;
 			}
 		}
@@ -661,6 +886,70 @@ public sealed class AccountViewModel : ViewModelBase, IDialogViewModel, IDisposa
 		{
 			await RejectUnboundSignInAsync(cancellationToken).ConfigureAwait(false);
 		}
+	}
+
+	/// <summary>
+	/// Handles an account whose hash is compared with the bound one: the same account is verified, another account takes over a phone
+	/// that holds nothing worth protecting, and otherwise waits for the decision of the user.
+	/// </summary>
+	/// <param name="hash">The hash of the signed-in account.</param>
+	/// <param name="same">Whether it equals the bound hash.</param>
+	/// <param name="cancellationToken">A token to cancel the operation.</param>
+	/// <returns>A task that completes when the account was verified or the decision was asked for.</returns>
+	private async Task VerifyBoundOwnerAsync(string hash, bool same, CancellationToken cancellationToken)
+	{
+		if (same)
+		{
+			verification.Verify(hash);
+			IsConfirmingOwnerChange = false;
+			pendingOwnerHash = string.Empty;
+			return;
+		}
+
+		verification.Clear();
+		if (await IsLocalProfileEmptyAsync(cancellationToken).ConfigureAwait(false) && await TakeOverEmptyPhoneAsync(hash, cancellationToken).ConfigureAwait(false))
+		{
+			return;
+		}
+
+		IsConfirmingOwnerChange = true;
+		pendingOwnerHash = hash;
+	}
+
+	/// <summary>
+	/// Tells whether the phone holds no place, vehicle or card. A profile that cannot be read counts as not empty, so nothing is removed unasked.
+	/// </summary>
+	/// <param name="cancellationToken">A token to cancel the operation.</param>
+	/// <returns>A task with <see langword="true"/> when nothing is saved.</returns>
+	private async Task<bool> IsLocalProfileEmptyAsync(CancellationToken cancellationToken)
+	{
+		var read = await localProfile.ReadAsync(cancellationToken).ConfigureAwait(false);
+		return read.IsSuccess && read.Value.IsEmpty;
+	}
+
+	/// <summary>
+	/// Binds an account to a phone that holds nothing to protect. The sync state of the previous account goes first: its base revision
+	/// must not be matched against the revisions of this account.
+	/// </summary>
+	/// <param name="hash">The hash of the signed-in account.</param>
+	/// <param name="cancellationToken">A token to cancel the operation.</param>
+	/// <returns>A task with <see langword="true"/> when the account is bound and verified.</returns>
+	private async Task<bool> TakeOverEmptyPhoneAsync(string hash, CancellationToken cancellationToken)
+	{
+		var wiped = await eraser.WipeProfileAsync(cancellationToken).ConfigureAwait(false);
+		if (wiped.IsFailure)
+		{
+			return false;
+		}
+
+		var bound = await owner.BindAsync(hash, cancellationToken).ConfigureAwait(false);
+		if (bound.IsFailure)
+		{
+			return false;
+		}
+
+		verification.Verify(hash);
+		return true;
 	}
 
 	/// <summary>
@@ -739,8 +1028,10 @@ public sealed class AccountViewModel : ViewModelBase, IDialogViewModel, IDisposa
 	private void ShowSignedOut()
 	{
 		IsSignedIn = false;
-		IsOwnerVerified = false;
+		verification.Clear();
+		sync.Reset();
 		IsConfirmingDelete = false;
+		IsConfirmingSignOut = false;
 		ClearOwnerChange();
 		Account = null;
 	}
@@ -751,5 +1042,30 @@ public sealed class AccountViewModel : ViewModelBase, IDialogViewModel, IDisposa
 	/// <param name="day">The day.</param>
 	/// <returns>The day as "17 Nov 2026".</returns>
 	private static string Format(DateOnly day) => day.ToString("d MMM yyyy", CultureInfo.InvariantCulture);
+	#endregion
+
+	#region Nested Types
+	/// <summary>
+	/// Author      : Gihed Annabi
+	/// Date        : 11-2026
+	/// Purpose     : Whether the places, vehicle and card are removed from the phone after a sign-out.
+	/// </summary>
+	private enum WipeMode
+	{
+		/// <summary>
+		/// Nothing is removed: the data was never synced to this account.
+		/// </summary>
+		None = 0,
+
+		/// <summary>
+		/// The data is removed unless a change landed since the sync.
+		/// </summary>
+		WhenSaved = 1,
+
+		/// <summary>
+		/// The data is removed because the user asked for it.
+		/// </summary>
+		Always = 2,
+	}
 	#endregion
 }

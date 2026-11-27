@@ -85,6 +85,24 @@ public sealed class ProfileHandlerTests
 	}
 
 	/// <summary>
+	/// Verifies that the moments of cleared sections survive the JSON round trip, and that a stored document without them reads back without.
+	/// </summary>
+	[Fact]
+	public void Json_ShouldKeepTheClearedSectionsAndReadADocumentWithoutThem()
+	{
+		var cleared = new ParkingTracker.Contracts.Features.Profiles.ProfileClearedSections(ProfileTestData.Now, null, ProfileTestData.Now.AddMinutes(1), null);
+		var document = ProfileTestData.Valid() with { Home = null, Vehicle = null, Cleared = cleared };
+
+		var bytes = ProfileDocumentJson.Serialize(document);
+		var back = ProfileDocumentJson.TryDeserialize(bytes);
+		var old = ProfileDocumentJson.TryDeserialize("{\"schemaVersion\":1,\"favourites\":{\"updatedAt\":\"2026-11-20T10:00:00+00:00\",\"places\":[]}}"u8);
+
+		System.Text.Encoding.UTF8.GetString(bytes).Should().Contain("\"cleared\":{");
+		back!.Cleared.Should().Be(cleared);
+		old!.Cleared.Should().BeNull();
+	}
+
+	/// <summary>
 	/// Verifies that the plain document that is encrypted is the fixed camelCase JSON of the document, with nulls written.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>

@@ -183,6 +183,27 @@ public sealed class ProfileDocumentValidatorTests
 	}
 
 	/// <summary>
+	/// Verifies that the moments of cleared sections are accepted for absent sections, that a document without them stays valid, and that
+	/// a time exactly a day ahead passes and one second more does not.
+	/// </summary>
+	[Fact]
+	public void Validate_ClearedSections_ShouldBeAcceptedForAbsentSectionsOnly()
+	{
+		var absent = ProfileTestData.Valid() with { Home = null, Card = null, Cleared = new ProfileClearedSections(ProfileTestData.Now, null, null, ProfileTestData.Now.AddDays(1)) };
+		var present = ProfileTestData.Valid() with { Cleared = new ProfileClearedSections(ProfileTestData.Now, null, null, null) };
+		var presentVehicle = ProfileTestData.Valid() with { Cleared = new ProfileClearedSections(null, null, ProfileTestData.Now, null) };
+		var ahead = ProfileTestData.Valid() with { Home = null, Cleared = new ProfileClearedSections(ProfileTestData.Now.AddDays(1).AddSeconds(1), null, null, null) };
+		var empty = ProfileTestData.Valid() with { Cleared = new ProfileClearedSections(null, null, null, null) };
+
+		validator.TestValidate(ProfileTestData.Valid() with { Cleared = null }).IsValid.Should().BeTrue();
+		validator.TestValidate(absent).IsValid.Should().BeTrue();
+		validator.TestValidate(empty).IsValid.Should().BeTrue();
+		validator.TestValidate(present).ShouldHaveValidationErrorFor(item => item.Cleared);
+		validator.TestValidate(presentVehicle).ShouldHaveValidationErrorFor(item => item.Cleared);
+		validator.TestValidate(ahead).ShouldHaveValidationErrorFor(item => item.Cleared);
+	}
+
+	/// <summary>
 	/// Verifies that a favourites section the caller left out is refused instead of throwing.
 	/// </summary>
 	[Fact]

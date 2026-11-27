@@ -1,5 +1,6 @@
 using Bunit;
 using NSubstitute;
+using ParkingTracker.ViewModels.Features.ProfileSync;
 using NSubstitute.ExceptionExtensions;
 using ParkingTracker.Application.Features.Accounts.Abstractions;
 using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
@@ -360,6 +361,74 @@ public sealed class AppMenuTests : UiTestContext
 		await host.WaitForAssertionAsync(() => host.FindAll("#appMenu").Should().BeEmpty());
 		back.CanGoBack.Should().BeFalse();
 		back.TryGoBack().Should().BeFalse();
+	}
+	#endregion
+
+	#region Sync Line Tests
+	/// <summary>
+	/// Verifies that the signed-in menu shows the sync line under the account entry, with the text of the state of the sync.
+	/// </summary>
+	/// <param name="state">The state of the sync.</param>
+	/// <param name="expected">The text of the line.</param>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Theory]
+	[InlineData(ProfileSyncState.Synced, "Saved to your account")]
+	[InlineData(ProfileSyncState.Pending, "Saving…")]
+	[InlineData(ProfileSyncState.Syncing, "Saving…")]
+	[InlineData(ProfileSyncState.Offline, "Waiting for network")]
+	[InlineData(ProfileSyncState.Error, "Not saved, try later")]
+	public async Task SyncLine_SignedIn_ShouldShowTheStateOfTheSync(ProfileSyncState state, string expected)
+	{
+		Sync.State.Returns(state);
+
+		var host = await OpenAccountMenuAsync(signedIn: true);
+
+		await host.WaitForAssertionAsync(() => host.Find("#menuSyncText").TextContent.Should().Be(expected));
+	}
+
+	/// <summary>
+	/// Verifies that the line follows a change of the state while the menu is open.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task SyncLine_StateChanges_ShouldRenderAgain()
+	{
+		Sync.State.Returns(ProfileSyncState.Syncing);
+		var host = await OpenAccountMenuAsync(signedIn: true);
+		await host.WaitForAssertionAsync(() => host.Find("#menuSyncText").TextContent.Should().Be("Saving…"));
+
+		Sync.State.Returns(ProfileSyncState.Synced);
+		await host.InvokeAsync(() => Sync.Changed += Raise.Event());
+
+		await host.WaitForAssertionAsync(() => host.Find("#menuSyncText").TextContent.Should().Be("Saved to your account"));
+	}
+
+	/// <summary>
+	/// Verifies that a signed-out menu has no sync line.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task SyncLine_SignedOut_ShouldBeAbsent()
+	{
+		var host = await OpenAccountMenuAsync(signedIn: false);
+
+		host.FindAll("#menuSyncText").Should().BeEmpty();
+	}
+
+	/// <summary>
+	/// Verifies that Sign out with changes that are not saved does not sign out: the question is asked in the account sheet.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task SignOut_NotSynced_ShouldAskInsteadOfSigningOut()
+	{
+		Sync.SyncAsync(Arg.Any<CancellationToken>()).Returns(new ProfileSyncResult(true, ProfileSyncState.Offline));
+		var host = await OpenAccountMenuAsync(signedIn: true);
+
+		await host.Find("#menuSignOut").ClickAsync();
+
+		await Session.DidNotReceive().SignOutAsync(Arg.Any<CancellationToken>());
+		Resolve<AccountViewModel>().IsConfirmingSignOut.Should().BeTrue();
 	}
 	#endregion
 }

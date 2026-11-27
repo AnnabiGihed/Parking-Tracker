@@ -1209,11 +1209,11 @@ public sealed class AccountViewModelTests : IDisposable
 	[Fact]
 	public void Constructor_NullArguments_ShouldThrowArgumentNullException()
 	{
-		var noClient = () => new AccountViewModel(null!, google, ui.Toast, ui.Owner, ui.Eraser); // null on purpose: proves the guard clause rejects it
-		var noGoogle = () => new AccountViewModel(client, null!, ui.Toast, ui.Owner, ui.Eraser); // null on purpose: proves the guard clause rejects it
-		var noToast = () => new AccountViewModel(client, google, null!, ui.Owner, ui.Eraser); // null on purpose: proves the guard clause rejects it
-		var noOwner = () => new AccountViewModel(client, google, ui.Toast, null!, ui.Eraser); // null on purpose: proves the guard clause rejects it
-		var noEraser = () => new AccountViewModel(client, google, ui.Toast, ui.Owner, null!); // null on purpose: proves the guard clause rejects it
+		var noClient = () => new AccountViewModel(null!, google, ui.Toast, ui.Owner, ui.Eraser, ui.Verification, ui.Sync, ui.LocalProfile, ui.Clock); // null on purpose: proves the guard clause rejects it
+		var noGoogle = () => new AccountViewModel(client, null!, ui.Toast, ui.Owner, ui.Eraser, ui.Verification, ui.Sync, ui.LocalProfile, ui.Clock); // null on purpose: proves the guard clause rejects it
+		var noToast = () => new AccountViewModel(client, google, null!, ui.Owner, ui.Eraser, ui.Verification, ui.Sync, ui.LocalProfile, ui.Clock); // null on purpose: proves the guard clause rejects it
+		var noOwner = () => new AccountViewModel(client, google, ui.Toast, null!, ui.Eraser, ui.Verification, ui.Sync, ui.LocalProfile, ui.Clock); // null on purpose: proves the guard clause rejects it
+		var noEraser = () => new AccountViewModel(client, google, ui.Toast, ui.Owner, null!, ui.Verification, ui.Sync, ui.LocalProfile, ui.Clock); // null on purpose: proves the guard clause rejects it
 
 		noClient.Should().Throw<ArgumentNullException>();
 		noGoogle.Should().Throw<ArgumentNullException>();

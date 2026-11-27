@@ -14,6 +14,10 @@
                 </Template>
             </RadzenPanelMenuItem>
         </RadzenPanelMenu>
+        @if (ViewModel.IsSyncVisible)
+        {
+            <p id="menuSyncText" class="app-menu-sync">@ViewModel.SyncText</p>
+        }
     }
     <div id="menuSectionLabel" class="app-menu-section">@ViewModel.SectionLabel</div>
     <RadzenPanelMenu class="app-menu-items" AriaLabel="Menu">

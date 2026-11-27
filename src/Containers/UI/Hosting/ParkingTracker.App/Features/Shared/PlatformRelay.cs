@@ -5,6 +5,7 @@ using ParkingTracker.Application.Features.ParkingDetection.Abstractions;
 using ParkingTracker.Application.Features.ParkingDetection.Services;
 using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.ViewModels.Features.Car;
+using ParkingTracker.ViewModels.Features.ProfileSync;
 using ParkingTracker.ViewModels.Features.Shared;
 using ParkingTracker.ViewModels.Features.Shared.Settings;
 using ParkingTracker.ViewModels.Features.SpotCheck;
@@ -108,6 +109,12 @@ public sealed partial class PlatformRelay : ComponentBase, IDisposable
 	public ParkedOnScreenResponder ParkedResponder { get; set; } = null!;
 
 	/// <summary>
+	/// Gets or sets the trigger of the profile sync, which the start, the return to the front and the return of the network ask (ADR-0032).
+	/// </summary>
+	[Inject]
+	public ProfileSyncTrigger ProfileSync { get; set; } = null!;
+
+	/// <summary>
 	/// Gets or sets the clock that times the wait before the notification question.
 	/// </summary>
 	[Inject]
@@ -129,6 +136,9 @@ public sealed partial class PlatformRelay : ComponentBase, IDisposable
 		Spot.CoverageChanged += OnCoverageChanged;
 		Watcher.ParkedOnScreen += OnParkedOnScreen;
 		_ = StartAlertsAsync();
+
+		// Resolving the trigger starts it listening for changes; a sync that cannot run (signed out) does nothing.
+		ProfileSync.RequestNow();
 	}
 	#endregion
 
@@ -153,6 +163,11 @@ public sealed partial class PlatformRelay : ComponentBase, IDisposable
 	{
 		try
 		{
+			if (e.Value)
+			{
+				ProfileSync.RequestNow();
+			}
+
 			await Spot.HandleConnectivityChangeAsync(e.Value).ConfigureAwait(false);
 		}
 		catch (Exception exception)
@@ -171,6 +186,7 @@ public sealed partial class PlatformRelay : ComponentBase, IDisposable
 	{
 		try
 		{
+			ProfileSync.RequestNow();
 			await Permission.RefreshAsync().ConfigureAwait(false);
 			await Car.LoadAsync().ConfigureAwait(false);
 			await Alerts.ApplyAsync().ConfigureAwait(false);

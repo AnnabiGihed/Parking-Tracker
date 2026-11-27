@@ -46,7 +46,7 @@ public sealed class DevicePlacesStoreTests
 	/// <returns>The store.</returns>
 	private static DevicePlacesStore NewStore(DeviceTestDatabase db, DeviceDataResetNotice? notice = null)
 	{
-		return new DevicePlacesStore(db.Places, db.Cards, db.Vehicles, db.Sessions, db.UnitOfWork, db.Initializer, new FakeStartupGate(), NullLogger<DevicePlacesStore>.Instance, notice ?? new DeviceDataResetNotice());
+		return new DevicePlacesStore(db.Places, db.Cards, db.Vehicles, db.Sessions, db.UnitOfWork, db.Initializer, new FakeStartupGate(), NullLogger<DevicePlacesStore>.Instance, notice ?? new DeviceDataResetNotice(), db.Tracker);
 	}
 	#endregion
 
@@ -380,7 +380,7 @@ public sealed class DevicePlacesStoreTests
 		notice.StaleRowsRemoved += (_, _) => raised++;
 		var store = NewStore(db, notice);
 		await store.SavePlaceAsync(PlaceKind.Home, GrandPlace, null);
-		var settings = new DeviceSettingsStore(new SettingsStore(new InMemoryKeyValueStorage(), new InMemoryKeyValueStorage()), db.Cards, db.Sessions, db.Places, db.Vehicles, db.UnitOfWork, db.Initializer, new FakeStartupGate(), db.ReferenceData, NullLogger<DeviceSettingsStore>.Instance, new DeviceDataResetNotice());
+		var settings = new DeviceSettingsStore(new SettingsStore(new InMemoryKeyValueStorage(), new InMemoryKeyValueStorage()), db.Cards, db.Sessions, db.Places, db.Vehicles, db.UnitOfWork, db.Initializer, new FakeStartupGate(), db.ReferenceData, NullLogger<DeviceSettingsStore>.Instance, new DeviceDataResetNotice(), db.Tracker);
 		await settings.SaveCardAsync(new ParkingCard("bruxelles", null, new CardPeriod(null, null), [], [], [], "N-1", "1ABC234"));
 		await settings.SaveCarAsync(new ParkedCar(GrandPlace, DateTimeOffset.UnixEpoch, "Paid parking", "Rue de la Loi"));
 		db.MemoryKeys.Lose();
@@ -463,7 +463,7 @@ public sealed class DevicePlacesStoreTests
 	{
 		await using var db = DeviceTestDatabase.CreateEmpty();
 
-		var noPlaces = () => new DevicePlacesStore(null!, db.Cards, db.Vehicles, db.Sessions, db.UnitOfWork, db.Initializer, new FakeStartupGate(), NullLogger<DevicePlacesStore>.Instance, new DeviceDataResetNotice()); // null on purpose: proves the guard clause rejects it
+		var noPlaces = () => new DevicePlacesStore(null!, db.Cards, db.Vehicles, db.Sessions, db.UnitOfWork, db.Initializer, new FakeStartupGate(), NullLogger<DevicePlacesStore>.Instance, new DeviceDataResetNotice(), db.Tracker); // null on purpose: proves the guard clause rejects it
 
 		noPlaces.Should().Throw<ArgumentNullException>();
 	}

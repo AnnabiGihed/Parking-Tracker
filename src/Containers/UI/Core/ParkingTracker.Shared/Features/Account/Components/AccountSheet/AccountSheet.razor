@@ -11,6 +11,14 @@
         {
             <p class="account-note">Developer build: sign in with Google against the API.</p>
             <RadzenButton id="accountSignIn" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Primary" Text="Sign in with Google" Disabled="ViewModel.IsBusy" Click="OnSignInAsync" />
+            @if (ViewModel.IsConfirmingLocalRemoval)
+            {
+                <p id="accountLocalRemovalNote" class="account-note">@AccountViewModel.LocalRemovalNoteText</p>
+                <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" class="account-actions">
+                    <RadzenButton id="accountKeepOnPhone" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Base" Variant="Variant.Outlined" Text="Keep on this phone" Disabled="ViewModel.IsBusy" Click="OnKeepOnPhone" />
+                    <RadzenButton id="accountRemoveFromPhone" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Danger" Text="Remove from this phone" Disabled="ViewModel.IsBusy" Click="OnConfirmLocalRemovalAsync" Style="flex:1" />
+                </RadzenStack>
+            }
             @if (ViewModel.IsWipePending)
             {
                 <RadzenButton id="accountWipeRetry" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Outlined" Text="Remove data from this phone" Disabled="ViewModel.IsBusy" Click="OnRetryWipeAsync" />
@@ -37,6 +45,14 @@
                 <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" class="account-actions">
                     <RadzenButton id="accountOwnerChangeCancel" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Base" Variant="Variant.Outlined" Text="Cancel" Disabled="ViewModel.IsBusy" Click="OnCancelOwnerChangeAsync" />
                     <RadzenButton id="accountOwnerChangeConfirm" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Danger" Text="Remove and continue" Disabled="ViewModel.IsBusy" Click="OnConfirmOwnerChangeAsync" Style="flex:1" />
+                </RadzenStack>
+            }
+            else if (ViewModel.IsConfirmingSignOut)
+            {
+                <p id="accountSignOutNote" class="account-note">Your latest changes are not saved to your account yet. If you sign out now they are removed from this phone.</p>
+                <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" class="account-actions">
+                    <RadzenButton id="accountSignOutStay" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Base" Variant="Variant.Outlined" Text="Stay signed in" Disabled="ViewModel.IsBusy" Click="OnCancelSignOut" />
+                    <RadzenButton id="accountSignOutAnyway" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Danger" Text="Sign out anyway" Disabled="ViewModel.IsBusy" Click="OnConfirmSignOutAsync" Style="flex:1" />
                 </RadzenStack>
             }
             else if (ViewModel.IsConfirmingDelete)

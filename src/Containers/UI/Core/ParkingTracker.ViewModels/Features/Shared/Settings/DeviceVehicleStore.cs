@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using ParkingTracker.Application.Features.ParkingSessions.Abstractions;
+using ParkingTracker.Application.Features.ProfileSync.Abstractions;
 using ParkingTracker.Application.Features.ResidentCards.Abstractions;
 using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
 using ParkingTracker.Application.Features.Shared.Abstractions;
@@ -19,7 +20,8 @@ namespace ParkingTracker.ViewModels.Features.Shared.Settings;
 ///              from the domain. A profile that exists but cannot be read is never read as "none": the read throws
 ///              <see cref="SavedDataUnreadableException"/>; a write replaces a profile that is unreadable for good, but never one whose key
 ///              cannot be read now. When the key was lost (<see cref="DeviceDataErrors.KeyLost"/>), saving a vehicle removes the stale encrypted
-///              rows in the same scope, and only then does a new key get created.
+///              rows in the same scope, and only then does a new key get created. Every save or removal stamps the synced vehicle section in
+///              the same scope (ADR-0032), and a commit tells the sync trigger.
 /// </summary>
 public sealed partial class DeviceVehicleStore : IVehicleStore
 {
@@ -73,6 +75,11 @@ public sealed partial class DeviceVehicleStore : IVehicleStore
 	/// Tells the other stores that the stale rows were removed, so that they forget what they remembered.
 	/// </summary>
 	private readonly DeviceDataResetNotice resetNotice;
+
+	/// <summary>
+	/// Records the moment of a change of a synced section, in the scope of the change (ADR-0032).
+	/// </summary>
+	private readonly IProfileChangeTracker tracker;
 	#endregion
 
 	#region Constructors
@@ -89,6 +96,7 @@ public sealed partial class DeviceVehicleStore : IVehicleStore
 	/// <param name="clock">The clock that tells the current year.</param>
 	/// <param name="logger">The log.</param>
 	/// <param name="resetNotice">Tells the other stores that the stale rows were removed.</param>
+	/// <param name="tracker">Records the moment of a change of a synced section, in the scope of the change.</param>
 	/// <exception cref="ArgumentNullException">An argument is <see langword="null"/>.</exception>
 	public DeviceVehicleStore(
 		IVehicleRepository vehicles,
@@ -100,7 +108,8 @@ public sealed partial class DeviceVehicleStore : IVehicleStore
 		IStartupGate gate,
 		TimeProvider clock,
 		ILogger<DeviceVehicleStore> logger,
-		DeviceDataResetNotice resetNotice)
+		DeviceDataResetNotice resetNotice,
+		IProfileChangeTracker tracker)
 	{
 		ArgumentNullException.ThrowIfNull(vehicles);
 		ArgumentNullException.ThrowIfNull(places);
@@ -112,6 +121,7 @@ public sealed partial class DeviceVehicleStore : IVehicleStore
 		ArgumentNullException.ThrowIfNull(clock);
 		ArgumentNullException.ThrowIfNull(logger);
 		ArgumentNullException.ThrowIfNull(resetNotice);
+		ArgumentNullException.ThrowIfNull(tracker);
 		this.vehicles = vehicles;
 		this.places = places;
 		this.cards = cards;
@@ -122,6 +132,7 @@ public sealed partial class DeviceVehicleStore : IVehicleStore
 		this.clock = clock;
 		this.logger = logger;
 		this.resetNotice = resetNotice;
+		this.tracker = tracker;
 	}
 	#endregion
 
@@ -186,7 +197,9 @@ public sealed partial class DeviceVehicleStore : IVehicleStore
 			}
 
 			ThrowIfFailed(staged);
+			tracker.Stage(scope, SyncSection.Vehicle);
 			await CommitAsync(scope, cancellationToken).ConfigureAwait(false);
+			tracker.NotifyCommitted();
 			return Result.Success();
 		}
 	}
@@ -199,7 +212,9 @@ public sealed partial class DeviceVehicleStore : IVehicleStore
 		await using (scope.ConfigureAwait(false))
 		{
 			vehicles.Remove(scope);
+			tracker.Stage(scope, SyncSection.Vehicle);
 			await CommitAsync(scope, cancellationToken).ConfigureAwait(false);
+			tracker.NotifyCommitted();
 		}
 	}
 	#endregion

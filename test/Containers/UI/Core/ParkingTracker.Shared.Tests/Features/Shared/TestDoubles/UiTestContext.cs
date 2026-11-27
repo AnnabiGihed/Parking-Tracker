@@ -6,6 +6,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
 using ParkingTracker.Application.Features.Accounts.Abstractions;
+using ParkingTracker.Application.Features.ProfileSync.Abstractions;
+using ParkingTracker.Contracts.Features.Profiles;
 using ParkingTracker.Application.Features.ParkingDetection.Abstractions;
 using ParkingTracker.Application.Features.ParkingDetection.Services;
 using ParkingTracker.Application.Features.ParkingSessions.Abstractions;
@@ -23,6 +25,7 @@ using ParkingTracker.Domain.Features.Shared.ValueObjects;
 using ParkingTracker.Domain.Features.SpotDecisions.ValueObjects;
 using ParkingTracker.Domain.Features.Vehicles.ValueObjects;
 using ParkingTracker.Domain.Features.Zones.ValueObjects;
+using ParkingTracker.ViewModels.Features.ProfileSync;
 using ParkingTracker.ViewModels.Features.Shared.Settings;
 using ParkingTracker.ViewModels.Features.Shared.Settings.Database;
 using ParkingTracker.ViewModels.Features.Shared.Settings.Legacy;
@@ -97,10 +100,21 @@ public abstract class UiTestContext : BunitContext
 		var configuration = new ConfigurationBuilder().Build();
 		new global::ParkingTracker.ViewModels.UiServiceInstaller().Install(Services, configuration);
 		new global::ParkingTracker.Shared.UiServiceInstaller().Install(Services, configuration);
+		ReplaceProfileSync();
 	}
 	#endregion
 
 	#region Properties
+	/// <summary>
+	/// Gets the substitute for the profile sync, which ends synced until a test says otherwise.
+	/// </summary>
+	protected IProfileSync Sync { get; } = Substitute.For<IProfileSync>();
+
+	/// <summary>
+	/// Gets the substitute for the local profile, which holds a home place until a test says otherwise.
+	/// </summary>
+	protected IProfileLocalStore LocalProfile { get; } = Substitute.For<IProfileLocalStore>();
+
 	/// <summary>
 	/// Gets the fake clock.
 	/// </summary>
@@ -261,6 +275,19 @@ public abstract class UiTestContext : BunitContext
 
 	#region Private Helpers
 	/// <summary>
+	/// Replaces the real profile sync, which the installers registered, with a substitute that says everything is saved, and gives the account
+	/// view model a profile that holds something. It runs after the installers, so that these registrations win.
+	/// </summary>
+	private void ReplaceProfileSync()
+	{
+		Sync.State.Returns(ProfileSyncState.Synced);
+		Sync.SyncAsync(Arg.Any<CancellationToken>()).Returns(new ProfileSyncResult(true, ProfileSyncState.Synced));
+		LocalProfile.ReadAsync(Arg.Any<CancellationToken>()).Returns(Result.Success(new ProfileSnapshot(new ProfileDocument(ProfileDocument.SupportedSchemaVersion, new ProfilePlaceSection("Home", 50.85, 4.35, "Rue", DateTimeOffset.UnixEpoch), null, new ProfileFavouritesSection(DateTimeOffset.UnixEpoch, []), null, null), SyncState.Empty)));
+		Services.AddScoped(_ => Sync);
+		Services.AddSingleton(LocalProfile);
+	}
+
+	/// <summary>
 	/// Registers the device owner store, which holds no owner, and the wiper, which succeeds, with the notice that tells the stores about a wipe.
 	/// </summary>
 	private void AddAccountDataServices()
@@ -269,6 +296,7 @@ public abstract class UiTestContext : BunitContext
 		Owner.BindAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Result.Success());
 		Wiper.WipeProfileAsync(Arg.Any<CancellationToken>()).Returns(Result.Success());
 		Wiper.WipeAllAsync(Arg.Any<CancellationToken>()).Returns(Result.Success());
+		Wiper.WipeProfileIfSavedAsync(Arg.Any<CancellationToken>()).Returns(Result.Success(true));
 		Owner.GetErasePendingAsync(Arg.Any<CancellationToken>()).Returns(Result.Success(false));
 		Owner.MarkErasePendingAsync(Arg.Any<CancellationToken>()).Returns(Result.Success());
 		Services.AddSingleton(Owner);

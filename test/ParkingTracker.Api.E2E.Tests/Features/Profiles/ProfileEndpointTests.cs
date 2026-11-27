@@ -158,6 +158,31 @@ public sealed class ProfileEndpointTests
 	}
 
 	/// <summary>
+	/// Verifies that the moments at which sections were cleared are stored with the document and come back on a read, and that a document
+	/// without them stays valid and reads back without them.
+	/// </summary>
+	/// <returns>A task that completes when the assertions have run.</returns>
+	[Fact]
+	public async Task Put_WithClearedSections_ShouldReturnThemOnGet()
+	{
+		await using var harness = await SignInHarness.StartAsync(server);
+		var device = await harness.SignInAsync(Subject);
+		var cleared = new ProfileClearedSections(Moment, null, Moment.AddMinutes(1), null);
+		var document = Document() with { Home = null, Vehicle = null, Cleared = cleared };
+
+		var created = await SendAsync(harness, HttpMethod.Put, device.AccessToken, document, CreateOnly);
+		var read = await SendAsync(harness, HttpMethod.Get, device.AccessToken);
+
+		created.StatusCode.Should().Be(HttpStatusCode.OK);
+		var back = await read.Content.ReadFromJsonAsync<ProfileDocument>();
+		back!.Cleared.Should().Be(cleared);
+		back.Home.Should().BeNull();
+		var withoutCleared = await SendAsync(harness, HttpMethod.Put, device.AccessToken, Document(), IfMatch("\"1\""));
+		withoutCleared.StatusCode.Should().Be(HttpStatusCode.OK);
+		(await (await SendAsync(harness, HttpMethod.Get, device.AccessToken)).Content.ReadFromJsonAsync<ProfileDocument>())!.Cleared.Should().BeNull();
+	}
+
+	/// <summary>
 	/// Verifies that an If-None-Match that names the current revision (also weak, in a list, or as *) answers 304 without a body
 	/// and with the ETag, and that another revision gets the document.
 	/// </summary>
@@ -316,7 +341,7 @@ public sealed class ProfileEndpointTests
 
 	/// <summary>
 	/// Verifies that an invalid document is 400 with the reasons and stores nothing: a schema version other than 1, a place outside
-	/// Brussels, an unknown fuel and a body that is not a document.
+	/// Brussels, an unknown fuel, a section that is both present and cleared, a clear time far in the future and a body that is not a document.
 	/// </summary>
 	/// <returns>A task that completes when the assertions have run.</returns>
 	[Fact]
@@ -330,6 +355,8 @@ public sealed class ProfileEndpointTests
 			valid with { SchemaVersion = 2 },
 			valid with { Home = valid.Home! with { Latitude = 48.0 } },
 			valid with { Vehicle = valid.Vehicle! with { Fuel = "Steam" } },
+			valid with { Cleared = new ProfileClearedSections(Moment, null, null, null) },
+			valid with { Home = null, Cleared = new ProfileClearedSections(null, null, null, DateTimeOffset.UtcNow.AddDays(3)) },
 		};
 
 		foreach (var document in documents)

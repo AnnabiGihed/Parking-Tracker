@@ -3,6 +3,7 @@ using ParkingTracker.Domain.Features.SavedPlaces.ValueObjects;
 using ParkingTracker.ViewModels.Features.Account;
 using ParkingTracker.ViewModels.Features.Card;
 using ParkingTracker.ViewModels.Features.Places;
+using ParkingTracker.ViewModels.Features.ProfileSync;
 using ParkingTracker.ViewModels.Features.Shared;
 using ParkingTracker.ViewModels.Features.Vehicles;
 
@@ -63,6 +64,26 @@ public sealed class MenuViewModel : ViewModelBase
 	/// The label above the entries while signed out or when the build cannot sign in.
 	/// </summary>
 	public const string OnThisPhoneText = "On this phone only";
+
+	/// <summary>
+	/// The sync line when the profile is saved to the account.
+	/// </summary>
+	public const string SyncedText = "Saved to your account";
+
+	/// <summary>
+	/// The sync line while a change is waiting to be saved or is being saved.
+	/// </summary>
+	public const string SavingText = "Saving…";
+
+	/// <summary>
+	/// The sync line while the server cannot be reached.
+	/// </summary>
+	public const string WaitingForNetworkText = "Waiting for network";
+
+	/// <summary>
+	/// The sync line after the sync stopped on a failure.
+	/// </summary>
+	public const string NotSavedText = "Not saved, try later";
 	#endregion
 
 	#region Fields
@@ -95,6 +116,11 @@ public sealed class MenuViewModel : ViewModelBase
 	/// The account sheet that its entry opens.
 	/// </summary>
 	private readonly AccountViewModel account;
+
+	/// <summary>
+	/// The profile sync, whose state the sync line shows.
+	/// </summary>
+	private readonly IProfileSync sync;
 	#endregion
 
 	#region Constructors
@@ -107,8 +133,9 @@ public sealed class MenuViewModel : ViewModelBase
 	/// <param name="vehicle">The saved vehicle and the dialog that edits it.</param>
 	/// <param name="card">The saved card and the dialog that edits it.</param>
 	/// <param name="account">The account sheet that its entry opens.</param>
+	/// <param name="sync">The profile sync, whose state the sync line shows.</param>
 	/// <exception cref="ArgumentNullException">Thrown when an argument is <see langword="null"/>.</exception>
-	public MenuViewModel(PlacesViewModel places, PlacePickerViewModel picker, FavouritesViewModel favourites, VehicleViewModel vehicle, CardViewModel card, AccountViewModel account)
+	public MenuViewModel(PlacesViewModel places, PlacePickerViewModel picker, FavouritesViewModel favourites, VehicleViewModel vehicle, CardViewModel card, AccountViewModel account, IProfileSync sync)
 	{
 		ArgumentNullException.ThrowIfNull(places);
 		ArgumentNullException.ThrowIfNull(picker);
@@ -116,18 +143,21 @@ public sealed class MenuViewModel : ViewModelBase
 		ArgumentNullException.ThrowIfNull(vehicle);
 		ArgumentNullException.ThrowIfNull(card);
 		ArgumentNullException.ThrowIfNull(account);
+		ArgumentNullException.ThrowIfNull(sync);
 		this.places = places;
 		this.picker = picker;
 		this.favourites = favourites;
 		this.vehicle = vehicle;
 		this.card = card;
 		this.account = account;
+		this.sync = sync;
 
 		// All are scoped like this view model and live as long as it does, so there is nothing to unsubscribe.
 		places.Changed += OnSourceChanged;
 		vehicle.Changed += OnSourceChanged;
 		card.Changed += OnSourceChanged;
 		account.Changed += OnSourceChanged;
+		sync.Changed += OnSourceChanged;
 	}
 	#endregion
 
@@ -189,7 +219,34 @@ public sealed class MenuViewModel : ViewModelBase
 	}
 
 	/// <summary>
-	/// Gets the label above the entries: where what they hold is kept.
+	/// Gets a value indicating whether the sync line is shown: the phone is signed in and its data is known to belong to the account.
+	/// </summary>
+	public bool IsSyncVisible => IsSignedIn && account.IsOwnerVerified;
+
+	/// <summary>
+	/// Gets a value indicating whether the account sheet asks about changes that are not saved, so that the menu gives way to it.
+	/// </summary>
+	public bool IsConfirmingSignOut => account.IsConfirmingSignOut;
+
+	/// <summary>
+	/// Gets the sync line under the account: whether the places, vehicle and card are saved to the account.
+	/// </summary>
+	public string SyncText
+	{
+		get
+		{
+			return sync.State switch
+			{
+				ProfileSyncState.Synced => SyncedText,
+				ProfileSyncState.Offline => WaitingForNetworkText,
+				ProfileSyncState.Error => NotSavedText,
+				_ => SavingText,
+			};
+		}
+	}
+
+	/// <summary>
+	/// Gets the label of the section of the menu that holds the places, vehicle and card.
 	/// </summary>
 	public string SectionLabel => IsSignedIn ? SavedWithAccountText : OnThisPhoneText;
 

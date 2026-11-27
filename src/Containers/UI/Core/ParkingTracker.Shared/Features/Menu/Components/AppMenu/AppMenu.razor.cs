@@ -88,10 +88,19 @@ public sealed partial class AppMenu : ViewModelComponent<MenuViewModel>
 	private Task OnAccountAsync() => CloseThenAsync(ViewModel.OpenAccountAsync);
 
 	/// <summary>
-	/// Handles a tap on Sign out; the menu stays open and shows the signed-out state.
+	/// Handles a tap on Sign out; the menu stays open and shows the signed-out state, unless the account sheet asks about unsaved changes.
 	/// </summary>
 	/// <returns>A task that completes when the phone is signed out.</returns>
-	private Task OnSignOutAsync() => ViewModel.SignOutAsync();
+	private async Task OnSignOutAsync()
+	{
+		await ViewModel.SignOutAsync().ConfigureAwait(true);
+
+		// Changes that are not saved yet are asked about in the account sheet, which opens over the page, not over the menu.
+		if (ViewModel.IsConfirmingSignOut)
+		{
+			await DialogService.CloseSideAsync().ConfigureAwait(true);
+		}
+	}
 
 	/// <summary>
 	/// Handles a tap on Delete account: the account sheet opens with the confirmation.

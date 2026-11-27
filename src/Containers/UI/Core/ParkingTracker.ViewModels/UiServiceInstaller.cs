@@ -7,6 +7,7 @@ using ParkingTracker.ViewModels.Features.Card;
 using ParkingTracker.ViewModels.Features.MapLayers;
 using ParkingTracker.ViewModels.Features.Menu;
 using ParkingTracker.ViewModels.Features.Places;
+using ParkingTracker.ViewModels.Features.ProfileSync;
 using ParkingTracker.ViewModels.Features.Shared;
 using ParkingTracker.ViewModels.Features.SpotCheck;
 using ParkingTracker.ViewModels.Features.Vehicles;
@@ -48,6 +49,13 @@ public sealed class UiServiceInstaller : IServiceInstaller
 		services.AddScoped<FavouritesViewModel>();
 		services.AddScoped<VehicleViewModel>();
 		services.AddScoped<LocalDataEraser>();
+		services.AddScoped<IScreenReloader>(provider => provider.GetRequiredService<LocalDataEraser>());
+
+		// Scoped like the view models they work with: one verification, one sync and one trigger per window.
+		services.AddScoped<OwnerVerification>();
+		services.AddScoped<ProfileSyncService>();
+		services.AddScoped<IProfileSync>(provider => provider.GetRequiredService<ProfileSyncService>());
+		services.AddScoped<ProfileSyncTrigger>();
 		services.AddScoped<AccountViewModel>();
 		services.AddScoped<MenuViewModel>();
 		services.AddScoped<ParkedOnScreenResponder>();
