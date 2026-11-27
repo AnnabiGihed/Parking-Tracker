@@ -12,6 +12,13 @@ Releases 1.0.1 to 1.0.11 (the Capacitor app) are listed on the
 
 ### Added
 
+- The phone now remembers which account its saved data belongs to (a hash of the account ID, never the ID itself).
+  The first account to sign in keeps the places, vehicle and card already on the phone; signing in with another
+  account asks "Remove and continue" or "Cancel" (which signs that account out and keeps the data). Deleting the
+  account now also removes its data from the phone, and the account sheet shows a retry when that fails. Signing out
+  still keeps the data.
+- Step 3 of the phone database schema adds the `sync_state` table that the profile sync will use; nothing reads it
+  yet.
 - The API's profile endpoints, which the app will use to sync the places, vehicle and residents' card: `GET
   /api/v1/me/profile` (the decrypted document with the revision as a strong `ETag`, `304` for a matching
   `If-None-Match`, `404` when there is none) and `PUT /api/v1/me/profile` (`If-Match` with the revision, or `If-None-Match:

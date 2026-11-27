@@ -20,7 +20,7 @@ public sealed partial class DeviceDatabaseInitializer : IDeviceDatabaseInitializ
 	/// <summary>
 	/// The steps of this release, in order.
 	/// </summary>
-	private static readonly IDeviceSchemaStep[] ReleasedSteps = [new CreateTablesStep(), new AddVehiclesStep()];
+	private static readonly IDeviceSchemaStep[] ReleasedSteps = [new CreateTablesStep(), new AddVehiclesStep(), new AddSyncStateStep()];
 	#endregion
 
 	#region Fields

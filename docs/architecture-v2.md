@@ -1158,18 +1158,21 @@ sequenceDiagram
   `LegacyDataMigration` (Capacitor to `Preferences`, ADR-0008) and before the sign-in screen.
 - **Schema versioning.** `schema_version` holds one row per applied step (version, applied at). The steps are numbered
   classes with explicit SQL in `ParkingTracker.Persistence.Device`, applied in order, each in one transaction with its
-  `schema_version` row; step 1 creates the tables below and step 2 (`AddVehiclesStep`, ADR-0031) adds `vehicles`. A
-  released step is never edited. A database newer than the app stops the initializer with a failed `Result`.
-  sqlite-net's `CreateTableAsync` is not used for the schema.
-- Tables: `resident_cards` (municipality, sector, period, mailles, lims and tolerances as JSON columns, card number and
-  plate as AES-GCM ciphertext), `saved_places` (kind, label, address text, coordinates as ciphertext),
+  `schema_version` row; step 1 creates the tables below, step 2 (`AddVehiclesStep`, ADR-0031) adds `vehicles` and step
+  3 (`AddSyncStateStep`, ADR-0032) adds `sync_state`. A released step is never edited. A database newer than the app
+  stops the initializer with a failed `Result`. sqlite-net's `CreateTableAsync` is not used for the schema.
+- Tables: `resident_cards` (municipality, sector, period, mailles, lims and tolerances as JSON columns, card number
+  and plate as AES-GCM ciphertext), `saved_places` (kind, label, address text, coordinates as ciphertext),
   `parking_sessions` (coordinates as ciphertext, parked at, headline, timer end and minutes, ended at), `device_owner`
-  (one row), `vehicles` (step 2: make code, model, model year, fuel and Euro standard as enum numbers, plugs as a JSON
-  array of numbers, battery kWh, range km, plate as ciphertext) and `schema_version`. There is no outbox table (3.1).
-  The phone holds one card, one list of places, one session and one vehicle profile, and the schema enforces it: a
-  `slot` column that is always 1 and unique in `resident_cards`, `parking_sessions` and `vehicles`, a unique index on
-  `position` and a partial unique index on `kind` for home and work in `saved_places`. Every row carries the identifier
-  of its aggregate (`saved_places` also the identifier of the list).
+  (one row: the hash of the bound account and the moment it was bound), `vehicles` (step 2: make code, model, model
+  year, fuel and Euro standard as enum numbers, plugs as a JSON array of numbers, battery kWh, range km, plate as
+  ciphertext), `sync_state` (step 3, one row: the base revision of the server copy, a changed flag, the
+  pending-removal flag `erase_pending` and the moment each synced section last changed, in milliseconds since 1970;
+  only the account flow and the wipes write it until the sync service exists) and `schema_version`. There is no outbox
+  table (3.1). The phone holds one card, one list of places, one session and one vehicle profile, and the schema
+  enforces it: a `slot` column that is always 1 and unique in `resident_cards`, `parking_sessions` and `vehicles`, a
+  unique index on `position` and a partial unique index on `kind` for home and work in `saved_places`. Every row
+  carries the identifier of its aggregate (`saved_places` also the identifier of the list).
 - **Repositories.** One per aggregate (`ResidentCard`, `SavedPlaces`, `ParkingSession`, `Vehicle`): narrow ports in the
   phone's Application project, implementations by hand in `ParkingTracker.Persistence.Device`. They map each aggregate
   to row types that never leave the project and rehydrate through the aggregates' `Restore` factories (stored
@@ -1279,11 +1282,26 @@ sequenceDiagram
     it holds the migration marker, the old car and timer, the alerts, layers and welcome flags. It is excluded because a
     restored marker without the excluded database would tell the move that the data was already moved. The price: those
     preferences are not restored on a new phone either.
-  - *Not done yet.* The `device_owner` table exists (step 1) but has no row type or repository; it comes with the
-    account binding.
-- **Binding to the account.** After the first successful sign-in, `device_owner` stores the SHA-256 hash of the Google
-  account ID. Migrated data belongs to the first account that signs in. If a different account signs in later, the app
-  asks before it wipes the local data of the previous one. Sign-out keeps the data; erasure (`DELETE /me`) wipes it.
+  - *Not done yet.* The sync service (ADR-0032) does not write `sync_state` yet, and sign-out does not wipe the phone:
+    with no sync, the data would exist nowhere else.
+- **Binding to the account.** Whenever a signed-in account becomes known (after sign-in and `GET /me`, when the sheet
+  opens, and when the menu refreshes the state at start), `AccountViewModel` compares the hash of the API account ID
+  (lowercase hex SHA-256 of the ID in the `N` format, so no account ID is stored in plain text) with `device_owner`
+  through `IDeviceOwnerStore`; the owner row is the source of truth, so a restart or a closed sheet loses nothing. No
+  owner: the account is bound, because migrated data belongs to the first account that signs in. Same hash: nothing
+  happens and `IsOwnerVerified` is true (the sync service uploads only while it is). A different hash: the sheet asks
+  "Remove and continue" or "Cancel", and a mismatch found at start opens the sheet; the first wipes the profile
+  (places, vehicle, card and sync state, not the parking session) and binds the new hash, the second signs the new
+  account out and keeps the data (a failed sign-out keeps the question and binds nothing). If the owner cannot be read
+  right after a sign-in, the new account is signed out and an error is shown; on open or refresh the check is only
+  tried again later. Account deletion calls `DELETE /me` first; a refused or failed call touches no flag and no data.
+  Only after the server confirmed it, the app sets `sync_state.erase_pending` (the flag means "deleted on the server,
+  not yet wiped here") and wipes everything (profile, parking session, owner and the flag, in one transaction) and
+  cancels the reminder alarms. A wipe that fails is shown in the sheet, can be retried there, and runs again by itself
+  at the next open or refresh while the flag is set, whatever the sign-in state, also after a restart. Each wipe is
+  one transaction of `IDeviceDataWiper` in `ParkingTracker.Persistence.Device`; afterwards `DeviceDataResetNotice`
+  makes the stores forget what they cached and the view models read their data again, so the screens show it empty
+  without a restart. Sign-out keeps the data until the sync service arrives (ADR-0032).
 - **What syncs:** nothing (3.8). The tokens live in `SecureStorage` (`pt.session`), never in the database.
 - The upgrade job of `android.yml` gets a second leg: install the latest release, seed card, car and timer through the
   test hooks, install the new APK over it, and check that the card comes from the database and the marker says

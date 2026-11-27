@@ -47,6 +47,7 @@ public sealed class UiServiceInstaller : IServiceInstaller
 		services.AddScoped<PlacePickerViewModel>();
 		services.AddScoped<FavouritesViewModel>();
 		services.AddScoped<VehicleViewModel>();
+		services.AddScoped<LocalDataEraser>();
 		services.AddScoped<AccountViewModel>();
 		services.AddScoped<MenuViewModel>();
 		services.AddScoped<ParkedOnScreenResponder>();

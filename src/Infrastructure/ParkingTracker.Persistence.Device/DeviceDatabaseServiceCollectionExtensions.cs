@@ -4,6 +4,7 @@ using ParkingTracker.Application.Features.ResidentCards.Abstractions;
 using ParkingTracker.Application.Features.SavedPlaces.Abstractions;
 using ParkingTracker.Application.Features.Shared.Abstractions;
 using ParkingTracker.Application.Features.Vehicles.Abstractions;
+using ParkingTracker.Persistence.Device.Features.Accounts;
 using ParkingTracker.Persistence.Device.Features.ParkingSessions;
 using ParkingTracker.Persistence.Device.Features.ResidentCards;
 using ParkingTracker.Persistence.Device.Features.SavedPlaces;
@@ -17,9 +18,10 @@ namespace ParkingTracker.Persistence.Device;
 /// Author      : Gihed Annabi
 /// Date        : 11-2026
 /// Purpose     : Registers the device database (ADR-0026) in the service collection of the host: the connection to the database
-///              file, the schema initializer, the unit of work, the field cipher and one repository per aggregate. Everything is a
-///              singleton, because the phone has one database and one connection per process. The host adds the one thing that only
-///              the platform can provide, its <see cref="IDeviceKeyStore"/>.
+///              file, the schema initializer, the unit of work, the field cipher and one repository per aggregate, the store of
+///              the device owner and the wiper of the account data. Everything is a singleton, because the phone has one database
+///              and one connection per process. The host adds the one thing that only the platform can provide, its
+///              <see cref="IDeviceKeyStore"/>.
 /// </summary>
 public static class DeviceDatabaseServiceCollectionExtensions
 {
@@ -45,6 +47,8 @@ public static class DeviceDatabaseServiceCollectionExtensions
 		services.AddSingleton<ISavedPlacesRepository, SavedPlacesRepository>();
 		services.AddSingleton<IParkingSessionRepository, ParkingSessionRepository>();
 		services.AddSingleton<IVehicleRepository, VehicleRepository>();
+		services.AddSingleton<IDeviceOwnerStore, DeviceOwnerStore>();
+		services.AddSingleton<IDeviceDataWiper, DeviceDataWiper>();
 		return services;
 	}
 	#endregion

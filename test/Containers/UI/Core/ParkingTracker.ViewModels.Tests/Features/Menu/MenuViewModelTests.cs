@@ -41,7 +41,7 @@ public sealed class MenuViewModelTests
 	{
 		var google = Substitute.For<IGoogleSignIn>();
 		google.IsAvailable.Returns(signInAvailable);
-		return new AccountViewModel(Substitute.For<ISessionClient>(), google, ui.Toast);
+		return ui.CreateAccount(Substitute.For<ISessionClient>(), google);
 	}
 
 	/// <summary>
@@ -79,7 +79,7 @@ public sealed class MenuViewModelTests
 		var (_, places, picker, favourites) = await ArrangeAsync(ui).ConfigureAwait(false);
 		var google = Substitute.For<IGoogleSignIn>();
 		google.IsAvailable.Returns(signInAvailable);
-		var account = new AccountViewModel(client, google, ui.Toast);
+		var account = ui.CreateAccount(client, google);
 		var menu = new MenuViewModel(places, picker, favourites, new VehicleViewModel(Substitute.For<IVehicleStore>(), ui.Toast, ui.Clock), ui.Card, account);
 		return (menu, account);
 	}

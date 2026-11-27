@@ -84,6 +84,7 @@ public abstract class UiTestContext : BunitContext
 		Google.IsAvailable.Returns(false);
 		Services.AddSingleton(Google);
 		Services.AddSingleton(Session);
+		AddAccountDataServices();
 		Services.AddSingleton(Alarms);
 		Services.AddSingleton(Notifier);
 		Services.AddSingleton(AlertCoordinator);
@@ -149,6 +150,16 @@ public abstract class UiTestContext : BunitContext
 	/// Gets the session client substitute.
 	/// </summary>
 	protected ISessionClient Session { get; } = Substitute.For<ISessionClient>();
+
+	/// <summary>
+	/// Gets the substitute for the store of the device owner, which holds no owner and accepts every binding.
+	/// </summary>
+	protected IDeviceOwnerStore Owner { get; } = Substitute.For<IDeviceOwnerStore>();
+
+	/// <summary>
+	/// Gets the substitute for the wiper of the account data, which succeeds.
+	/// </summary>
+	protected IDeviceDataWiper Wiper { get; } = Substitute.For<IDeviceDataWiper>();
 
 	/// <summary>
 	/// Gets the link launcher substitute.
@@ -249,6 +260,22 @@ public abstract class UiTestContext : BunitContext
 	#endregion
 
 	#region Private Helpers
+	/// <summary>
+	/// Registers the device owner store, which holds no owner, and the wiper, which succeeds, with the notice that tells the stores about a wipe.
+	/// </summary>
+	private void AddAccountDataServices()
+	{
+		Owner.GetAccountHashAsync(Arg.Any<CancellationToken>()).Returns(Result.Failure<string>(DeviceDataErrors.NotStored, ResultExceptionType.NotFound));
+		Owner.BindAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Result.Success());
+		Wiper.WipeProfileAsync(Arg.Any<CancellationToken>()).Returns(Result.Success());
+		Wiper.WipeAllAsync(Arg.Any<CancellationToken>()).Returns(Result.Success());
+		Owner.GetErasePendingAsync(Arg.Any<CancellationToken>()).Returns(Result.Success(false));
+		Owner.MarkErasePendingAsync(Arg.Any<CancellationToken>()).Returns(Result.Success());
+		Services.AddSingleton(Owner);
+		Services.AddSingleton(Wiper);
+		Services.AddSingleton<DeviceDataResetNotice>();
+	}
+
 	/// <summary>
 	/// Builds the start-up gate over the given migration of the previous version's data, with a device database that is ready and
 	/// whose move of the saved values has finished, so that only the legacy migration decides when the page opens.
